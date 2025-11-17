@@ -4,5 +4,8 @@
 	(generator_version "9.0")
 	(uuid "d13abb82-296c-48b6-98ee-aae4241f40ee")
 	(paper "A4")
+	(title_block
+		(comment 1 "Angelo Perotti")
+	)
 	(lib_symbols)
 )
