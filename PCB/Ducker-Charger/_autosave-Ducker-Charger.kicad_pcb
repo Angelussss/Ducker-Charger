@@ -1541,7 +1541,7 @@
 	(footprint "EasyEDA:QFN-64_L8.0-W8.0-P0.40-TL-EP6.2"
 		(layer "F.Cu")
 		(uuid "ed85bcd7-f32c-40ab-8f80-2dd85dd87afc")
-		(at 256.32 139.16)
+		(at 270.23 140.16)
 		(property "Reference" "U1"
 			(at 0 -8 0)
 			(layer "F.SilkS")
