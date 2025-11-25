@@ -150,7 +150,7 @@
 			)
 			(embedded_fonts no)
 		)
-		(symbol "Connector_Generic:Conn_01x04"
+		(symbol "Connector_Generic:Conn_01x06"
 			(pin_names
 				(offset 1.016)
 				(hide yes)
@@ -159,15 +159,15 @@
 			(in_bom yes)
 			(on_board yes)
 			(property "Reference" "J"
-				(at 0 5.08 0)
+				(at 0 7.62 0)
 				(effects
 					(font
 						(size 1.27 1.27)
 					)
 				)
 			)
-			(property "Value" "Conn_01x04"
-				(at 0 -7.62 0)
+			(property "Value" "Conn_01x06"
+				(at 0 -10.16 0)
 				(effects
 					(font
 						(size 1.27 1.27)
@@ -192,7 +192,7 @@
 					(hide yes)
 				)
 			)
-			(property "Description" "Generic connector, single row, 01x04, script generated (kicad-library-utils/schlib/autogen/connector/)"
+			(property "Description" "Generic connector, single row, 01x06, script generated (kicad-library-utils/schlib/autogen/connector/)"
 				(at 0 0 0)
 				(effects
 					(font
@@ -219,16 +219,27 @@
 					(hide yes)
 				)
 			)
-			(symbol "Conn_01x04_1_1"
+			(symbol "Conn_01x06_1_1"
 				(rectangle
-					(start -1.27 3.81)
-					(end 1.27 -6.35)
+					(start -1.27 6.35)
+					(end 1.27 -8.89)
 					(stroke
 						(width 0.254)
 						(type default)
 					)
 					(fill
 						(type background)
+					)
+				)
+				(rectangle
+					(start -1.27 5.207)
+					(end 0 4.953)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
 					)
 				)
 				(rectangle
@@ -275,8 +286,19 @@
 						(type none)
 					)
 				)
+				(rectangle
+					(start -1.27 -7.493)
+					(end 0 -7.747)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
 				(pin passive line
-					(at -5.08 2.54 0)
+					(at -5.08 5.08 0)
 					(length 3.81)
 					(name "Pin_1"
 						(effects
@@ -294,7 +316,7 @@
 					)
 				)
 				(pin passive line
-					(at -5.08 0 0)
+					(at -5.08 2.54 0)
 					(length 3.81)
 					(name "Pin_2"
 						(effects
@@ -312,7 +334,7 @@
 					)
 				)
 				(pin passive line
-					(at -5.08 -2.54 0)
+					(at -5.08 0 0)
 					(length 3.81)
 					(name "Pin_3"
 						(effects
@@ -330,7 +352,7 @@
 					)
 				)
 				(pin passive line
-					(at -5.08 -5.08 0)
+					(at -5.08 -2.54 0)
 					(length 3.81)
 					(name "Pin_4"
 						(effects
@@ -340,6 +362,42 @@
 						)
 					)
 					(number "4"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at -5.08 -5.08 0)
+					(length 3.81)
+					(name "Pin_5"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "5"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at -5.08 -7.62 0)
+					(length 3.81)
+					(name "Pin_6"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "6"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -443,7 +501,7 @@
 	)
 	(global_label "BATT_SENS_B-"
 		(shape output)
-		(at 35.56 115.57 0)
+		(at 35.56 111.76 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -453,7 +511,7 @@
 		)
 		(uuid "035a33a6-6b94-407c-b710-a18430d62802")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 52.5151 115.57 0)
+			(at 52.5151 111.76 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -485,9 +543,9 @@
 			)
 		)
 	)
-	(global_label "BATT_SENS_B+"
+	(global_label "BATT_SENS_B3"
 		(shape output)
-		(at 35.56 123.19 0)
+		(at 35.56 119.38 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -495,9 +553,9 @@
 			)
 			(justify left)
 		)
-		(uuid "133a315f-a760-4ad3-9719-74cf32ca95fd")
+		(uuid "2d6552b9-2ea4-4b4b-8f90-ab70208aecaa")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 52.5151 123.19 0)
+			(at 52.1522 119.38 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -509,7 +567,7 @@
 	)
 	(global_label "BATT_SENS_B1"
 		(shape output)
-		(at 35.56 118.11 0)
+		(at 35.56 114.3 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -519,7 +577,51 @@
 		)
 		(uuid "331b3efa-a42e-47c7-a776-1139d420e174")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 52.1522 118.11 0)
+			(at 52.1522 114.3 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+	)
+	(global_label "BATT_SENS_B+"
+		(shape output)
+		(at 35.56 124.46 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "55128c1d-238e-4dc0-97e5-8eef369fb057")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 52.5151 124.46 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+	)
+	(global_label "BATT_SENS_B4"
+		(shape output)
+		(at 35.56 121.92 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "5e9cf68b-be55-423d-9c96-8f9717c7002a")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 52.1522 121.92 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -531,7 +633,7 @@
 	)
 	(global_label "BATT_SENS_B2"
 		(shape output)
-		(at 35.56 120.65 0)
+		(at 35.56 116.84 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -541,7 +643,7 @@
 		)
 		(uuid "857fdaf5-9569-4191-a93f-a20e62e638bf")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 52.1522 120.65 0)
+			(at 52.1522 116.84 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -570,81 +672,6 @@
 				)
 				(justify left)
 				(hide yes)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Connector_Generic:Conn_01x04")
-		(at 30.48 118.11 0)
-		(mirror y)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "312626cb-8c66-40be-bda9-1786d43a9bb6")
-		(property "Reference" "J2"
-			(at 30.48 109.22 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "Conn_01x04"
-			(at 30.48 111.76 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" ""
-			(at 30.48 118.11 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "~"
-			(at 30.48 118.11 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" "Generic connector, single row, 01x04, script generated (kicad-library-utils/schlib/autogen/connector/)"
-			(at 30.48 118.11 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "55b3ac29-613d-4b89-9c0a-916f8e93201b")
-		)
-		(pin "4"
-			(uuid "49db0e27-e61b-4be1-9863-3602a2e7bdb3")
-		)
-		(pin "3"
-			(uuid "a47c7856-6efb-47ff-9603-cfa29913f148")
-		)
-		(pin "2"
-			(uuid "a3318a1b-5182-457b-9aa3-3d36b46c94e7")
-		)
-		(instances
-			(project ""
-				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817"
-					(reference "J2")
-					(unit 1)
-				)
 			)
 		)
 	)
@@ -712,6 +739,87 @@
 			(project ""
 				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817"
 					(reference "J1")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Connector_Generic:Conn_01x06")
+		(at 30.48 116.84 0)
+		(mirror y)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "5aba2020-8e1d-4df5-b04d-8b1ce2b53044")
+		(property "Reference" "J2"
+			(at 30.48 105.41 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "Conn_01x06"
+			(at 30.48 107.95 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 30.48 116.84 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 30.48 116.84 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Generic connector, single row, 01x06, script generated (kicad-library-utils/schlib/autogen/connector/)"
+			(at 30.48 116.84 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "3247a63e-3da9-4913-af3e-43023b2d359d")
+		)
+		(pin "4"
+			(uuid "35dd5baa-7075-4b29-ab18-b4ebbaa8c9b5")
+		)
+		(pin "3"
+			(uuid "9c269407-be42-4100-b41f-10365209033b")
+		)
+		(pin "2"
+			(uuid "6e1478a5-0df3-4a70-a659-e7600846b360")
+		)
+		(pin "6"
+			(uuid "61f93458-2365-4f06-aeb1-ed868267f398")
+		)
+		(pin "5"
+			(uuid "c699772b-ed1c-439d-a13f-eb8f9890ac1b")
+		)
+		(instances
+			(project ""
+				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817"
+					(reference "J2")
 					(unit 1)
 				)
 			)
