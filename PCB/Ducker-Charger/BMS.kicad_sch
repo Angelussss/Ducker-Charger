@@ -1435,6 +1435,16 @@
 		)
 		(uuid "26108382-98ed-4be5-99e1-cbee4dfc2b9d")
 	)
+	(text "NOTE: Implementation of Kelvin Sensing topology. The BQ77915 VSS reference is connected to the battery terminal via a dedicated sense trace, bypassing the IR drop on the high-current power path to prevent false UV/OV triggering under load"
+		(exclude_from_sim no)
+		(at 144.018 217.424 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+		(uuid "58fd17dd-8ad8-414d-9be2-2300cd3d23c8")
+	)
 	(text "I_BAL = V_CELLA / (2 * R)=4.2V/100R=42mA\nP=RxI^2=~ 88mW\n"
 		(exclude_from_sim no)
 		(at 56.388 159.258 0)
@@ -1455,6 +1465,26 @@
 		)
 		(uuid "a7f2c9fb-81ea-4c11-8810-7331c7c5eed1")
 	)
+	(text "NB: in this layer has been applied \na kelvin connection; it has been made to avoid miscalculing\ncurrents and voltages on a loaded system"
+		(exclude_from_sim no)
+		(at 149.86 211.582 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+		(uuid "ae90cc5c-5159-4787-af5f-625529140982")
+	)
+	(text "tbd\n"
+		(exclude_from_sim no)
+		(at 85.344 139.954 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+		(uuid "cbaba575-a320-419a-a1be-ce93bb2bd13e")
+	)
 	(text "NB: VC5 and VC4 are shorted in order to make it\nusable with the configuration we are working with: 4s3p"
 		(exclude_from_sim no)
 		(at 249.936 131.318 0)
@@ -1466,10 +1496,22 @@
 		(uuid "d1d4f721-2ccd-44f1-a68a-04eb93189fbe")
 	)
 	(junction
+		(at 134.62 132.08)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "4e521397-9986-427d-86c4-c3aa5bff88c5")
+	)
+	(junction
 		(at 63.5 88.9)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "58ba3918-f089-42a5-bf62-5dd6b246ed4b")
+	)
+	(junction
+		(at 101.6 139.7)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "5ae67df9-fe75-437c-8561-ada512b15a4e")
 	)
 	(junction
 		(at 63.5 111.76)
@@ -1506,6 +1548,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "d6f77fee-3e24-42c1-9bba-a015b0b8a66f")
+	)
+	(junction
+		(at 111.76 132.08)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "e2bc6759-9636-4e85-91c6-6aba3366ea59")
 	)
 	(junction
 		(at 63.5 119.38)
@@ -1561,6 +1609,16 @@
 	)
 	(wire
 		(pts
+			(xy 101.6 139.7) (xy 106.68 139.7)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "121c2cb5-3ecf-4644-96ac-7104cc0291fb")
+	)
+	(wire
+		(pts
 			(xy 63.5 104.14) (xy 57.15 104.14)
 		)
 		(stroke
@@ -1608,6 +1666,26 @@
 			(type default)
 		)
 		(uuid "4eb532c3-4a84-4869-b884-9fa85a502985")
+	)
+	(wire
+		(pts
+			(xy 134.62 132.08) (xy 144.78 132.08)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "4fbe0bf2-f7a0-4f3d-8f04-478720365c32")
+	)
+	(wire
+		(pts
+			(xy 88.9 139.7) (xy 101.6 139.7)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "514565cf-41c5-478d-9ef1-1e01da4c2f36")
 	)
 	(wire
 		(pts
@@ -1691,6 +1769,16 @@
 	)
 	(wire
 		(pts
+			(xy 134.62 124.46) (xy 134.62 116.84)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "8fc6b1db-5db8-4c69-b42a-2601baf8dd2a")
+	)
+	(wire
+		(pts
 			(xy 44.45 104.14) (xy 49.53 104.14)
 		)
 		(stroke
@@ -1708,6 +1796,16 @@
 			(type default)
 		)
 		(uuid "994291d1-51c1-4fd5-b820-e04e6a23f420")
+	)
+	(wire
+		(pts
+			(xy 144.78 139.7) (xy 139.7 139.7)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "9f3e02a6-1944-461d-a66d-b658ae056f6c")
 	)
 	(wire
 		(pts
@@ -1748,6 +1846,16 @@
 			(type default)
 		)
 		(uuid "cb5ef33c-4504-41b0-ab50-d58ca1a25380")
+	)
+	(wire
+		(pts
+			(xy 101.6 132.08) (xy 111.76 132.08)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d32a0552-adcd-4e40-b57f-07b67d80bada")
 	)
 	(wire
 		(pts
@@ -1841,6 +1949,16 @@
 	)
 	(wire
 		(pts
+			(xy 116.84 139.7) (xy 129.54 139.7)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f9cd8399-1904-4586-a5bd-bda2507e6d26")
+	)
+	(wire
+		(pts
 			(xy 57.15 73.66) (xy 46.99 73.66)
 		)
 		(stroke
@@ -1858,6 +1976,16 @@
 			(type default)
 		)
 		(uuid "fba2b6f8-3f62-4022-a4e6-054b9ccf593d")
+	)
+	(wire
+		(pts
+			(xy 111.76 124.46) (xy 111.76 116.84)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "fd4b58b6-3369-4b99-8df6-2e7069e8b04a")
 	)
 	(image
 		(at -29.845 111.125)
@@ -3628,6 +3756,28 @@
 			)
 		)
 	)
+	(global_label "BATT_SENS_B-"
+		(shape output)
+		(at 81.28 139.7 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "1dce5d97-f349-4bb3-bc62-2b24d78c7585")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 64.3249 139.7 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+				(hide yes)
+			)
+		)
+	)
 	(global_label "BATT_SENS_B+"
 		(shape output)
 		(at 44.45 88.9 180)
@@ -3738,8 +3888,8 @@
 			)
 		)
 	)
-	(global_label "BATT_-"
-		(shape bidirectional)
+	(global_label "BATT_SENS_B-"
+		(shape output)
 		(at 110.49 109.22 180)
 		(fields_autoplaced yes)
 		(effects
@@ -3748,9 +3898,9 @@
 			)
 			(justify right)
 		)
-		(uuid "c0101bb0-da2e-488a-b273-cc89a93af641")
+		(uuid "e2344563-8d17-42c3-9d2e-d49c0b7f5416")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 99.5597 109.22 0)
+			(at 93.5349 109.22 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -3847,6 +3997,74 @@
 			(project "Ducker-Charger"
 				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
 					(reference "C17")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 85.09 139.7 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "0176cb07-56f4-4d2e-bfd8-0c976e13a29b")
+		(property "Reference" "RSNS"
+			(at 85.09 133.35 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "~"
+			(at 85.09 135.89 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 85.09 141.478 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 85.09 139.7 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 85.09 139.7 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "2"
+			(uuid "e7fba0ee-fcf4-4ccd-af45-fb19cc87c06f")
+		)
+		(pin "1"
+			(uuid "d7771b98-1193-4fd9-8f93-f8b67fbffb2a")
+		)
+		(instances
+			(project ""
+				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
+					(reference "RSNS")
 					(unit 1)
 				)
 			)
@@ -4135,34 +4353,32 @@
 	)
 	(symbol
 		(lib_id "EasyEDA:NCE3080K")
-		(at 173.99 59.69 0)
+		(at 134.62 137.16 90)
+		(mirror x)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "1823fd97-6034-4598-bab1-02e90b56b813")
 		(property "Reference" "Q5"
-			(at 181.61 58.4199 0)
+			(at 134.62 146.05 90)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
 			)
 		)
 		(property "Value" "NCE3080K"
-			(at 181.61 60.9599 0)
+			(at 134.62 148.59 90)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
 			)
 		)
 		(property "Footprint" "EasyEDA:TO-252-2_L6.6-W6.1-P4.57-LS9.9-TL-CW"
-			(at 173.99 72.39 0)
+			(at 147.32 137.16 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4171,7 +4387,7 @@
 			)
 		)
 		(property "Datasheet" "https://lcsc.com/product-detail/MOSFET_NCE3080K_C108901.html"
-			(at 173.99 74.93 0)
+			(at 149.86 137.16 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4180,7 +4396,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 173.99 59.69 0)
+			(at 134.62 137.16 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4189,7 +4405,7 @@
 			)
 		)
 		(property "LCSC Part" "C108901"
-			(at 173.99 77.47 0)
+			(at 152.4 137.16 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4210,6 +4426,76 @@
 			(project ""
 				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
 					(reference "Q5")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 144.78 135.89 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "1c979935-2c20-4adf-8f43-6ed62e904acf")
+		(property "Reference" "RGS"
+			(at 147.32 134.6199 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "1M"
+			(at 147.32 137.1599 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 143.002 135.89 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 144.78 135.89 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 144.78 135.89 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "2"
+			(uuid "f03c1173-f5bc-4b92-83ac-649dc23676b8")
+		)
+		(pin "1"
+			(uuid "0dc9860e-99f3-4bc4-9a9a-cfcf71ba0d7c")
+		)
+		(instances
+			(project "Ducker-Charger"
+				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
+					(reference "RGS")
 					(unit 1)
 				)
 			)
@@ -4417,6 +4703,75 @@
 			(project "Ducker-Charger"
 				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
 					(reference "C16")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 111.76 128.27 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "394d17c2-b122-4e66-ad4e-fe87351459ed")
+		(property "Reference" "RDSG"
+			(at 106.426 127.254 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "4k5"
+			(at 106.426 129.794 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 109.982 128.27 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 111.76 128.27 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 111.76 128.27 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "2"
+			(uuid "eae7b000-f3a2-4792-b229-09f3d400b90b")
+		)
+		(pin "1"
+			(uuid "c1e35c4c-9a27-40c1-b68f-2eb4a173b97a")
+		)
+		(instances
+			(project "Ducker-Charger"
+				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
+					(reference "RDSG")
 					(unit 1)
 				)
 			)
@@ -4899,34 +5254,31 @@
 	)
 	(symbol
 		(lib_id "EasyEDA:NCE3080K")
-		(at 170.18 74.93 0)
+		(at 111.76 137.16 270)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "7d2bf041-4c1c-41a6-a64a-244fc95037f0")
 		(property "Reference" "Q6"
-			(at 177.8 73.6599 0)
+			(at 111.76 146.05 90)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
 			)
 		)
 		(property "Value" "NCE3080K"
-			(at 177.8 76.1999 0)
+			(at 111.76 148.59 90)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
 			)
 		)
 		(property "Footprint" "EasyEDA:TO-252-2_L6.6-W6.1-P4.57-LS9.9-TL-CW"
-			(at 170.18 87.63 0)
+			(at 99.06 137.16 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4935,7 +5287,7 @@
 			)
 		)
 		(property "Datasheet" "https://lcsc.com/product-detail/MOSFET_NCE3080K_C108901.html"
-			(at 170.18 90.17 0)
+			(at 96.52 137.16 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4944,7 +5296,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 170.18 74.93 0)
+			(at 111.76 137.16 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4953,7 +5305,7 @@
 			)
 		)
 		(property "LCSC Part" "C108901"
-			(at 170.18 92.71 0)
+			(at 93.98 137.16 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -5111,6 +5463,145 @@
 			(project ""
 				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
 					(reference "C15")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 134.62 128.27 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "e460ebca-097e-4e20-8891-58ff4fd57388")
+		(property "Reference" "RCHG"
+			(at 137.16 126.9999 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "1k"
+			(at 137.16 129.5399 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 132.842 128.27 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 134.62 128.27 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 134.62 128.27 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "2"
+			(uuid "ece576e1-6ffc-4cfa-a900-8c4d663b1cc4")
+		)
+		(pin "1"
+			(uuid "8ab95981-7b64-4226-b2df-0f77e760fe62")
+		)
+		(instances
+			(project "Ducker-Charger"
+				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
+					(reference "RCHG")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 101.6 135.89 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "f0c28090-d063-40e8-950e-7f6ecb072959")
+		(property "Reference" "RGS"
+			(at 96.266 134.62 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "1M"
+			(at 96.266 137.16 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 99.822 135.89 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 101.6 135.89 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 101.6 135.89 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "2"
+			(uuid "072b27c7-83cc-4ec1-8bf4-9756a3acf3e9")
+		)
+		(pin "1"
+			(uuid "822b2d19-f1db-4baa-82af-aa4359424e1c")
+		)
+		(instances
+			(project "Ducker-Charger"
+				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
+					(reference "RGS")
 					(unit 1)
 				)
 			)
