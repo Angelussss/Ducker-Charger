@@ -8,6 +8,374 @@
 		(comment 1 "Angelo Perotti")
 	)
 	(lib_symbols
+		(symbol "BQ34Z100PWR-R2:BQ34Z100PWR-R2"
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "IC"
+				(at 29.21 7.62 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left top)
+				)
+			)
+			(property "Value" "BQ34Z100PWR-R2"
+				(at 29.21 5.08 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left top)
+				)
+			)
+			(property "Footprint" "SOP65P640X120-14N"
+				(at 29.21 -94.92 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left top)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" "https://www.arrow.com/en/products/bq34z100pwr-r2/texas-instruments?region=nac"
+				(at 29.21 -194.92 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left top)
+					(hide yes)
+				)
+			)
+			(property "Description" "Battery Management Multi-chemistry Impedance Track stand-alone fuel gauge"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Height" "1.2"
+				(at 29.21 -394.92 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left top)
+					(hide yes)
+				)
+			)
+			(property "Mouser Part Number" "595-BQ34Z100PWR-R2"
+				(at 29.21 -494.92 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left top)
+					(hide yes)
+				)
+			)
+			(property "Mouser Price/Stock" "https://www.mouser.co.uk/ProductDetail/Texas-Instruments/BQ34Z100PWR-R2?qs=rQFj71Wb1eWspkgmxcmVcA%3D%3D"
+				(at 29.21 -594.92 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left top)
+					(hide yes)
+				)
+			)
+			(property "Manufacturer_Name" "Texas Instruments"
+				(at 29.21 -694.92 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left top)
+					(hide yes)
+				)
+			)
+			(property "Manufacturer_Part_Number" "BQ34Z100PWR-R2"
+				(at 29.21 -794.92 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left top)
+					(hide yes)
+				)
+			)
+			(symbol "BQ34Z100PWR-R2_1_1"
+				(rectangle
+					(start 5.08 2.54)
+					(end 27.94 -17.78)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type background)
+					)
+				)
+				(pin passive line
+					(at 0 0 0)
+					(length 5.08)
+					(name "P2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 0 -2.54 0)
+					(length 5.08)
+					(name "VEN"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 0 -5.08 0)
+					(length 5.08)
+					(name "P1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 0 -7.62 0)
+					(length 5.08)
+					(name "BAT"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "4"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 0 -10.16 0)
+					(length 5.08)
+					(name "CE"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "5"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 0 -12.7 0)
+					(length 5.08)
+					(name "REGIN"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "6"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 0 -15.24 0)
+					(length 5.08)
+					(name "REG25"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "7"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 33.02 0 180)
+					(length 5.08)
+					(name "P3/SDA"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "14"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 33.02 -2.54 180)
+					(length 5.08)
+					(name "P4/SCL"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "13"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 33.02 -5.08 180)
+					(length 5.08)
+					(name "P5/HDQ"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "12"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 33.02 -7.62 180)
+					(length 5.08)
+					(name "P6/TS"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "11"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 33.02 -10.16 180)
+					(length 5.08)
+					(name "SRN"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "10"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 33.02 -12.7 180)
+					(length 5.08)
+					(name "SRP"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "9"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 33.02 -15.24 180)
+					(length 5.08)
+					(name "VSS"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "8"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 		(symbol "Device:C"
 			(pin_numbers
 				(hide yes)
@@ -1509,7 +1877,7 @@
 	)
 	(text "BQ34Z100-R2"
 		(exclude_from_sim no)
-		(at 229.108 107.95 0)
+		(at 253.746 59.182 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -1531,7 +1899,7 @@
 	)
 	(text "fuel gage IC\n"
 		(exclude_from_sim no)
-		(at 229.616 110.49 0)
+		(at 254.254 61.722 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -4204,7 +4572,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "0176cb07-56f4-4d2e-bfd8-0c976e13a29b")
-		(property "Reference" "RSNS"
+		(property "Reference" "RSNS1"
 			(at 111.76 86.36 90)
 			(effects
 				(font
@@ -4265,7 +4633,7 @@
 		(instances
 			(project ""
 				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
-					(reference "RSNS")
+					(reference "RSNS1")
 					(unit 1)
 				)
 			)
@@ -4572,7 +4940,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "1c979935-2c20-4adf-8f43-6ed62e904acf")
-		(property "Reference" "RGS"
+		(property "Reference" "RGS2"
 			(at 168.91 87.6299 0)
 			(effects
 				(font
@@ -4626,7 +4994,7 @@
 		(instances
 			(project "Ducker-Charger"
 				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
-					(reference "RGS")
+					(reference "RGS2")
 					(unit 1)
 				)
 			)
@@ -4848,7 +5216,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "394d17c2-b122-4e66-ad4e-fe87351459ed")
-		(property "Reference" "RDSG"
+		(property "Reference" "RDSG1"
 			(at 128.016 80.264 0)
 			(effects
 				(font
@@ -4902,7 +5270,7 @@
 		(instances
 			(project "Ducker-Charger"
 				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
-					(reference "RDSG")
+					(reference "RDSG1")
 					(unit 1)
 				)
 			)
@@ -4985,7 +5353,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "3f8f0c80-54a5-4317-a5ae-c3735839645f")
-		(property "Reference" "C_VDD"
+		(property "Reference" "C_VDD2"
 			(at 44.45 45.7199 0)
 			(effects
 				(font
@@ -5039,7 +5407,7 @@
 		(instances
 			(project "Ducker-Charger"
 				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
-					(reference "C_VDD")
+					(reference "C_VDD2")
 					(unit 1)
 				)
 			)
@@ -5195,7 +5563,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "565766d3-df63-4b51-b8c8-9f63ed0f423d")
-		(property "Reference" "RLD"
+		(property "Reference" "RLD1"
 			(at 179.07 73.6599 0)
 			(effects
 				(font
@@ -5249,7 +5617,7 @@
 		(instances
 			(project ""
 				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
-					(reference "RLD")
+					(reference "RLD1")
 					(unit 1)
 				)
 			)
@@ -5402,7 +5770,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "6b37ee10-efe3-4bc1-8244-c24f61c5aac0")
-		(property "Reference" "R_VDD"
+		(property "Reference" "R_VDD1"
 			(at 36.83 36.83 90)
 			(effects
 				(font
@@ -5454,7 +5822,7 @@
 		(instances
 			(project "Ducker-Charger"
 				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
-					(reference "R_VDD")
+					(reference "R_VDD1")
 					(unit 1)
 				)
 			)
@@ -5810,6 +6178,162 @@
 		)
 	)
 	(symbol
+		(lib_id "BQ34Z100PWR-R2:BQ34Z100PWR-R2")
+		(at 238.76 77.47 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "a6f7bea8-65bb-4638-add8-07a507fbcfd0")
+		(property "Reference" "IC2"
+			(at 255.27 69.85 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "BQ34Z100PWR-R2"
+			(at 255.27 72.39 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "SOP65P640X120-14N"
+			(at 267.97 172.39 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "kicad-embed://bq34z100-r2.pdf"
+			(at 267.97 272.39 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+				(hide yes)
+			)
+		)
+		(property "Description" "Battery Management Multi-chemistry Impedance Track stand-alone fuel gauge"
+			(at 238.76 77.47 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Height" "1.2"
+			(at 267.97 472.39 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+				(hide yes)
+			)
+		)
+		(property "Mouser Part Number" "595-BQ34Z100PWR-R2"
+			(at 267.97 572.39 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+				(hide yes)
+			)
+		)
+		(property "Mouser Price/Stock" "https://www.mouser.co.uk/ProductDetail/Texas-Instruments/BQ34Z100PWR-R2?qs=rQFj71Wb1eWspkgmxcmVcA%3D%3D"
+			(at 267.97 672.39 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+				(hide yes)
+			)
+		)
+		(property "Manufacturer_Name" "Texas Instruments"
+			(at 267.97 772.39 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+				(hide yes)
+			)
+		)
+		(property "Manufacturer_Part_Number" "BQ34Z100PWR-R2"
+			(at 267.97 872.39 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+				(hide yes)
+			)
+		)
+		(pin "9"
+			(uuid "77d9f44c-5f65-4a68-bb20-f41a89ad9019")
+		)
+		(pin "12"
+			(uuid "5cc0010f-c5be-4682-a92f-3c956f6824a9")
+		)
+		(pin "14"
+			(uuid "8425b49c-0da4-4ea1-9249-793773c9b616")
+		)
+		(pin "6"
+			(uuid "a0f834a8-36cb-44e6-b911-a15a911f8013")
+		)
+		(pin "1"
+			(uuid "b5911c8e-7495-42e0-825c-9c771a714820")
+		)
+		(pin "3"
+			(uuid "64ba40c7-7852-4929-9fe3-8f3d370af57c")
+		)
+		(pin "4"
+			(uuid "e2199f0b-f37b-49db-94ca-a3ed74ca0499")
+		)
+		(pin "2"
+			(uuid "894443b6-8fa0-4c30-9142-08b2bb8f7237")
+		)
+		(pin "5"
+			(uuid "173f9b7d-b561-4a6b-8e71-40dc9062e830")
+		)
+		(pin "7"
+			(uuid "17133eb1-4d5a-4b24-aca1-4b4f34f1a04b")
+		)
+		(pin "10"
+			(uuid "d8b81fa4-20be-43b8-8b2d-430958c90930")
+		)
+		(pin "13"
+			(uuid "5f7c63e9-822f-437a-b69d-57166c38b5e8")
+		)
+		(pin "11"
+			(uuid "e8119c92-93df-4a61-8761-a9e374d8fdb0")
+		)
+		(pin "8"
+			(uuid "a3c8a3ef-66e7-4cbb-9209-7b0c75e2e70d")
+		)
+		(instances
+			(project ""
+				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
+					(reference "IC2")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Device:R")
 		(at 137.16 175.26 0)
 		(unit 1)
@@ -5957,7 +6481,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "e460ebca-097e-4e20-8891-58ff4fd57388")
-		(property "Reference" "RCHG"
+		(property "Reference" "RCHG1"
 			(at 158.75 80.0099 0)
 			(effects
 				(font
@@ -6011,7 +6535,7 @@
 		(instances
 			(project "Ducker-Charger"
 				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
-					(reference "RCHG")
+					(reference "RCHG1")
 					(unit 1)
 				)
 			)
@@ -6092,7 +6616,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "f0c28090-d063-40e8-950e-7f6ecb072959")
-		(property "Reference" "RGS"
+		(property "Reference" "RGS1"
 			(at 117.856 87.63 0)
 			(effects
 				(font
@@ -6146,7 +6670,7 @@
 		(instances
 			(project "Ducker-Charger"
 				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
-					(reference "RGS")
+					(reference "RGS1")
 					(unit 1)
 				)
 			)

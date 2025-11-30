@@ -9461,7 +9461,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "f56c188d-f08a-4060-9675-fedf383c001b")
-		(property "Reference" "CVBAT"
+		(property "Reference" "CVBAT1"
 			(at 27.94 73.6599 0)
 			(effects
 				(font
@@ -9515,7 +9515,7 @@
 		(instances
 			(project "Ducker-Charger"
 				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/b1375a06-d47d-478c-835c-6ba88db99bcf"
-					(reference "CVBAT")
+					(reference "CVBAT1")
 					(unit 1)
 				)
 			)
