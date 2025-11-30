@@ -1,5 +1,6 @@
 (fp_lib_table
   (version 7)
   (lib (name "EasyEDA")(type "KiCad")(uri "${KIPRJMOD}/EasyEDA.pretty")(options "")(descr ""))
-  (lib (name "KiCad")(type "KiCad")(uri "${KIPRJMOD}/libs/TPS54202HDDCT/KiCad")(options "")(descr ""))
+  (lib (name "TPS54202HDDCT")(type "KiCad")(uri "${KIPRJMOD}/libs/TPS54202HDDCT/KiCad")(options "")(descr ""))
+  (lib (name "BQ34Z100PWR")(type "KiCad")(uri "${KIPRJMOD}/libs/BQ34Z100PWR-R2/KiCad")(options "")(descr ""))
 )
