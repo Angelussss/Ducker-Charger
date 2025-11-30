@@ -1,0 +1,9 @@
+EESchema-DOCLIB  Version 2.0
+#
+$CMP TPS54202HDDCT
+D Conv DC-DC 4.5V to 28V Synchronous Step Down Single-Out 0.6V to 26V 2A 6-Pin TSOT-23 T/R
+K
+F http://www.ti.com/general/docs/lit/getliterature.tsp?genericPartNumber=TPS54202H&&fileType=pdf
+$ENDCMP
+#
+#End Doc Library
