@@ -2,4 +2,5 @@
   (version 7)
   (lib (name "EasyEDA")(type "KiCad")(uri "${KIPRJMOD}/EasyEDA.kicad_sym")(options "")(descr ""))
   (lib (name "TPS54202HDDCT")(type "KiCad")(uri "${KIPRJMOD}/libs/TPS54202HDDCT/KiCad/TPS54202HDDCT.kicad_sym")(options "")(descr ""))
+  (lib (name "BQ34Z100PWR-R2")(type "KiCad")(uri "${KIPRJMOD}/libs/BQ34Z100PWR-R2/KiCad/BQ34Z100PWR-R2.kicad_sym")(options "")(descr ""))
 )
