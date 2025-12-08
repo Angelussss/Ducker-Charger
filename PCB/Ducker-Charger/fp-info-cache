@@ -1,4 +1,4 @@
-26888878948246874
+26906516357258060
 Audio_Module
 Reverb_BTDR-1H
 Digital Reverberation Unit, http://www.belton.co.kr/inc/downfile.php?seq=17&file=pdf (footprint from http://www.uk-electronic.de/PDF/BTDR-1.pdf)
@@ -13,6 +13,13 @@ audio belton reverb
 0
 7
 7
+BQ34Z100PWR
+SOP65P640X120-14N
+PW
+Integrated Circuit
+0
+14
+14
 Battery
 BatteryClip_Keystone_54_D16-19mm
 Battery clip for batteries with a diameter between 16-19 mm: https://www.keyelco.com/product.cfm/product_id/826
@@ -62012,6 +62019,62 @@ Through hole pin header THT 2x20 2.54mm double row
 0
 40
 40
+EasyEDA
+LQFP-64_L10.0-W10.0-P0.50-LS12.0-BL
+
+
+0
+64
+64
+EasyEDA
+MSOP-10_L3.0-W3.0-P0.50-LS5.0-BL
+
+
+0
+10
+10
+EasyEDA
+QFN-64_L8.0-W8.0-P0.40-TL-EP6.2
+
+
+0
+65
+65
+EasyEDA
+SMB_L4.3-W3.6-LS5.4-RD
+
+
+0
+2
+2
+EasyEDA
+SOT-23-6_L2.9-W1.6-P0.95-LS2.8-BL
+
+
+0
+6
+6
+EasyEDA
+TO-252-2_L6.6-W6.1-P4.57-LS9.9-TL-CW
+
+
+0
+3
+3
+EasyEDA
+TSSOP-24_L7.8-W4.4-P0.65-LS6.4-BL
+
+
+0
+24
+24
+EasyEDA
+USB-C_SMD-TYPE-C-31-M-12_1
+
+
+0
+18
+16
 Ferrite_THT
 LairdTech_28C0236-0JW-10
 Ferrite, vertical, LairdTech 28C0236-0JW-10, https://assets.lairdtech.com/home/brandworld/files/28C0236-0JW-10.pdf, JW Miller core https://www.bourns.com/products/magnetic-products/j.w.-miller-through-hole-ferrite-beads-emi-filters
@@ -99994,6 +100057,13 @@ Logo WEEE
 0
 0
 0
+TPS54202HDDCT
+SOT95P280X110-6N
+DDC (R-PDSO-G6)-1
+Integrated Circuit
+0
+6
+6
 TerminalBlock
 TerminalBlock_MaiXu_MX126-5.0-02P_1x02_P5.00mm
 terminal block MaiXu MX126-5.0-02P, 2 pins, pitch 5mm, size 10.5x7.8mm, drill diameter 1.3mm, pad diameter 2.8mm, https://www.lcsc.com/datasheet/lcsc_datasheet_2309150913_MAX-MX126-5-0-03P-GN01-Cu-S-A_C5188435.pdf, script-generated using https://gitlab.com/kicad/libraries/kicad-footprint-generator/-/tree/master/scripts/TerminalBlock_MaiXu
