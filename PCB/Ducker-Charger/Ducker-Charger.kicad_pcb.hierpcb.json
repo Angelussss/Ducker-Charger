@@ -1,0 +1,24 @@
+{
+  "subpcb": {
+    "Ducker-Charger.kicad_pcb": {
+      "anchor": "U2"
+    }
+  },
+  "sheet": {
+    "": {
+      "checked": false
+    },
+    "/2619d069-74ef-4c2a-996f-0b2ab6b3180e": {
+      "checked": false
+    },
+    "/5d5574d1-c297-4bba-a44d-88ff163858a6": {
+      "checked": false
+    },
+    "/b1375a06-d47d-478c-835c-6ba88db99bcf": {
+      "checked": false
+    },
+    "/ccd240c6-b24b-451e-a22e-a82e757ea5cc": {
+      "checked": false
+    }
+  }
+}
