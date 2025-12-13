@@ -1,0 +1,9 @@
+EESchema-DOCLIB  Version 2.0
+#
+$CMP STUSB4710AQ1TR
+D Stand-alone USB PD controller (with short-to-VBUS protection)
+K
+F https://www.st.com/resource/en/datasheet/stusb4710.pdf
+$ENDCMP
+#
+#End Doc Library
