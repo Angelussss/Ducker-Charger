@@ -3764,6 +3764,16 @@
 	)
 	(wire
 		(pts
+			(xy 194.31 90.17) (xy 175.26 90.17)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "1e08e48b-bc6a-4259-92d1-cf15a8541339")
+	)
+	(wire
+		(pts
 			(xy 116.84 140.97) (xy 134.62 140.97)
 		)
 		(stroke
@@ -3901,6 +3911,16 @@
 			(type default)
 		)
 		(uuid "45522784-0627-42f2-b16c-d467255317fc")
+	)
+	(wire
+		(pts
+			(xy 194.31 92.71) (xy 175.26 92.71)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "48ef9d59-8d4b-45e5-b32a-7beb71cd26c4")
 	)
 	(wire
 		(pts
@@ -4061,16 +4081,6 @@
 			(type default)
 		)
 		(uuid "78736000-1ec0-4185-ae14-e25bcbf79b65")
-	)
-	(wire
-		(pts
-			(xy 175.26 92.71) (xy 193.04 92.71)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "7b494ada-fe74-46c2-8502-6f348b7d096c")
 	)
 	(wire
 		(pts
@@ -4381,16 +4391,6 @@
 			(type default)
 		)
 		(uuid "cd5187a0-e1a8-48e1-80b4-d108d6f4cc21")
-	)
-	(wire
-		(pts
-			(xy 175.26 90.17) (xy 193.04 90.17)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "cd5d0ca1-29d7-4bcc-b12b-ee9357d93115")
 	)
 	(wire
 		(pts
@@ -4885,17 +4885,6 @@
 		)
 		(uuid "5648b320-9633-4adb-85a8-ccf3cb8ea1ea")
 	)
-	(label "I2C1_SDA"
-		(at 193.04 90.17 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-				(thickness 0.1588)
-			)
-			(justify right bottom)
-		)
-		(uuid "5937231d-5c2e-49ce-ac65-2f390323c1de")
-	)
 	(label "VSS"
 		(at 116.84 120.65 0)
 		(effects
@@ -4941,17 +4930,6 @@
 			(justify right bottom)
 		)
 		(uuid "760512a4-6613-43f9-a206-3ed69a7dfe68")
-	)
-	(label "I2C1_SCL"
-		(at 193.04 92.71 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-				(thickness 0.1588)
-			)
-			(justify right bottom)
-		)
-		(uuid "79eea7e4-b2e7-4541-ba24-64055733b7c4")
 	)
 	(label "SWCLK"
 		(at 269.24 36.83 180)
@@ -5275,6 +5253,52 @@
 			(justify left bottom)
 		)
 		(uuid "fe1863c9-edad-4355-965e-a68afe89f0a7")
+	)
+	(global_label "SDA"
+		(shape bidirectional)
+		(at 194.31 90.17 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.1588)
+			)
+			(justify left)
+		)
+		(uuid "0361932d-3445-452e-a972-d72ded648295")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 201.9746 90.17 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+	)
+	(global_label "SCL"
+		(shape bidirectional)
+		(at 194.31 92.71 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.1588)
+			)
+			(justify left)
+		)
+		(uuid "6465b1f7-54dd-49eb-91bc-f17f7182f983")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 201.9141 92.71 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
 	)
 	(global_label "BATT_+"
 		(shape bidirectional)
