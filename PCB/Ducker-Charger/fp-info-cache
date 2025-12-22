@@ -1,4 +1,4 @@
-26906516357258060
+26925934114743163
 Audio_Module
 Reverb_BTDR-1H
 Digital Reverberation Unit, http://www.belton.co.kr/inc/downfile.php?seq=17&file=pdf (footprint from http://www.uk-electronic.de/PDF/BTDR-1.pdf)
@@ -61474,6 +61474,13 @@ XT90_Connector
 2
 2
 Eagle_Connectors
+in_out_M3
+
+
+0
+2
+2
+Eagle_Connectors
 mouse-bite-1mm-slot
 
 
@@ -61726,6 +61733,13 @@ ID_space
 0
 0
 Eagle_Main
+IHXL1100OZEB4R7K3A
+IHXL1100OZEB4R7K3A-2
+Inductor
+0
+2
+2
+Eagle_Main
 KT12_THT
 
 
@@ -61936,6 +61950,13 @@ Tex_DCDC_v2_horizontal
 7
 7
 Eagle_Main
+Tex_DCDC_v2_horizontal_castellated
+
+
+0
+7
+7
+Eagle_Main
 Tex_DCDC_v2_vertical
 
 
@@ -61956,6 +61977,27 @@ Tex_DCDC_vertical_up
 0
 6
 6
+Eagle_Main
+Transformer_corvi_proto
+
+
+0
+5
+5
+Eagle_Main
+Untitled
+
+
+0
+5
+5
+Eagle_Main
+XZM-E50023
+
+
+0
+5
+5
 Eagle_Main
 connecting_trace_0.6mm
 
@@ -62034,6 +62076,27 @@ MSOP-10_L3.0-W3.0-P0.50-LS5.0-BL
 10
 10
 EasyEDA
+QFN-24_L4.0-W3.0-P0.40-TL-EP
+
+
+0
+25
+25
+EasyEDA
+QFN-32_L4.0-W4.0-P0.40-TL-EP2.8
+
+
+0
+33
+33
+EasyEDA
+QFN-38_L6.0-W4.0-P0.40-TL-EP_RJK
+
+
+0
+44
+40
+EasyEDA
 QFN-64_L8.0-W8.0-P0.40-TL-EP6.2
 
 
@@ -62047,6 +62110,20 @@ SMB_L4.3-W3.6-LS5.4-RD
 0
 2
 2
+EasyEDA
+SOIC-8_L4.9-W3.9-P1.27-LS6.0-BL
+
+
+0
+8
+8
+EasyEDA
+SOT-23-3_L2.9-W1.3-P1.90-LS2.4-BR
+
+
+0
+3
+3
 EasyEDA
 SOT-23-6_L2.9-W1.6-P0.95-LS2.8-BL
 
