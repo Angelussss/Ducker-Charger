@@ -23,7 +23,7 @@ This project involves the use of Lithium-Ion (Li-Ion) or Lithium Polymer (LiPo) 
 * **Battery Support:** [12x 18650 cells in 4s3p configuration]
 * **Input:** USB-C (PD supported)
 * **Output:** [2 PD USB-C, 2 3A USB-A]
-* **Interface:** [ 4 Status LEDs, I2C OLED Display, Pressable encoder]
+* **Interface:** [ Status LEDs, SPI OLED Display, Pressable encoder]
 * **Protections:** Overcharge, Overdischarge, Short-circuit, Thermal protection.
 
 ## 📂 Repository Structure
