@@ -308,6 +308,156 @@
 			)
 			(embedded_fonts no)
 		)
+		(symbol "Device:D_Schottky"
+			(pin_numbers
+				(hide yes)
+			)
+			(pin_names
+				(offset 1.016)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "D"
+				(at 0 2.54 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Value" "D_Schottky"
+				(at 0 -2.54 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" "~"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" "Schottky diode"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "ki_keywords" "diode Schottky"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "ki_fp_filters" "TO-???* *_Diode_* *SingleDiode* D_*"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(symbol "D_Schottky_0_1"
+				(polyline
+					(pts
+						(xy -1.905 0.635) (xy -1.905 1.27) (xy -1.27 1.27) (xy -1.27 -1.27) (xy -0.635 -1.27) (xy -0.635 -0.635)
+					)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 1.27 1.27) (xy 1.27 -1.27) (xy -1.27 0) (xy 1.27 1.27)
+					)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 1.27 0) (xy -1.27 0)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+			(symbol "D_Schottky_1_1"
+				(pin passive line
+					(at -3.81 0 0)
+					(length 2.54)
+					(name "K"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 3.81 0 180)
+					(length 2.54)
+					(name "A"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 		(symbol "Device:L"
 			(pin_numbers
 				(hide yes)
@@ -1519,150 +1669,6 @@
 						)
 					)
 					(number "3"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-			)
-			(embedded_fonts no)
-		)
-		(symbol "EasyEDA:SMBJ22A-E3_52"
-			(exclude_from_sim no)
-			(in_bom yes)
-			(on_board yes)
-			(property "Reference" "D"
-				(at 0 6.35 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Value" "SMBJ22A-E3/52"
-				(at 0 -3.81 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Footprint" "EasyEDA:SMB_L4.3-W3.6-LS5.4-RD"
-				(at 0 -6.35 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Datasheet" ""
-				(at 0 0 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Description" ""
-				(at 0 0 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "LCSC Part" "C3698580"
-				(at 0 -8.89 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(symbol "SMBJ22A-E3_52_0_1"
-				(polyline
-					(pts
-						(xy -2.54 3.05) (xy -3.05 3.56) (xy -2.54 3.05) (xy -2.54 -0.51) (xy -2.03 -1.02) (xy -2.03 -1.02)
-					)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(polyline
-					(pts
-						(xy -2.54 1.27) (xy -3.81 1.27)
-					)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(polyline
-					(pts
-						(xy 0 3.05) (xy -2.54 1.27) (xy 0 -0.51) (xy 0 3.05)
-					)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type background)
-					)
-				)
-				(polyline
-					(pts
-						(xy 1.27 1.27) (xy 0 1.27)
-					)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(pin unspecified line
-					(at -6.35 1.27 0)
-					(length 2.54)
-					(name "C"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "1"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at 3.81 1.27 180)
-					(length 2.54)
-					(name "A"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "2"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -4277,22 +4283,10 @@
 		(uuid "1d46a6da-51fb-436d-b854-fb6fe3c1aae3")
 	)
 	(junction
-		(at 270.51 71.12)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "2ca55e0c-9bb6-486f-97a7-c2645d49d812")
-	)
-	(junction
 		(at 270.51 76.2)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "35eccdd6-eb4d-4bb4-9745-b9d8e3fc550d")
-	)
-	(junction
-		(at 222.25 52.07)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "3fce00ec-f94c-4346-9282-d341b5d96d8d")
 	)
 	(junction
 		(at 193.04 52.07)
@@ -4337,6 +4331,12 @@
 		(uuid "64cdb3e3-5350-4d0a-bd20-86b975396234")
 	)
 	(junction
+		(at 270.51 78.74)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "78df0a2d-4b9c-4c07-8a78-91425a88e752")
+	)
+	(junction
 		(at 130.81 105.41)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -4347,12 +4347,6 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "8c830d2b-cb9b-457a-ab12-cf201ae694f5")
-	)
-	(junction
-		(at 270.51 78.74)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "974e8655-697d-42ab-9358-24942c0bd5f9")
 	)
 	(junction
 		(at 200.66 62.23)
@@ -4371,6 +4365,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "bbcd5d01-2b7a-493f-8dde-f731a4f1ead8")
+	)
+	(junction
+		(at 222.25 52.07)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "c47f5fcd-3709-42a1-b848-89e1e3b6a1e0")
 	)
 	(junction
 		(at 124.46 52.07)
@@ -4540,6 +4540,16 @@
 	)
 	(wire
 		(pts
+			(xy 222.25 53.34) (xy 222.25 52.07)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "03025997-a995-44b6-bc77-d514290f8b5b")
+	)
+	(wire
+		(pts
 			(xy 80.01 149.86) (xy 82.55 149.86)
 		)
 		(stroke
@@ -4637,16 +4647,6 @@
 			(type default)
 		)
 		(uuid "11aaad5e-413b-49f1-8589-e9432054826b")
-	)
-	(wire
-		(pts
-			(xy 251.46 46.99) (xy 251.46 50.8)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "11e17e8d-9dfa-4059-8775-7ea5198902b3")
 	)
 	(wire
 		(pts
@@ -4900,6 +4900,26 @@
 	)
 	(wire
 		(pts
+			(xy 251.46 46.99) (xy 251.46 50.8)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "3fdddecf-d82c-4011-9641-202ac6cd09ae")
+	)
+	(wire
+		(pts
+			(xy 247.65 46.99) (xy 251.46 46.99)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "4162ca47-094c-4b1b-8f27-b274f4c9179b")
+	)
+	(wire
+		(pts
 			(xy 269.24 71.12) (xy 270.51 71.12)
 		)
 		(stroke
@@ -4967,6 +4987,16 @@
 			(type default)
 		)
 		(uuid "4ac25a10-84e3-4fa9-99e6-373cdc48225f")
+	)
+	(wire
+		(pts
+			(xy 222.25 52.07) (xy 229.87 52.07)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "4d264b18-357f-4625-b61d-84c4cfe3ab05")
 	)
 	(wire
 		(pts
@@ -5300,6 +5330,16 @@
 	)
 	(wire
 		(pts
+			(xy 222.25 60.96) (xy 222.25 62.23)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "91761832-3605-4e18-827d-662031fb4995")
+	)
+	(wire
+		(pts
 			(xy 82.55 130.81) (xy 90.17 130.81)
 		)
 		(stroke
@@ -5350,7 +5390,7 @@
 	)
 	(wire
 		(pts
-			(xy 222.25 52.07) (xy 229.87 52.07)
+			(xy 219.71 52.07) (xy 222.25 52.07)
 		)
 		(stroke
 			(width 0)
@@ -5380,16 +5420,6 @@
 	)
 	(wire
 		(pts
-			(xy 270.51 71.12) (xy 270.51 46.99)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "a1d0e304-09fe-49e8-9581-3583b7d84331")
-	)
-	(wire
-		(pts
 			(xy 34.29 119.38) (xy 44.45 119.38)
 		)
 		(stroke
@@ -5407,16 +5437,6 @@
 			(type default)
 		)
 		(uuid "a3bdb2aa-f201-40b7-897f-1a51fb1176be")
-	)
-	(wire
-		(pts
-			(xy 219.71 52.07) (xy 222.25 52.07)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "a5a7db9f-813e-4663-b0ed-1b3fefcfb6cb")
 	)
 	(wire
 		(pts
@@ -5587,16 +5607,6 @@
 			(type default)
 		)
 		(uuid "c21c5576-924e-4c3b-ad8a-be6d94ed1821")
-	)
-	(wire
-		(pts
-			(xy 270.51 46.99) (xy 251.46 46.99)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "c29a4e08-01d6-4bb8-8564-f175a83c9654")
 	)
 	(wire
 		(pts
@@ -6838,6 +6848,71 @@
 			(project "Ducker-Charger"
 				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/ccd240c6-b24b-451e-a22e-a82e757ea5cc"
 					(reference "#PWR04")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 247.65 46.99 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "08d3d29d-3540-4d9d-a587-7a3743207224")
+		(property "Reference" "#PWR0124"
+			(at 247.65 53.34 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 243.84 48.26 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 247.65 46.99 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 247.65 46.99 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 247.65 46.99 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "b9aaee56-cc07-4721-9aa8-0ca32850d17b")
+		)
+		(instances
+			(project "Ducker-Charger"
+				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/ccd240c6-b24b-451e-a22e-a82e757ea5cc"
+					(reference "#PWR0124")
 					(unit 1)
 				)
 			)
@@ -9222,84 +9297,6 @@
 		)
 	)
 	(symbol
-		(lib_id "EasyEDA:SMBJ22A-E3_52")
-		(at 220.98 58.42 270)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(uuid "a1e58ae3-d1a7-476d-ab5a-d9d944258861")
-		(property "Reference" "D1"
-			(at 225.044 58.928 90)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "SMBJ22A-E3/52"
-			(at 214.122 70.358 90)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Footprint" "EasyEDA:SMB_L4.3-W3.6-LS5.4-RD"
-			(at 214.63 58.42 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" ""
-			(at 220.98 58.42 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" ""
-			(at 220.98 58.42 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "LCSC Part" "C3698580"
-			(at 212.09 58.42 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "2"
-			(uuid "74aad329-ee2d-41c1-b9a6-fb4f962dd880")
-		)
-		(pin "1"
-			(uuid "ec574ab4-2818-4f6b-9217-52cf4c2d25e7")
-		)
-		(instances
-			(project ""
-				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/ccd240c6-b24b-451e-a22e-a82e757ea5cc"
-					(reference "D1")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
 		(lib_id "Device:C")
 		(at 50.8 181.61 0)
 		(unit 1)
@@ -10418,6 +10415,76 @@
 			(project "Ducker-Charger"
 				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/ccd240c6-b24b-451e-a22e-a82e757ea5cc"
 					(reference "C9")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:D_Schottky")
+		(at 222.25 57.15 270)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "ccba92f5-2ea2-4b60-8ec4-5ba3209fff83")
+		(property "Reference" "D4"
+			(at 224.79 55.5624 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "SMBJ22A-E3/52"
+			(at 227.584 57.658 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+		(property "Footprint" "EasyEDA:SMB_L4.3-W3.6-LS5.4-RD"
+			(at 222.25 57.15 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 222.25 57.15 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Schottky diode"
+			(at 222.25 57.15 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "e1ca2bdf-c903-4f02-8246-b99adb1905d4")
+		)
+		(pin "2"
+			(uuid "d99189b4-f027-4eb8-aa7b-441dd2afebb8")
+		)
+		(instances
+			(project ""
+				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/ccd240c6-b24b-451e-a22e-a82e757ea5cc"
+					(reference "D4")
 					(unit 1)
 				)
 			)
