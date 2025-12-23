@@ -684,7 +684,7 @@
 	)
 	(text "LOW POWER\n"
 		(exclude_from_sim no)
-		(at 248.666 90.678 0)
+		(at 248.666 48.768 0)
 		(effects
 			(font
 				(size 3.81 3.81)
@@ -697,7 +697,7 @@
 	)
 	(text "HIGH POWER\n"
 		(exclude_from_sim no)
-		(at 248.92 50.546 0)
+		(at 248.92 92.71 0)
 		(effects
 			(font
 				(size 3.81 3.81)
@@ -707,6 +707,12 @@
 			)
 		)
 		(uuid "fe5157ad-d19b-4413-b340-821a58ac9059")
+	)
+	(junction
+		(at 219.71 123.19)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "83a4178b-49b0-49c1-a854-d5ce15014540")
 	)
 	(wire
 		(pts
@@ -718,6 +724,26 @@
 		)
 		(uuid "07b31c2f-bde9-4a64-aece-5753e9dec465")
 	)
+	(bus
+		(pts
+			(xy 219.71 64.77) (xy 227.33 64.77)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "1287d8e3-c57a-40cc-9cd1-71c428dbb371")
+	)
+	(bus
+		(pts
+			(xy 224.79 119.38) (xy 224.79 106.68)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "5a4fdf74-9303-4df3-95c7-8b10ed600e4f")
+	)
 	(wire
 		(pts
 			(xy 35.56 67.31) (xy 35.56 73.66)
@@ -728,6 +754,46 @@
 		)
 		(uuid "64fa1d47-fb9e-4b29-a990-373d21ef2da7")
 	)
+	(bus
+		(pts
+			(xy 182.88 123.19) (xy 219.71 123.19)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "78bca320-72f0-48d3-acb5-0b2adf83ebbe")
+	)
+	(bus
+		(pts
+			(xy 219.71 123.19) (xy 219.71 64.77)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "81834650-50a5-49ef-8b76-6c8951ef671c")
+	)
+	(bus
+		(pts
+			(xy 224.79 106.68) (xy 227.33 106.68)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "b27afcab-25a2-45bf-9934-d2ef8e48a2e2")
+	)
+	(bus
+		(pts
+			(xy 227.33 123.19) (xy 219.71 123.19)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d2f6f7bb-41fd-4241-98b6-1241bcf99363")
+	)
 	(wire
 		(pts
 			(xy 39.37 71.12) (xy 39.37 76.2)
@@ -737,6 +803,16 @@
 			(type default)
 		)
 		(uuid "d54fd873-f243-4473-af32-54225b1c66f0")
+	)
+	(bus
+		(pts
+			(xy 227.33 119.38) (xy 224.79 119.38)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "ea66bf90-6333-4359-bd71-6ca03d7c0f53")
 	)
 	(global_label "BATT_SENS_B3"
 		(shape output)
@@ -1128,8 +1204,8 @@
 		)
 	)
 	(sheet
-		(at 106.045 71.12)
-		(size 76.2 55.245)
+		(at 106.68 71.12)
+		(size 76.2 55.88)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
@@ -1144,7 +1220,7 @@
 		)
 		(uuid "2619d069-74ef-4c2a-996f-0b2ab6b3180e")
 		(property "Sheetname" "BMS"
-			(at 106.045 70.4084 0)
+			(at 106.68 70.4084 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -1153,12 +1229,22 @@
 			)
 		)
 		(property "Sheetfile" "BMS.kicad_sch"
-			(at 106.045 126.9496 0)
+			(at 106.68 126.9496 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 				(justify left top)
+			)
+		)
+		(pin "I2C_LP{I2C}" bidirectional
+			(at 182.88 123.19 0)
+			(uuid "6cf40319-7ccd-462f-bcc0-88003b47505e")
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
 			)
 		)
 		(instances
@@ -1170,7 +1256,7 @@
 		)
 	)
 	(sheet
-		(at 227.33 72.39)
+		(at 227.33 30.48)
 		(size 43.815 37.465)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -1186,7 +1272,7 @@
 		)
 		(uuid "5d5574d1-c297-4bba-a44d-88ff163858a6")
 		(property "Sheetname" "Low_pow"
-			(at 227.33 71.6784 0)
+			(at 227.33 29.7684 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -1195,12 +1281,22 @@
 			)
 		)
 		(property "Sheetfile" "low_pow.kicad_sch"
-			(at 227.33 110.4396 0)
+			(at 227.33 68.5296 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 				(justify left top)
+			)
+		)
+		(pin "I2C_LP{I2C}" bidirectional
+			(at 227.33 64.77 180)
+			(uuid "5ea9359b-8a13-463a-b2fc-dc1be6bdccb8")
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
 			)
 		)
 		(instances
@@ -1245,6 +1341,26 @@
 				(justify left top)
 			)
 		)
+		(pin "I2C_PD{I2C}" bidirectional
+			(at 227.33 119.38 180)
+			(uuid "97629fb6-121c-4608-8b98-d8948f5743f3")
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(pin "I2C_LP{I2C}" bidirectional
+			(at 227.33 123.19 180)
+			(uuid "de676d78-f31c-4536-843e-d7a54a4e0910")
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
 		(instances
 			(project "Ducker-Charger"
 				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817"
@@ -1254,7 +1370,7 @@
 		)
 	)
 	(sheet
-		(at 226.695 32.385)
+		(at 227.33 74.93)
 		(size 44.45 35.56)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -1270,7 +1386,7 @@
 		)
 		(uuid "ccd240c6-b24b-451e-a22e-a82e757ea5cc")
 		(property "Sheetname" "High_pow"
-			(at 226.695 31.6734 0)
+			(at 227.33 74.2184 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -1279,12 +1395,22 @@
 			)
 		)
 		(property "Sheetfile" "high_pow.kicad_sch"
-			(at 226.695 68.5296 0)
+			(at 227.33 111.0746 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 				(justify left top)
+			)
+		)
+		(pin "I2C_PD{I2C}" bidirectional
+			(at 227.33 106.68 180)
+			(uuid "e7fcf153-44a0-4a6f-ad01-779639f19e4f")
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
 			)
 		)
 		(instances
