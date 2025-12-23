@@ -2024,6 +2024,244 @@
 			)
 			(embedded_fonts no)
 		)
+		(symbol "power:+BATT"
+			(power)
+			(pin_numbers
+				(hide yes)
+			)
+			(pin_names
+				(offset 0)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "#PWR"
+				(at 0 -3.81 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Value" "+BATT"
+				(at 0 3.556 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" "Power symbol creates a global label with name \"+BATT\""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "ki_keywords" "global power battery"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(symbol "+BATT_0_1"
+				(polyline
+					(pts
+						(xy -0.762 1.27) (xy 0 2.54)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 0 2.54) (xy 0.762 1.27)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 0 0) (xy 0 2.54)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+			(symbol "+BATT_1_1"
+				(pin power_in line
+					(at 0 0 90)
+					(length 0)
+					(name "~"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
+		(symbol "power:-BATT"
+			(power)
+			(pin_numbers
+				(hide yes)
+			)
+			(pin_names
+				(offset 0)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "#PWR"
+				(at 0 -3.81 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Value" "-BATT"
+				(at 0 3.556 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" "Power symbol creates a global label with name \"-BATT\""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "ki_keywords" "global power battery"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(symbol "-BATT_0_1"
+				(polyline
+					(pts
+						(xy 0 0) (xy 0 2.54)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 0.762 1.27) (xy -0.762 1.27) (xy 0 2.54) (xy 0.762 1.27)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type outline)
+					)
+				)
+			)
+			(symbol "-BATT_1_1"
+				(pin power_in line
+					(at 0 0 90)
+					(length 0)
+					(name "~"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 		(symbol "power:GND"
 			(power)
 			(pin_numbers
@@ -2175,18 +2413,6 @@
 		(uuid 312a3c03-0d8c-46bb-9183-0c25170f2b2c)
 	)
 	(rectangle
-		(start 160.655 165.735)
-		(end 176.53 196.215)
-		(stroke
-			(width 0)
-			(type dash)
-		)
-		(fill
-			(type none)
-		)
-		(uuid 82e11972-2c3b-4c74-9d33-0c2d01db13ce)
-	)
-	(rectangle
 		(start 13.335 165.735)
 		(end 60.325 196.215)
 		(stroke
@@ -2328,19 +2554,6 @@
 			)
 		)
 		(uuid "b440dcc4-311d-4b7a-ace6-ff6c5e2f3fea")
-	)
-	(text "GLOBAL DEFINITIONS\n"
-		(exclude_from_sim no)
-		(at 179.578 163.83 0)
-		(effects
-			(font
-				(size 2.54 2.54)
-				(thickness 0.762)
-				(bold yes)
-				(color 31 20 255 1)
-			)
-		)
-		(uuid "b59ad182-01c6-4fde-8db2-071591e3d589")
 	)
 	(text "HARDWARE CONFIG\n"
 		(exclude_from_sim no)
@@ -2518,6 +2731,12 @@
 		(uuid "802f1f42-5b8b-4152-a7e2-1ea2eb5591cf")
 	)
 	(junction
+		(at 220.98 72.39)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "8036adb6-0094-4d09-8277-49dd29023fe1")
+	)
+	(junction
 		(at 40.64 50.8)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -2605,13 +2824,13 @@
 	)
 	(wire
 		(pts
-			(xy 264.16 104.14) (xy 269.24 104.14)
+			(xy 95.25 107.95) (xy 105.41 107.95)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "0334649e-0f61-4615-af6e-459349a29912")
+		(uuid "033b725a-a71a-4610-964a-f7f650716233")
 	)
 	(wire
 		(pts
@@ -2642,16 +2861,6 @@
 			(type default)
 		)
 		(uuid "08aa9d26-9cef-4c10-a588-45fd8810e95d")
-	)
-	(wire
-		(pts
-			(xy 175.26 179.07) (xy 163.83 179.07)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "0a75e390-301a-4ad7-bb21-822b894cf4dc")
 	)
 	(wire
 		(pts
@@ -2815,6 +3024,16 @@
 	)
 	(wire
 		(pts
+			(xy 209.55 72.39) (xy 220.98 72.39)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "3b8acc4b-8251-4cd9-a79a-69c1f32eb509")
+	)
+	(wire
+		(pts
 			(xy 57.15 83.82) (xy 50.8 83.82)
 		)
 		(stroke
@@ -2845,6 +3064,16 @@
 	)
 	(wire
 		(pts
+			(xy 220.98 72.39) (xy 220.98 64.77)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "4ae2de9a-2d2a-40d7-b34f-4108189d1a14")
+	)
+	(wire
+		(pts
 			(xy 121.92 59.69) (xy 133.35 59.69)
 		)
 		(stroke
@@ -2862,16 +3091,6 @@
 			(type default)
 		)
 		(uuid "4fbe0bf2-f7a0-4f3d-8f04-478720365c32")
-	)
-	(wire
-		(pts
-			(xy 99.06 107.95) (xy 105.41 107.95)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "50bfa4ec-0a2c-4932-a6ef-5859ffc6c5bb")
 	)
 	(wire
 		(pts
@@ -2912,6 +3131,16 @@
 			(type default)
 		)
 		(uuid "5a3cd02b-b333-4373-8015-db70353418bd")
+	)
+	(wire
+		(pts
+			(xy 220.98 72.39) (xy 237.49 72.39)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "5af63e04-8385-428f-9a51-1dfe17a92eb9")
 	)
 	(wire
 		(pts
@@ -2975,16 +3204,6 @@
 	)
 	(wire
 		(pts
-			(xy 220.98 66.04) (xy 220.98 64.77)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "673f7421-e1dd-4996-a1d4-ddc60349b27f")
-	)
-	(wire
-		(pts
 			(xy 38.1 175.26) (xy 38.1 171.45)
 		)
 		(stroke
@@ -3045,23 +3264,13 @@
 	)
 	(wire
 		(pts
-			(xy 220.98 81.28) (xy 226.06 81.28)
+			(xy 217.17 81.28) (xy 226.06 81.28)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
 		(uuid "7529cb9d-1095-47c2-8b21-1bd4045367b9")
-	)
-	(wire
-		(pts
-			(xy 220.98 104.14) (xy 226.06 104.14)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "75a0926f-df54-489c-93eb-f8c9676d12ca")
 	)
 	(wire
 		(pts
@@ -3112,6 +3321,16 @@
 			(type default)
 		)
 		(uuid "830b5b65-ef47-4840-9f2d-a63fcc1908aa")
+	)
+	(wire
+		(pts
+			(xy 217.17 104.14) (xy 226.06 104.14)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "85780a36-4340-409b-8dff-63d84c05bc16")
 	)
 	(wire
 		(pts
@@ -3215,7 +3434,7 @@
 	)
 	(wire
 		(pts
-			(xy 101.6 92.71) (xy 99.06 92.71)
+			(xy 101.6 92.71) (xy 95.25 92.71)
 		)
 		(stroke
 			(width 0)
@@ -3422,6 +3641,16 @@
 			(type default)
 		)
 		(uuid "d6e122aa-a2f2-4c05-907e-4184e0a132a2")
+	)
+	(wire
+		(pts
+			(xy 256.54 104.14) (xy 269.24 104.14)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d953b8ac-b058-47f5-a9a5-5d096d97a67a")
 	)
 	(wire
 		(pts
@@ -4881,16 +5110,6 @@
 		)
 		(uuid "92f73fcb-2ec5-4741-b8e3-a9db2bc5b769")
 	)
-	(label "PACK_-"
-		(at 175.26 179.07 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "a1402d61-1c3e-49dc-936f-32e458dd9b7c")
-	)
 	(label "VC1"
 		(at 71.12 99.06 180)
 		(effects
@@ -5085,28 +5304,6 @@
 			)
 		)
 	)
-	(global_label "BATT_-"
-		(shape bidirectional)
-		(at 270.51 64.77 0)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "26cb458d-ec2f-4cf9-a6a5-5b9990936465")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 281.4403 64.77 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-				(hide yes)
-			)
-		)
-	)
 	(global_label "BATT_SENS_B+"
 		(shape output)
 		(at 220.98 48.26 180)
@@ -5151,28 +5348,6 @@
 			)
 		)
 	)
-	(global_label "BATT_-"
-		(shape bidirectional)
-		(at 99.06 92.71 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "3507765f-5a83-4ed3-8c72-bc352a1fcdef")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 88.1297 92.71 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-				(hide yes)
-			)
-		)
-	)
 	(global_label "SDA"
 		(shape bidirectional)
 		(at 270.51 49.53 0)
@@ -5192,50 +5367,6 @@
 					(size 1.27 1.27)
 				)
 				(justify left)
-				(hide yes)
-			)
-		)
-	)
-	(global_label "BATT_-"
-		(shape bidirectional)
-		(at 99.06 107.95 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "514eff9d-7659-4f12-a037-690e387822eb")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 88.1297 107.95 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-				(hide yes)
-			)
-		)
-	)
-	(global_label "BATT_-"
-		(shape bidirectional)
-		(at 237.49 72.39 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "54574ecd-ba87-404b-bdd4-4bc7b85db6c7")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 226.5597 72.39 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
 				(hide yes)
 			)
 		)
@@ -5363,94 +5494,6 @@
 		(uuid "aee673ac-aba3-4080-a442-e84898d9c4fe")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 21.5078 91.44 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-				(hide yes)
-			)
-		)
-	)
-	(global_label "BATT_-"
-		(shape bidirectional)
-		(at 220.98 66.04 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "bca3760c-38a1-4eea-8d9b-d28fd3bba8e8")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 210.0497 66.04 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-				(hide yes)
-			)
-		)
-	)
-	(global_label "BATT_-"
-		(shape bidirectional)
-		(at 220.98 104.14 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "bdd03db0-2b7f-4090-a7a5-38fc95ea9994")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 210.0497 104.14 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-				(hide yes)
-			)
-		)
-	)
-	(global_label "BATT_+"
-		(shape bidirectional)
-		(at 220.98 81.28 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "df5695a3-3641-4998-885b-d0c4686efc15")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 210.0497 81.28 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-				(hide yes)
-			)
-		)
-	)
-	(global_label "BATT_-"
-		(shape bidirectional)
-		(at 264.16 104.14 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "e9f43453-f5d9-4ad9-9ae1-d94873df7b10")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 253.2297 104.14 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -5738,6 +5781,71 @@
 			(project ""
 				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
 					(reference "R37")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:-BATT")
+		(at 270.51 64.77 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "0a2cda4d-2e53-41fc-a208-7a8dd8583be5")
+		(property "Reference" "#PWR0122"
+			(at 270.51 68.58 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "-BATT"
+			(at 274.32 63.754 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 270.51 64.77 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 270.51 64.77 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"-BATT\""
+			(at 270.51 64.77 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "fc6657ee-6d13-47a9-a346-f50256a1d43a")
+		)
+		(instances
+			(project "Ducker-Charger"
+				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
+					(reference "#PWR0122")
 					(unit 1)
 				)
 			)
@@ -6462,7 +6570,7 @@
 		(dnp no)
 		(uuid "394d17c2-b122-4e66-ad4e-fe87351459ed")
 		(property "Reference" "RDSG1"
-			(at 128.016 80.264 0)
+			(at 125.476 80.518 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -6471,7 +6579,7 @@
 			)
 		)
 		(property "Value" "4k5"
-			(at 128.016 82.804 0)
+			(at 125.476 83.058 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -6799,6 +6907,72 @@
 			(project ""
 				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
 					(reference "TH2")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:+BATT")
+		(at 217.17 81.28 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "47ebf39a-c1c3-42ed-a0fc-469c48f35bc3")
+		(property "Reference" "#PWR0110"
+			(at 217.17 85.09 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "+BATT"
+			(at 217.17 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 217.17 81.28 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 217.17 81.28 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"+BATT\""
+			(at 217.17 81.28 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "edd4e38d-a1a6-491d-a2b6-43e1843c9776")
+		)
+		(instances
+			(project "Ducker-Charger"
+				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
+					(reference "#PWR0110")
 					(unit 1)
 				)
 			)
@@ -7221,6 +7395,72 @@
 		)
 	)
 	(symbol
+		(lib_id "power:-BATT")
+		(at 256.54 104.14 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "6ee84439-e22c-4a51-b540-773488740480")
+		(property "Reference" "#PWR0123"
+			(at 256.54 107.95 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "-BATT"
+			(at 256.54 99.06 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 256.54 104.14 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 256.54 104.14 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"-BATT\""
+			(at 256.54 104.14 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "75b206ef-ab96-445e-a3b8-bbabb5495bd7")
+		)
+		(instances
+			(project "Ducker-Charger"
+				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
+					(reference "#PWR0123")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Device:R")
 		(at 46.99 106.68 90)
 		(unit 1)
@@ -7570,6 +7810,72 @@
 		)
 	)
 	(symbol
+		(lib_id "power:-BATT")
+		(at 217.17 104.14 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "9ac96934-3abb-414b-b70d-4c9def17c3af")
+		(property "Reference" "#PWR0120"
+			(at 217.17 107.95 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "-BATT"
+			(at 217.17 99.06 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 217.17 104.14 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 217.17 104.14 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"-BATT\""
+			(at 217.17 104.14 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "1937ea7d-1859-4406-b377-2fde0f003fde")
+		)
+		(instances
+			(project "Ducker-Charger"
+				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
+					(reference "#PWR0120")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Device:R")
 		(at 226.06 85.09 180)
 		(unit 1)
@@ -7857,6 +8163,72 @@
 			(project ""
 				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
 					(reference "IC3")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:-BATT")
+		(at 95.25 107.95 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "aeadd7da-35ed-49d0-aa6a-d530c968c623")
+		(property "Reference" "#PWR0119"
+			(at 95.25 111.76 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "-BATT"
+			(at 95.25 102.87 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 95.25 107.95 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 95.25 107.95 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"-BATT\""
+			(at 95.25 107.95 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "5d4f46db-8539-4052-a1b1-484f294b38b1")
+		)
+		(instances
+			(project "Ducker-Charger"
+				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
+					(reference "#PWR0119")
 					(unit 1)
 				)
 			)
@@ -8280,7 +8652,7 @@
 	)
 	(symbol
 		(lib_id "power:GND")
-		(at 163.83 179.07 0)
+		(at 189.23 92.71 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -8289,7 +8661,7 @@
 		(fields_autoplaced yes)
 		(uuid "e99ded17-ec6e-47ef-ab75-d4007ca3e49e")
 		(property "Reference" "#PWR090"
-			(at 163.83 185.42 0)
+			(at 189.23 99.06 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8298,7 +8670,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 163.83 184.15 0)
+			(at 189.23 97.79 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8306,7 +8678,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 163.83 179.07 0)
+			(at 189.23 92.71 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8315,7 +8687,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 163.83 179.07 0)
+			(at 189.23 92.71 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8324,7 +8696,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 163.83 179.07 0)
+			(at 189.23 92.71 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8336,7 +8708,7 @@
 			(uuid "b2baaac3-52c3-4e2d-bb8a-fe8fa609158a")
 		)
 		(instances
-			(project ""
+			(project "Ducker-Charger"
 				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
 					(reference "#PWR090")
 					(unit 1)
@@ -8414,6 +8786,72 @@
 		)
 	)
 	(symbol
+		(lib_id "power:-BATT")
+		(at 95.25 92.71 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "f0560842-5d51-4639-9944-c1b7d0571d7f")
+		(property "Reference" "#PWR0118"
+			(at 95.25 96.52 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "-BATT"
+			(at 95.25 87.63 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 95.25 92.71 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 95.25 92.71 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"-BATT\""
+			(at 95.25 92.71 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "0fcce316-875f-4125-85fb-9ef0b710daba")
+		)
+		(instances
+			(project "Ducker-Charger"
+				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
+					(reference "#PWR0118")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Device:R")
 		(at 123.19 88.9 0)
 		(unit 1)
@@ -8477,6 +8915,72 @@
 			(project "Ducker-Charger"
 				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
 					(reference "RGS1")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:-BATT")
+		(at 209.55 72.39 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "f4a89bb2-4a9d-470b-9c97-22245c197d3a")
+		(property "Reference" "#PWR0121"
+			(at 209.55 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "-BATT"
+			(at 209.55 67.31 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 209.55 72.39 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 209.55 72.39 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"-BATT\""
+			(at 209.55 72.39 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "53e58e1e-9896-481f-80fb-dad1c8e6aadc")
+		)
+		(instances
+			(project "Ducker-Charger"
+				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/2619d069-74ef-4c2a-996f-0b2ab6b3180e"
+					(reference "#PWR0121")
 					(unit 1)
 				)
 			)
