@@ -379,6 +379,244 @@
 			)
 			(embedded_fonts no)
 		)
+		(symbol "power:+BATT"
+			(power)
+			(pin_numbers
+				(hide yes)
+			)
+			(pin_names
+				(offset 0)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "#PWR"
+				(at 0 -3.81 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Value" "+BATT"
+				(at 0 3.556 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" "Power symbol creates a global label with name \"+BATT\""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "ki_keywords" "global power battery"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(symbol "+BATT_0_1"
+				(polyline
+					(pts
+						(xy -0.762 1.27) (xy 0 2.54)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 0 2.54) (xy 0.762 1.27)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 0 0) (xy 0 2.54)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+			(symbol "+BATT_1_1"
+				(pin power_in line
+					(at 0 0 90)
+					(length 0)
+					(name "~"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
+		(symbol "power:-BATT"
+			(power)
+			(pin_numbers
+				(hide yes)
+			)
+			(pin_names
+				(offset 0)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "#PWR"
+				(at 0 -3.81 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Value" "-BATT"
+				(at 0 3.556 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" "Power symbol creates a global label with name \"-BATT\""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "ki_keywords" "global power battery"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(symbol "-BATT_0_1"
+				(polyline
+					(pts
+						(xy 0 0) (xy 0 2.54)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 0.762 1.27) (xy -0.762 1.27) (xy 0 2.54) (xy 0.762 1.27)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type outline)
+					)
+				)
+			)
+			(symbol "-BATT_1_1"
+				(pin power_in line
+					(at 0 0 90)
+					(length 0)
+					(name "~"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 	)
 	(text "LOGIC\n"
 		(exclude_from_sim no)
@@ -470,9 +708,39 @@
 		)
 		(uuid "fe5157ad-d19b-4413-b340-821a58ac9059")
 	)
+	(wire
+		(pts
+			(xy 39.37 76.2) (xy 35.56 76.2)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "07b31c2f-bde9-4a64-aece-5753e9dec465")
+	)
+	(wire
+		(pts
+			(xy 35.56 67.31) (xy 35.56 73.66)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "64fa1d47-fb9e-4b29-a990-373d21ef2da7")
+	)
+	(wire
+		(pts
+			(xy 39.37 71.12) (xy 39.37 76.2)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d54fd873-f243-4473-af32-54225b1c66f0")
+	)
 	(global_label "BATT_SENS_B3"
 		(shape output)
-		(at 39.37 119.38 0)
+		(at 35.56 119.38 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -482,29 +750,7 @@
 		)
 		(uuid "05b633a0-92ce-405a-a215-7c62cad1424a")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 55.9622 119.38 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-				(hide yes)
-			)
-		)
-	)
-	(global_label "BATT_-"
-		(shape bidirectional)
-		(at 35.56 73.66 0)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "06cf422e-eb63-401b-8db9-a0e277e842b4")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 46.4903 73.66 0)
+			(at 52.1522 119.38 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -516,7 +762,7 @@
 	)
 	(global_label "BATT_SENS_B2"
 		(shape output)
-		(at 39.37 116.84 0)
+		(at 35.56 116.84 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -526,7 +772,7 @@
 		)
 		(uuid "0d050b3f-f05b-4555-951a-a76e22b79349")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 55.9622 116.84 0)
+			(at 52.1522 116.84 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -538,7 +784,7 @@
 	)
 	(global_label "BATT_SENS_B-"
 		(shape output)
-		(at 39.37 111.76 0)
+		(at 35.56 111.76 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -548,7 +794,7 @@
 		)
 		(uuid "20598a99-e91b-47f6-898a-9398a7b39c6d")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 56.3251 111.76 0)
+			(at 52.5151 111.76 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -560,7 +806,7 @@
 	)
 	(global_label "BATT_SENS_B+"
 		(shape output)
-		(at 39.37 121.92 0)
+		(at 35.56 121.92 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -570,7 +816,7 @@
 		)
 		(uuid "75edabc6-b9ba-4764-91b0-540eb5fb04f2")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 56.3251 121.92 0)
+			(at 52.5151 121.92 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -582,7 +828,7 @@
 	)
 	(global_label "BATT_SENS_B1"
 		(shape output)
-		(at 39.37 114.3 0)
+		(at 35.56 114.3 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -592,29 +838,7 @@
 		)
 		(uuid "b49d64ee-9e36-4f2a-b036-eae56fa5346d")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 55.9622 114.3 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-				(hide yes)
-			)
-		)
-	)
-	(global_label "BATT_+"
-		(shape bidirectional)
-		(at 35.56 76.2 0)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "b4f8d914-ab12-49d3-81d2-1124fd973c34")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 46.4903 76.2 0)
+			(at 52.1522 114.3 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -633,10 +857,9 @@
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "41e8f665-9b56-4e92-8f13-49ed38541f44")
 		(property "Reference" "J1"
-			(at 30.48 67.31 0)
+			(at 30.48 70.612 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -649,6 +872,7 @@
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
 		(property "Footprint" "Connector_AMASS:AMASS_XT60-M_1x02_P7.20mm_Vertical"
@@ -695,17 +919,16 @@
 	)
 	(symbol
 		(lib_id "Connector_Generic:Conn_01x05")
-		(at 34.29 116.84 0)
+		(at 30.48 116.84 0)
 		(mirror y)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "adfb0e39-1f49-4db3-a609-ab34d7349448")
 		(property "Reference" "J2"
-			(at 34.29 105.41 0)
+			(at 30.734 108.458 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -713,15 +936,16 @@
 			)
 		)
 		(property "Value" "Conn_01x05"
-			(at 34.29 107.95 0)
+			(at 30.48 107.95 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
 		(property "Footprint" ""
-			(at 34.29 116.84 0)
+			(at 30.48 116.84 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -730,7 +954,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 34.29 116.84 0)
+			(at 30.48 116.84 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -739,7 +963,7 @@
 			)
 		)
 		(property "Description" "Generic connector, single row, 01x05, script generated (kicad-library-utils/schlib/autogen/connector/)"
-			(at 34.29 116.84 0)
+			(at 30.48 116.84 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -766,6 +990,138 @@
 			(project ""
 				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817"
 					(reference "J2")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:-BATT")
+		(at 35.56 67.31 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "d793fc78-f787-451d-bd47-b0d195557326")
+		(property "Reference" "#PWR0109"
+			(at 35.56 71.12 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "-BATT"
+			(at 35.56 62.23 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 35.56 67.31 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 35.56 67.31 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"-BATT\""
+			(at 35.56 67.31 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "c32be573-5165-4288-a9c9-fdd62442945b")
+		)
+		(instances
+			(project "Ducker-Charger"
+				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817"
+					(reference "#PWR0109")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:+BATT")
+		(at 39.37 71.12 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "e0d9a1d8-de98-4320-9b5e-abd6d6f86386")
+		(property "Reference" "#PWR0108"
+			(at 39.37 74.93 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "+BATT"
+			(at 39.37 66.04 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 39.37 71.12 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 39.37 71.12 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"+BATT\""
+			(at 39.37 71.12 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "e689a991-7987-4b77-9301-ef831e8ea9d7")
+		)
+		(instances
+			(project "Ducker-Charger"
+				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817"
+					(reference "#PWR0108")
 					(unit 1)
 				)
 			)
