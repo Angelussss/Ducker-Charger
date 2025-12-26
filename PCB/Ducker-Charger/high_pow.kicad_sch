@@ -4,9 +4,6 @@
 	(generator_version "9.0")
 	(uuid "6a868fe2-6b8f-4a57-bbc2-cc5bbbc3213e")
 	(paper "A4")
-	(title_block
-		(comment 1 "Angelo Perotti")
-	)
 	(lib_symbols
 		(symbol "Device:C"
 			(pin_numbers
@@ -4075,7 +4072,7 @@
 	)
 	(text "NB:\nI pin AGND e GND sono collegati elettricamente nello schematico\n per garantire il riferimento DC. Nel PCB, devono essere uniti in\n un UNICO punto (Star Ground), preferibilmente sotto il Pad \nTermico (EP) del chip, per isolare la logica analogica dai \ndisturbi di potenza.\n"
 		(exclude_from_sim no)
-		(at 217.17 158.75 0)
+		(at 222.25 229.87 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -4120,7 +4117,7 @@
 	)
 	(text "PD_IRQ must be connected to an INTERRUPT on the STM\n"
 		(exclude_from_sim no)
-		(at 243.078 169.926 0)
+		(at 248.158 241.046 0)
 		(effects
 			(font
 				(size 1.27 1.27)
