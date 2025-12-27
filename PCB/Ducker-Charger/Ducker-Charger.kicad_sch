@@ -902,6 +902,16 @@
 		(color 0 0 0 0)
 		(uuid "f6106ae9-799c-4fcd-a6f3-0b2ceda4574e")
 	)
+	(wire
+		(pts
+			(xy 275.59 63.5) (xy 271.78 63.5)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "06971bac-67cf-4633-9032-58191988d33a")
+	)
 	(bus
 		(pts
 			(xy 219.71 64.77) (xy 227.33 64.77)
@@ -911,6 +921,16 @@
 			(type default)
 		)
 		(uuid "1287d8e3-c57a-40cc-9cd1-71c428dbb371")
+	)
+	(wire
+		(pts
+			(xy 271.78 123.19) (xy 275.59 123.19)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "3a83b36f-3ad7-47dd-b4e7-a53913964f2a")
 	)
 	(bus
 		(pts
@@ -931,6 +951,16 @@
 			(type default)
 		)
 		(uuid "64fa1d47-fb9e-4b29-a990-373d21ef2da7")
+	)
+	(wire
+		(pts
+			(xy 275.59 123.19) (xy 275.59 63.5)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "650f1e9c-f163-43de-bb6f-56b76028d438")
 	)
 	(bus
 		(pts
@@ -1014,6 +1044,26 @@
 	)
 	(wire
 		(pts
+			(xy 273.05 66.04) (xy 273.05 119.38)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f1e6d29e-fb44-4fcc-9e50-e41aae90046d")
+	)
+	(wire
+		(pts
+			(xy 273.05 119.38) (xy 271.78 119.38)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f613f23e-c62c-4491-929e-0eb13f5cc5bc")
+	)
+	(wire
+		(pts
 			(xy 62.23 71.12) (xy 62.23 68.58)
 		)
 		(stroke
@@ -1021,6 +1071,16 @@
 			(type default)
 		)
 		(uuid "f72162f8-26e5-4294-8c01-790b966f72bb")
+	)
+	(wire
+		(pts
+			(xy 271.78 66.04) (xy 273.05 66.04)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "fc9e9104-65e6-4d01-ad17-a5bf0c0ed737")
 	)
 	(global_label "BATT_SENS_B3"
 		(shape output)
@@ -1548,7 +1608,7 @@
 	)
 	(sheet
 		(at 227.33 30.48)
-		(size 43.815 37.465)
+		(size 44.45 38.1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
@@ -1588,6 +1648,26 @@
 					(size 1.27 1.27)
 				)
 				(justify left)
+			)
+		)
+		(pin "LAB_2ENABLER" input
+			(at 271.78 66.04 0)
+			(uuid "43a9feb1-1081-4933-add3-5e9134c8132b")
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(pin "USB_C_2ENABLER" input
+			(at 271.78 63.5 0)
+			(uuid "cda569be-1720-4af8-a1b8-9f17524c0b5a")
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
 			)
 		)
 		(instances
@@ -1650,6 +1730,26 @@
 					(size 1.27 1.27)
 				)
 				(justify left)
+			)
+		)
+		(pin "LAB_2ENABLER" output
+			(at 271.78 123.19 0)
+			(uuid "4d0c379b-3b2e-4d13-ba24-59b05d8c7e20")
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(pin "USB_C_2ENABLER" output
+			(at 271.78 119.38 0)
+			(uuid "45963aa2-a493-41b2-bbe2-b9024ca16e33")
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
 			)
 		)
 		(instances
