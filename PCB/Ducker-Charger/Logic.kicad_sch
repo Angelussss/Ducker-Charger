@@ -5943,8 +5943,16 @@
 		(uuid "51844d8c-c256-4de6-868a-b3a14ba88d5a")
 	)
 	(no_connect
+		(at 105.41 83.82)
+		(uuid "78610351-8e2b-45cc-a482-568dbddb9764")
+	)
+	(no_connect
 		(at 262.89 44.45)
 		(uuid "f9a692e4-9877-4e55-b857-511b72d3cdbc")
+	)
+	(no_connect
+		(at 105.41 81.28)
+		(uuid "ffb62840-bfa2-48de-a5f2-3a6bef1c8243")
 	)
 	(bus_entry
 		(at 213.36 152.4)
@@ -7114,6 +7122,16 @@
 	)
 	(wire
 		(pts
+			(xy 105.41 132.08) (xy 87.63 132.08)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "a7c9a969-600e-4f0d-ac86-a2b45ad172dc")
+	)
+	(wire
+		(pts
 			(xy 257.81 92.71) (xy 270.51 92.71)
 		)
 		(stroke
@@ -7281,16 +7299,6 @@
 			(type default)
 		)
 		(uuid "c3f483fb-9c80-45a7-bd8b-109c98ec46f5")
-	)
-	(wire
-		(pts
-			(xy 146.05 93.98) (xy 163.83 93.98)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "c548f080-9b7d-401f-be6d-5db5085d3b2c")
 	)
 	(wire
 		(pts
@@ -7721,16 +7729,6 @@
 			(type default)
 		)
 		(uuid "f5441cef-34ac-4701-9c78-b64932c44bf2")
-	)
-	(wire
-		(pts
-			(xy 146.05 111.76) (xy 163.83 111.76)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "f8bce258-aeaf-4d9e-b6fb-45d40a6b96c5")
 	)
 	(wire
 		(pts
@@ -8190,17 +8188,6 @@
 		)
 		(uuid "896c67e5-0b63-4516-87a9-9756d261fdeb")
 	)
-	(label "TIM2_CH1"
-		(at 163.83 111.76 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-				(thickness 0.1588)
-			)
-			(justify right bottom)
-		)
-		(uuid "8b6beb0a-1e05-40ed-a14c-bf78c4239113")
-	)
 	(label "I2C_PD.SDA"
 		(at 229.87 148.59 180)
 		(effects
@@ -8297,6 +8284,17 @@
 		)
 		(uuid "a5df0411-fdbf-41e5-b69b-cc61f1138665")
 	)
+	(label "SPI1_MOSI"
+		(at 87.63 132.08 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.1588)
+			)
+			(justify left bottom)
+		)
+		(uuid "a6aa52b1-a202-4831-9e79-6f1fea277cbc")
+	)
 	(label "NTC_2"
 		(at 233.68 97.79 0)
 		(effects
@@ -8326,17 +8324,6 @@
 			(justify right bottom)
 		)
 		(uuid "aed61947-0739-4b3f-868b-513bd09f30d2")
-	)
-	(label "SPI1_MOSI"
-		(at 163.83 93.98 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-				(thickness 0.1588)
-			)
-			(justify right bottom)
-		)
-		(uuid "af529935-d8af-40cb-a3fc-215747f06296")
 	)
 	(label "SPI1_SCK"
 		(at 246.38 138.43 0)
@@ -8703,6 +8690,28 @@
 				(hide yes)
 			)
 		)
+	)
+	(hierarchical_label "LAB_2ENABLER"
+		(shape output)
+		(at 146.05 127 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "2333153e-0b54-401a-a30b-393e817e81b2")
+	)
+	(hierarchical_label "USB_C_2ENABLER"
+		(shape output)
+		(at 146.05 124.46 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "5b1c9c2c-8d9b-4501-a155-85e3a49ab651")
 	)
 	(hierarchical_label "I2C_LP{I2C}"
 		(shape bidirectional)

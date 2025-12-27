@@ -4662,6 +4662,16 @@
 	)
 	(wire
 		(pts
+			(xy 191.77 107.95) (xy 193.04 107.95)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "291682f7-cb7a-4934-a666-7d1cb34a1d3a")
+	)
+	(wire
+		(pts
 			(xy 44.45 274.32) (xy 58.42 274.32)
 		)
 		(stroke
@@ -4689,16 +4699,6 @@
 			(type default)
 		)
 		(uuid "2c2cb6f1-5778-402e-bb6a-ecad2ef83d72")
-	)
-	(wire
-		(pts
-			(xy 175.26 72.39) (xy 193.04 72.39)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "2c53c360-9488-4a0e-b9fa-c542083b9348")
 	)
 	(wire
 		(pts
@@ -5212,6 +5212,16 @@
 	)
 	(wire
 		(pts
+			(xy 191.77 72.39) (xy 193.04 72.39)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "7a8a57ca-a03b-4e13-a738-05d786211701")
+	)
+	(wire
+		(pts
 			(xy 359.41 81.28) (xy 370.84 81.28)
 		)
 		(stroke
@@ -5349,16 +5359,6 @@
 			(type default)
 		)
 		(uuid "94115a03-3bfd-4453-9d03-24150ef97ee3")
-	)
-	(wire
-		(pts
-			(xy 175.26 107.95) (xy 193.04 107.95)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "9575a79f-acae-415e-94c4-ba3912d87a2b")
 	)
 	(wire
 		(pts
@@ -7202,16 +7202,6 @@
 		)
 		(uuid "a2c605c0-2b8a-4299-b2b2-c7cc0f530973")
 	)
-	(label "LAB_2ENABLER"
-		(at 175.26 107.95 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "a59cfba6-430f-4fde-87f0-933d21e89233")
-	)
 	(label "USB_A1_FB"
 		(at 309.88 187.96 180)
 		(effects
@@ -7272,16 +7262,6 @@
 			(justify left bottom)
 		)
 		(uuid "cc0ef6ca-5ade-43b3-9a4a-42c54b7802b3")
-	)
-	(label "USB_C_2ENABLER"
-		(at 175.26 72.39 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "cea6ca68-e89e-4c68-b33e-a69e4ad08365")
 	)
 	(label "I2C_LP.SDA"
 		(at 86.36 200.66 180)
@@ -7509,6 +7489,28 @@
 			(justify right)
 		)
 		(uuid "3ff7c7a1-456d-4fcb-96dd-0098e43326f5")
+	)
+	(hierarchical_label "USB_C_2ENABLER"
+		(shape input)
+		(at 191.77 72.39 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "bb154d1c-e909-417c-80bf-3b0a004e21da")
+	)
+	(hierarchical_label "LAB_2ENABLER"
+		(shape input)
+		(at 191.77 107.95 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "edcbe55f-1243-48d2-9276-eb785edc5ff6")
 	)
 	(symbol
 		(lib_id "power:GND")
@@ -12071,7 +12073,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+		(property "Footprint" "Resistor_SMD:R_1206_3216Metric"
 			(at 127 84.328 90)
 			(effects
 				(font
