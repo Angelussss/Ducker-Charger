@@ -3255,12 +3255,28 @@
 		(uuid "f1d632a2-1d60-43ae-8d49-7d353c1afb28")
 	)
 	(no_connect
+		(at 267.97 54.61)
+		(uuid "0cf16c3e-d5d7-43a9-8326-c1f762a9c659")
+	)
+	(no_connect
+		(at 234.95 54.61)
+		(uuid "186f9c57-6a3a-4c0c-9b2b-77b0fbb2486b")
+	)
+	(no_connect
 		(at 156.21 49.53)
 		(uuid "25afd68f-d05d-4a49-ba1a-b926748e7814")
 	)
 	(no_connect
 		(at 156.21 64.77)
 		(uuid "2f14d6b9-b7dd-4b70-92b2-256e6cce992b")
+	)
+	(no_connect
+		(at 234.95 52.07)
+		(uuid "83570968-0c0f-4e6b-9e88-07185c8e74a3")
+	)
+	(no_connect
+		(at 234.95 49.53)
+		(uuid "d45f062b-9a79-47c4-aa0a-207ad92383af")
 	)
 	(bus_entry
 		(at 180.34 154.94)
