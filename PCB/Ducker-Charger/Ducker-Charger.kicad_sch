@@ -376,6 +376,185 @@
 			)
 			(embedded_fonts no)
 		)
+		(symbol "EasyEDA:3522-2"
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "F"
+				(at 0 7.62 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Value" "3522-2"
+				(at 0 -7.62 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" "EasyEDA:FUSE-TH_3522-2"
+				(at 0 -10.16 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "LCSC Part" "C3204137"
+				(at 0 -12.7 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(symbol "3522-2_0_1"
+				(polyline
+					(pts
+						(xy -5.08 2.54) (xy -5.08 -2.54)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -5.08 0) (xy 5.08 0)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(rectangle
+					(start -3.81 1.27)
+					(end 4.06 -1.27)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type background)
+					)
+				)
+				(polyline
+					(pts
+						(xy 5.08 2.54) (xy 5.08 -2.54)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(pin unspecified line
+					(at -10.16 2.54 0)
+					(length 5.08)
+					(name "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin unspecified line
+					(at -10.16 -2.54 0)
+					(length 5.08)
+					(name "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin unspecified line
+					(at 10.16 2.54 180)
+					(length 5.08)
+					(name "4"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "4"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin unspecified line
+					(at 10.16 -2.54 180)
+					(length 5.08)
+					(name "3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 		(symbol "power:+BATT"
 			(power)
 			(pin_numbers
@@ -711,15 +890,17 @@
 		(color 0 0 0 0)
 		(uuid "83a4178b-49b0-49c1-a854-d5ce15014540")
 	)
-	(wire
-		(pts
-			(xy 39.37 76.2) (xy 35.56 76.2)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "07b31c2f-bde9-4a64-aece-5753e9dec465")
+	(junction
+		(at 62.23 71.12)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "a39df5c4-1ebb-4fd1-b445-f73d6b2d7b4e")
+	)
+	(junction
+		(at 41.91 76.2)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "f6106ae9-799c-4fcd-a6f3-0b2ceda4574e")
 	)
 	(bus
 		(pts
@@ -771,6 +952,16 @@
 		)
 		(uuid "81834650-50a5-49ef-8b76-6c8951ef671c")
 	)
+	(wire
+		(pts
+			(xy 41.91 71.12) (xy 41.91 76.2)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "a93849c3-d8ca-4b8a-b5db-9dfff0176968")
+	)
 	(bus
 		(pts
 			(xy 224.79 106.68) (xy 227.33 106.68)
@@ -780,6 +971,16 @@
 			(type default)
 		)
 		(uuid "b27afcab-25a2-45bf-9934-d2ef8e48a2e2")
+	)
+	(wire
+		(pts
+			(xy 35.56 76.2) (xy 41.91 76.2)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d138bbd9-f8f8-4157-ab52-0968456dbeb6")
 	)
 	(bus
 		(pts
@@ -793,7 +994,7 @@
 	)
 	(wire
 		(pts
-			(xy 39.37 71.12) (xy 39.37 76.2)
+			(xy 62.23 71.12) (xy 62.23 76.2)
 		)
 		(stroke
 			(width 0)
@@ -810,6 +1011,16 @@
 			(type default)
 		)
 		(uuid "ea66bf90-6333-4359-bd71-6ca03d7c0f53")
+	)
+	(wire
+		(pts
+			(xy 62.23 71.12) (xy 62.23 68.58)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f72162f8-26e5-4294-8c01-790b966f72bb")
 	)
 	(global_label "BATT_SENS_B3"
 		(shape output)
@@ -991,6 +1202,89 @@
 		)
 	)
 	(symbol
+		(lib_id "EasyEDA:3522-2")
+		(at 52.07 73.66 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "4b2c7351-af81-468f-9c6b-b56ad7a5ee88")
+		(property "Reference" "F1"
+			(at 52.07 66.04 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "3522-2"
+			(at 52.07 68.58 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "EasyEDA:FUSE-TH_3522-2"
+			(at 52.07 83.82 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 52.07 73.66 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 52.07 73.66 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC Part" "C3204137"
+			(at 52.07 86.36 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "3"
+			(uuid "d1527773-87b3-4d46-9130-eec1ba407dbd")
+		)
+		(pin "4"
+			(uuid "4bae1dbe-a76f-4f88-a8eb-44228c480383")
+		)
+		(pin "2"
+			(uuid "59a19c00-ada1-4355-a3b5-6325decf965c")
+		)
+		(pin "1"
+			(uuid "beb3264e-56a0-43de-9dd1-e1b446c6f978")
+		)
+		(instances
+			(project ""
+				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817"
+					(reference "F1")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Connector_Generic:Conn_01x05")
 		(at 30.48 116.84 0)
 		(mirror y)
@@ -1136,7 +1430,7 @@
 	)
 	(symbol
 		(lib_id "power:+BATT")
-		(at 39.37 71.12 0)
+		(at 62.23 68.58 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -1145,7 +1439,7 @@
 		(fields_autoplaced yes)
 		(uuid "e0d9a1d8-de98-4320-9b5e-abd6d6f86386")
 		(property "Reference" "#PWR0108"
-			(at 39.37 74.93 0)
+			(at 62.23 72.39 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -1154,7 +1448,7 @@
 			)
 		)
 		(property "Value" "+BATT"
-			(at 39.37 66.04 0)
+			(at 62.23 63.5 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -1162,7 +1456,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 39.37 71.12 0)
+			(at 62.23 68.58 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -1171,7 +1465,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 39.37 71.12 0)
+			(at 62.23 68.58 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -1180,7 +1474,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"+BATT\""
-			(at 39.37 71.12 0)
+			(at 62.23 68.58 0)
 			(effects
 				(font
 					(size 1.27 1.27)
