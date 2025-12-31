@@ -4380,8 +4380,8 @@
 		(uuid 1f49c6d1-2eb6-4bc3-9181-0a1038029e59)
 	)
 	(rectangle
-		(start 24.765 53.975)
-		(end 26.67 55.88)
+		(start 23.368 53.848)
+		(end 25.273 55.753)
 		(stroke
 			(width 0)
 			(type default)
@@ -4440,8 +4440,8 @@
 		(uuid 97d0088d-9024-410c-a9ae-26de6287b0f0)
 	)
 	(rectangle
-		(start 24.765 48.895)
-		(end 26.67 50.8)
+		(start 23.368 48.768)
+		(end 25.273 50.673)
 		(stroke
 			(width 0)
 			(type default)
@@ -4464,8 +4464,8 @@
 		(uuid ac3d8eb2-0882-44ae-8f7d-a8b7f182940d)
 	)
 	(rectangle
-		(start 24.765 51.435)
-		(end 26.67 53.34)
+		(start 23.368 51.308)
+		(end 25.273 53.213)
 		(stroke
 			(width 0)
 			(type default)
@@ -4498,6 +4498,17 @@
 			)
 		)
 		(uuid "002e6216-3e44-487d-90d8-fb264373af74")
+	)
+	(text "6"
+		(exclude_from_sim no)
+		(at 23.495 50.165 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "0d199a6c-cbfe-44a3-86bd-584ed27140d2")
 	)
 	(text "SVEGLIA"
 		(exclude_from_sim no)
@@ -4555,6 +4566,17 @@
 		)
 		(uuid "38822e1e-5ead-45d6-b52a-da4f44b710c3")
 	)
+	(text "14"
+		(exclude_from_sim no)
+		(at 23.241 55.245 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "3a6c4e3b-1d60-4bcb-94fa-0237131217a5")
+	)
 	(text "PD_IRQ must be connected to an INTERRUPT on the STM\n"
 		(exclude_from_sim no)
 		(at 248.158 241.046 0)
@@ -4567,7 +4589,7 @@
 	)
 	(text "ADC INPUT"
 		(exclude_from_sim no)
-		(at 18.796 50.038 0)
+		(at 17.399 49.911 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -4645,7 +4667,7 @@
 	)
 	(text "ADC INPUT"
 		(exclude_from_sim no)
-		(at 19.05 52.832 0)
+		(at 17.653 52.705 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -4666,9 +4688,20 @@
 		)
 		(uuid "a18efe6e-61ea-4e23-b4f1-54223e619d3a")
 	)
+	(text "7"
+		(exclude_from_sim no)
+		(at 23.495 52.705 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "ab79a77d-adb6-4dc8-85a1-c6a0556a32dd")
+	)
 	(text "VANNO A STM"
 		(exclude_from_sim no)
-		(at 12.7 53.086 90)
+		(at 12.954 53.086 90)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -4723,7 +4756,7 @@
 	)
 	(text "ADC INPUT"
 		(exclude_from_sim no)
-		(at 18.796 55.372 0)
+		(at 17.399 55.245 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -7139,16 +7172,6 @@
 	)
 	(wire
 		(pts
-			(xy 143.51 185.42) (xy 132.08 185.42)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "8797166d-82a0-4610-b345-89bec0568e43")
-	)
-	(wire
-		(pts
 			(xy 57.15 139.7) (xy 57.15 137.16)
 		)
 		(stroke
@@ -7909,6 +7932,16 @@
 	)
 	(wire
 		(pts
+			(xy 132.08 187.96) (xy 144.78 187.96)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c6576569-d79c-402b-8acd-58a105e0bfa3")
+	)
+	(wire
+		(pts
 			(xy 241.3 115.57) (xy 241.3 118.11)
 		)
 		(stroke
@@ -8166,6 +8199,16 @@
 			(type default)
 		)
 		(uuid "e34532a2-3042-4458-8993-cd3cbfc7969e")
+	)
+	(wire
+		(pts
+			(xy 132.08 187.96) (xy 132.08 185.42)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "e3757e65-19fd-4256-9851-4e40f310f303")
 	)
 	(wire
 		(pts
@@ -8547,6 +8590,16 @@
 		)
 		(uuid "038e9481-4929-4065-b67d-c80d6c543c3f")
 	)
+	(label "HP.CHRG_OK"
+		(at 26.67 40.64 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "04b1048d-73d2-4ee3-9f04-0ec7acf32370")
+	)
 	(label "SYS"
 		(at 209.55 99.06 180)
 		(effects
@@ -8576,16 +8629,6 @@
 			(justify left bottom)
 		)
 		(uuid "095ec6cd-3c39-438c-9990-c7935cecc922")
-	)
-	(label "PSYS"
-		(at 26.67 55.88 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "0a8d70d6-1346-4752-bec8-46ac624992d1")
 	)
 	(label "CC2"
 		(at 196.85 140.97 180)
@@ -8947,6 +8990,16 @@
 		)
 		(uuid "5f3b6503-0138-4e01-b152-c0e08709595c")
 	)
+	(label "HP.IADPT"
+		(at 26.67 50.8 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "5f90e5b0-9ad6-400d-8c56-8c6b3745f26c")
+	)
 	(label "VBUS"
 		(at 26.67 33.02 0)
 		(effects
@@ -9016,16 +9069,6 @@
 			(justify left bottom)
 		)
 		(uuid "6d224873-52a5-4e29-b385-dcb8598a733c")
-	)
-	(label "IBAT"
-		(at 26.67 53.34 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "6f62640d-db48-4e71-98d3-e850ac19294a")
 	)
 	(label "LODRV2"
 		(at 189.23 119.38 180)
@@ -9127,15 +9170,15 @@
 		)
 		(uuid "8c778fed-2e23-476c-8c66-c1ba95f00433")
 	)
-	(label "EN_OTG"
-		(at 26.67 43.18 0)
+	(label "HP.PSYS"
+		(at 26.67 55.88 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
 			(justify left bottom)
 		)
-		(uuid "8ca8c020-1509-4ccc-9ed2-d4f58c1a452b")
+		(uuid "91348300-881e-46f3-8e21-7282f1500352")
 	)
 	(label "V_WIRE"
 		(at 158.75 45.72 180)
@@ -9267,16 +9310,6 @@
 		)
 		(uuid "b148d3f8-a1f9-4b86-bd24-1a45243e08f2")
 	)
-	(label "PD_IRQ"
-		(at 101.6 49.53 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "b1f57616-a1fb-43a4-8539-3648e40cc847")
-	)
 	(label "BTST1"
 		(at 160.02 119.38 180)
 		(effects
@@ -9306,6 +9339,16 @@
 			(justify right bottom)
 		)
 		(uuid "ba50e422-51b9-47a4-9f46-077eabab813d")
+	)
+	(label "HP.EN_OTG"
+		(at 26.67 43.18 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "bb3123c5-d85f-4578-b6ab-0e50a8627753")
 	)
 	(label "I2C_EX.SDA"
 		(at 15.24 148.59 0)
@@ -9367,6 +9410,16 @@
 		)
 		(uuid "c66158e2-eae3-4e4c-b28b-f1d29088e865")
 	)
+	(label "HP.IBAT"
+		(at 26.67 53.34 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "c7385c50-72e0-40b9-a8e4-7576a6edba41")
+	)
 	(label "ILIM_HIZ"
 		(at 43.18 181.61 180)
 		(effects
@@ -9417,8 +9470,8 @@
 		)
 		(uuid "d25f8214-9521-471f-b778-afbed950bc31")
 	)
-	(label "CHRG_OK"
-		(at 143.51 185.42 180)
+	(label "HP.CHRG_OK"
+		(at 144.78 187.96 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -9487,16 +9540,6 @@
 		)
 		(uuid "dc6c703a-693b-467a-8dfb-ca98f1d14a83")
 	)
-	(label "CHRG_OK"
-		(at 26.67 40.64 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "de5a1b31-7c85-490b-b087-bf740e351d3d")
-	)
 	(label "COMP1"
 		(at 26.67 71.12 0)
 		(effects
@@ -9506,16 +9549,6 @@
 			(justify left bottom)
 		)
 		(uuid "df204b5c-dc1d-4dfd-80a4-89ccb5b9625c")
-	)
-	(label "IADPT"
-		(at 26.67 50.8 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "e04442d4-b3d6-4ab4-b329-a37bc90c1724")
 	)
 	(label "ACP"
 		(at 95.25 109.22 180)
@@ -9556,6 +9589,16 @@
 			(justify right bottom)
 		)
 		(uuid "e4e8106d-5451-464a-91be-4694d3d9a8c0")
+	)
+	(label "HP.PD_IRQ"
+		(at 101.6 49.53 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "ea6cd054-db65-4bc7-8de8-066093984e73")
 	)
 	(label "I2C_PD.SCL"
 		(at -7.62 34.29 180)
