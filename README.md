@@ -6,7 +6,6 @@
 
 **Ducker-Charger** is a completely custom, open-source power bank designed from scratch. This project aims to create a reliable Battery Management System (BMS) and charging solution, packed into a compact design.
 
-![Ducker Charger Render](img/render_preview.png)
 
 ## ⚠️ Disclaimer & Safety
 
@@ -30,8 +29,8 @@ This project involves the use of Lithium-Ion (Li-Ion) or Lithium Polymer (LiPo) 
 
 ```text
 Ducker-Charger/
-├── hardware/          # KiCad Project (Schematics and PCB Layout)
-├── firmware/          # Source Code 
+├── PCB/               # KiCad Project (Schematics and PCBs Layout)
+├── firmware/          # Source Code & CubeMX project
 ├── mechanical/        # 3D Enclosure files 
 ├── docs/              # Documentation
 └── img/               # Images for this README
