@@ -22,9 +22,6 @@ typedef enum {
 typedef struct {
   State_ID_t currentState;
   State_ID_t nextState;
-  /*
-   *
-   * */
 } FSM;
 
 typedef struct {
