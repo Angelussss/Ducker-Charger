@@ -11,22 +11,11 @@ The system utilizes a **Narrow Voltage DC (NVDC)** architecture. This decouples 
 
 | Rail Name | Voltage | Source | Description |
 | --- | --- | --- | --- |
-| **VBUS** | 5V - 20V | USB-C / Boost | Input/Output power rail negotiated by PD Controller.
-
- |
-| **VSYS** | Regulated | U1 (Charger) | Main system bus. Powered by Buck-Boost from VBUS or Battery.
-
- |
-| **+BATT** | 10V - 16.8V | Battery Pack | Raw battery stack voltage (4S Li-Ion typical).
-
- |
-| **+3V3** | 3.3V | **IC2** (TPS54202) | Logic supply for MCU and sensors, derived from `VSYS`.
-
- |
-| **5V_USB** | 5.0V | **U4, U5** | Regulated output for USB-A ports.
-
- |
-
+| **VBUS** | 5V - 20V | USB-C / Boost | Input/Output power rail negotiated by PD Controller.|
+| **VSYS** | Regulated | U1 (Charger) | Main system bus. Powered by Buck-Boost from VBUS or Battery.|
+| **+BATT** | 10V - 16.8V | Battery Pack | Raw battery stack voltage (4S Li-Ion typical).|
+| **+3V3** | 3.3V | **IC2** (TPS54202) | Logic supply for MCU and sensors, derived from `VSYS`.|
+| **5V_USB** | 5.0V | **U4, U5** | Regulated output for USB-A ports.|
 ---
 
 ## 2. Subsystem Analysis
@@ -51,8 +40,7 @@ The BMS prioritizes safety through hardware redundancy, separating protection fr
 * **Primary Protection (U8 - BQ77915):** A standalone hardware protector. It monitors individual cell voltages (`VC0`-`VC4`) and drives the series protection MOSFETs (Q1, Q2) to cut off the battery in case of Over-Voltage, Under-Voltage, or Short-Circuit. It also handles passive cell balancing.
 
 
-* 
-**Fuel Gauge (IC3 - BQ34Z100-R2):** Uses a low-side sense resistor (`SRN`/`SRP`) to track State of Charge (SoC).
+* **Fuel Gauge (IC3 - BQ34Z100-R2):** Uses a low-side sense resistor (`SRN`/`SRP`) to track State of Charge (SoC).
 
 
 * **Critical Design Note:** An **ISO1540 (U9)** I2C isolator is used. The Fuel Gauge references the Battery Negative (`-BATT`), while the MCU references System Ground (`GND`). The isolator prevents ground loops and protects the logic when protection FETs are open.
@@ -76,12 +64,10 @@ The BMS prioritizes safety through hardware redundancy, separating protection fr
 
 *Schematic Sheet: `/Low_pow/*`
 
-* 
-**Lab Mode Switching:** The system can route power to banana jacks (`V_LABS`) or USB ports via back-to-back MOSFETs (Q6-Q9), controlled by `USB_C_ZENABLER` and `LAB_ZENABLER` signals.
+* **Lab Mode Switching:** The system can route power to banana jacks (`V_LABS`) or USB ports via back-to-back MOSFETs (Q6-Q9), controlled by `USB_C_ZENABLER` and `LAB_ZENABLER` signals.
 
 
-* 
-**Current Monitoring:** An **INA3221** (3-channel monitor) provides real-time current and voltage telemetry for the auxiliary outputs.
+* **Current Monitoring:** An **INA3221** (3-channel monitor) provides real-time current and voltage telemetry for the auxiliary outputs.
 
 
 
@@ -95,5 +81,6 @@ The design features two distinct ground domains:
 
 1. **GND:** System Ground (Logic, Power Stage, USB-C).
 2. **-BATT:** Battery Pack Negative.
+
 *Connection:* These are connected via the **Protection MOSFETs** and the **Sense Resistor**. When the protection trips, `-BATT` floats.
 
