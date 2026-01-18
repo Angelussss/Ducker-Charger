@@ -4,6 +4,8 @@
 ![License](https://img.shields.io/github/license/Angelussss/Ducker-Charger)
 ![KiCad](https://img.shields.io/badge/Designed_with-KiCad-blue)
 
+**THIS PROJECT HAS NOT YET BEEN COMPLETED, TAKE ANY INFO AT YOUR OWN RISK**
+
 **Ducker-Charger** is a completely custom, open-source power bank designed from scratch. This project aims to create a reliable Battery Management System (BMS) and charging solution, packed into a compact design.
 
 
