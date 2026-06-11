@@ -1,16 +1,24 @@
 #ifndef __CHARGEMANAGEMENT__
 #define __CHARGEMANAGEMENT__
+#include "stm32f4xx.h"
 
-float Voltage();
+// Sensors:
+typedef struct {
+    float tempZone[4];
+    float usbCInputCurrent;
+    float batteryCurrent;
+    float power_sys_W;
+} SensorData;
 
-float Current();
+extern SensorData sensor_data;
 
-float State_of_charge();
-
-void handshake();
+void init();
 
 void readSensors();
 
+float toVoltage(uint32_t raw);
+
+float toCelsius(float temp);
 
 
 

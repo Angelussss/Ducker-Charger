@@ -9,26 +9,15 @@ extern ADC_HandleTypeDef hadcTZ4;
 extern ADC_HandleTypeDef hadcUSBCIC;
 extern ADC_HandleTypeDef hadcBC;
 extern ADC_HandleTypeDef hadcTSP;
+// interrupt per fuel gauge
 
-const int timeout = 10; // In ms
-const int VREF = 3300;
-const int VMAX = 1;
+const int timeout = 10;         // In ms
+const float VREF = 3300;        // In mV
+const float VMAX = 4095;        // 2^12 - 1
+const float V_25 = 760;         // Voltage at 25ºC (in mV)
+const float AVG_SLOPE = 2.5f;   // mV/ºC
 
-/*
-const float MAX_V = 16.8;
-const float NOMINAL_V = 14.4;
-
-const float DEFAULT_VOLTAGE = 0.0;      // To be defined
-*/
-
-// Sensors:
-float tempZone1;
-float tempZone2;
-float tempZone3;
-float tempZone4;
-float usbCInputC;
-float batteryCurrent;
-float totalSystemPower;
+SensorData sensor_data;
 
 /*  Read via ADC1; VREF+ = VDD (+3.3V)
     Signal Name     STM32 Pin	ADC Channel	Description
@@ -59,12 +48,22 @@ float totalSystemPower;
        (+) Stop the ADC peripheral using HAL_ADC_Stop()
 */
 
+void init() {
+    // Initialize INA3221 (I2C_LP) immediately to provide OCP (Over Current Protection) for USB-A ports
+
+}
+
 float toVoltage(uint32_t raw) {
-    return raw/VMAX * VREF;
+    return ((float)raw / VMAX) * VREF;
+}
+
+float toCelsius(float temp) {
+    return (V_25 - temp) / AVG_SLOPE + 25.0f;
 }
 
 void readSensors() {
     uint32_t raw;
+
         // --- Temperature Zone 1 Reading ---
     // Start the ADC peripheral
     HAL_ADC_Start(&hadcTZ1);
@@ -72,11 +71,58 @@ void readSensors() {
     // Read Temp Zone 1
     HAL_ADC_PollForConversion(&hadcTZ1, timeout);
     raw = HAL_ADC_GetValue(&hadcTZ1);
-    raw = toVoltage(raw);
-
+    sensor_data.tempZone[0] = toVoltage(raw);
+    sensor_data.tempZone[0] = toCelsius(sensor_data.tempZone[0]);
 
     // Stop the ADC peripheral
     HAL_ADC_Stop(&hadcTZ1);
+
+        // --- Temperature Zone 2 Reading ---
+    HAL_ADC_Start(&hadcTZ2);
+    HAL_ADC_PollForConversion(&hadcTZ2, timeout);
+    raw = HAL_ADC_GetValue(&hadcTZ2);
+    sensor_data.tempZone[1] = toVoltage(raw);
+    sensor_data.tempZone[1] = toCelsius(sensor_data.tempZone[1]);
+    HAL_ADC_Stop(&hadcTZ2);
+
+        // --- Temperature Zone 3 Reading ---
+    HAL_ADC_Start(&hadcTZ3);
+    HAL_ADC_PollForConversion(&hadcTZ3, timeout);
+    raw = HAL_ADC_GetValue(&hadcTZ3);
+    sensor_data.tempZone[2] = toVoltage(raw);
+    sensor_data.tempZone[2] = toCelsius(sensor_data.tempZone[2]);
+    HAL_ADC_Stop(&hadcTZ3);
+
+        // --- Temperature Zone 4 Reading ---
+    HAL_ADC_Start(&hadcTZ4);
+    HAL_ADC_PollForConversion(&hadcTZ4, timeout);
+    raw = HAL_ADC_GetValue(&hadcTZ4);
+    sensor_data.tempZone[3] = toVoltage(raw);
+    sensor_data.tempZone[3] = toCelsius(sensor_data.tempZone[3]);
+    HAL_ADC_Stop(&hadcTZ4);
+
+        // --- USB-C Input Current ---
+    HAL_ADC_Start(&hadcUSBCIC);
+    HAL_ADC_PollForConversion(&hadcUSBCIC, timeout);
+    raw = HAL_ADC_GetValue(&hadcUSBCIC);
+    sensor_data.usbCInputCurrent = toVoltage(raw) / 200.0f;
+
+    HAL_ADC_Stop(&hadcUSBCIC);
+
+        // --- Battery Current (Charge/Discharge) ---
+    HAL_ADC_Start(&hadcBC);
+    HAL_ADC_PollForConversion(&hadcBC, timeout);
+    raw = HAL_ADC_GetValue(&hadcBC);
+    // vedi datasheet integrato
+    HAL_ADC_Stop(&hadcBC);
+
+        // --- Total System Power ---
+    HAL_ADC_Start(&hadcTSP);
+    HAL_ADC_PollForConversion(&hadcTSP, timeout);
+    raw = HAL_ADC_GetValue(&hadcTSP);
+    sensor_data.power_sys_W = (toVoltage(raw) / 1000.0f) * 60.0f;
+    //batteryCurrent = ;       // I < 0: charging; I > 0: discharging
+    HAL_ADC_Stop(&hadcTSP);
 
 }
 
