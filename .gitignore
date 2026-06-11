@@ -43,3 +43,10 @@ fp-info-cache
 # Python files
 .ipynb_checkpoints/
 
+# OS
+.DS_Store
+
+# idea
+.idea
+CMakeLists.txt
+
