@@ -7,8 +7,6 @@ float Current();
 
 float State_of_charge();
 
-bool check_for_connection();
-
 void handshake();
 
 void readSensors();
