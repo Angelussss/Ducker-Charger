@@ -1,13 +1,34 @@
 #include "charge.h"
-#include "../cubeMX/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_adc.h"
-#include <iostream>
+#include "stm32f4xx_hal.h"
 
-using namespace std;
+// To be configured during ADC Initialization
+extern ADC_HandleTypeDef hadcTZ1;
+extern ADC_HandleTypeDef hadcTZ2;
+extern ADC_HandleTypeDef hadcTZ3;
+extern ADC_HandleTypeDef hadcTZ4;
+extern ADC_HandleTypeDef hadcUSBCIC;
+extern ADC_HandleTypeDef hadcBC;
+extern ADC_HandleTypeDef hadcTSP;
 
+const int timeout = 10; // In ms
+const int VREF = 3300;
+const int VMAX = 1;
+
+/*
 const float MAX_V = 16.8;
 const float NOMINAL_V = 14.4;
 
 const float DEFAULT_VOLTAGE = 0.0;      // To be defined
+*/
+
+// Sensors:
+float tempZone1;
+float tempZone2;
+float tempZone3;
+float tempZone4;
+float usbCInputC;
+float batteryCurrent;
+float totalSystemPower;
 
 /*  Read via ADC1; VREF+ = VDD (+3.3V)
     Signal Name     STM32 Pin	ADC Channel	Description
@@ -38,16 +59,24 @@ const float DEFAULT_VOLTAGE = 0.0;      // To be defined
        (+) Stop the ADC peripheral using HAL_ADC_Stop()
 */
 
+float toVoltage(uint32_t raw) {
+    return raw/VMAX * VREF;
+}
+
 void readSensors() {
-    ADC_HandleTypeDef hadc;
+    uint32_t raw;
+        // --- Temperature Zone 1 Reading ---
     // Start the ADC peripheral
-    HAL_ADC_Start(&hadc);
+    HAL_ADC_Start(&hadcTZ1);
 
     // Read Temp Zone 1
+    HAL_ADC_PollForConversion(&hadcTZ1, timeout);
+    raw = HAL_ADC_GetValue(&hadcTZ1);
+    raw = toVoltage(raw);
 
 
     // Stop the ADC peripheral
-    HAL_ADC_Stop(&hadc);
+    HAL_ADC_Stop(&hadcTZ1);
 
 }
 
