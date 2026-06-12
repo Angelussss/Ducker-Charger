@@ -28,6 +28,7 @@ All sensors are read via **ADC1** (12-bit resolution).
 | **NTC_2** | **PA1** | IN1 | Temp Zone 2 |
 | **NTC_3** | **PA2** | IN2 | Temp Zone 3 |
 | **NTC_4** | **PA3** | IN3 | Temp Zone 4 |
+| **NTC_ONB** | **PA4** | IN4 | On-Board NTC |
 | **HP.IADPT** | **PA6** | IN6 | USB-C Input Current |
 | **HP.IBAT** | **PA7** | IN7 | Battery Current (Charge/Discharge) |
 | **HP.PSYS** | **PC4** | IN14 | Total System Power |
@@ -62,7 +63,7 @@ The system uses two separate I2C buses to isolate High Power (PD) negotiation fr
 
 ### 3.1 High Power Bus (I2C_PD) - "Monitor Mode"
 
-**Pins:** SCL = **PB8**, SDA = **PB9**
+**Peripheral:** I2C3 — **Pins:** SCL = **PA8**, SDA = **PC9**
 
 | Device | IC | Address (7-bit) | Firmware Role |
 | --- | --- | --- | --- |
@@ -71,7 +72,7 @@ The system uses two separate I2C buses to isolate High Power (PD) negotiation fr
 
 ### 3.2 Low Power Bus (I2C_LP) - "Control Mode"
 
-**Pins:** SCL = **PB6**, SDA = **PB7**
+**Peripheral:** I2C1 — **Pins:** SCL = **PB6**, SDA = **PB7**
 
 | Device | IC | Address (7-bit) | Function & Configuration |
 | --- | --- | --- | --- |
@@ -86,7 +87,7 @@ The system uses two separate I2C buses to isolate High Power (PD) negotiation fr
 | **Sec. USB-C** | **STUSB4710** | **0x28** | **Low Power Port.**<br>
 
 <br> Read attachment status. |
-| **Aux Reg.** | **STP001PUR** | **0x54** (Verify) | **V_OUT_AUX Control.**<br>
+| **Aux Reg.** | **STPD01PUR** | **0x54** (Verify) | **V_OUT_AUX Control.**<br>
 
 <br> Set voltage and monitor Faults. |
 
