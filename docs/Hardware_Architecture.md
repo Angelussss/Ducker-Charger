@@ -14,7 +14,7 @@ The system utilizes a **Narrow Voltage DC (NVDC)** architecture. This decouples 
 | **VBUS** | 5V - 20V | USB-C / Boost | Input/Output power rail negotiated by PD Controller.|
 | **VSYS** | Regulated | U1 (Charger) | Main system bus. Powered by Buck-Boost from VBUS or Battery.|
 | **+BATT** | 10V - 16.8V | Battery Pack | Raw battery stack voltage (4S Li-Ion typical).|
-| **+3V3** | 3.3V | **IC2** (TPS54202) | Logic supply for MCU and sensors, derived from `VSYS`.|
+| **+3V3** | 3.3V | **IC2** (TPS54302) | Logic supply for MCU and sensors, derived from `VSYS`.|
 | **5V_USB** | 5.0V | **U4, U5** | Regulated output for USB-A ports.|
 ---
 
@@ -56,7 +56,7 @@ The BMS prioritizes safety through hardware redundancy, separating protection fr
 * **MCU (U7 - STM32F401RBT6):** The central controller. It monitors system telemetry, drives the display, and configures the PD controller and Charger via I2C.
 
 
-* **Power Supply:** The MCU regulator (**IC2 - TPS54202**) is powered by `VSYS`. Since `VSYS` is backed by `VBUS`, the logic remains active during charging.
+* **Power Supply:** The MCU regulator (**IC2 - TPS54302**) is powered by `VSYS`. Since `VSYS` is backed by `VBUS`, the logic remains active during charging.
 
 
 
