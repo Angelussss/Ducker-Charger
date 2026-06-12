@@ -54,29 +54,29 @@ void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(STATUS_GPIO_Port, STATUS_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, USB_A1_CTRL_Pin|USB_A2_CTTL_Pin|PD_IRQ_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, USB_A1_CTRL_Pin|USB_A2_CTRL_Pin|LP_ST_EN_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, DISP_CS_Pin|DISP_RST_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(DISP_DC_GPIO_Port, DISP_DC_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, DISP_DC_Pin|HP_EN_OTG_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, LAB_ENABLER_Pin|USB_C2_ENABLER_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : STATUS_Pin USB_A1_CTRL_Pin USB_A2_CTTL_Pin PD_IRQ_Pin */
-  GPIO_InitStruct.Pin = STATUS_Pin|USB_A1_CTRL_Pin|USB_A2_CTTL_Pin|PD_IRQ_Pin;
+  /*Configure GPIO pins : STATUS_Pin USB_A1_CTRL_Pin USB_A2_CTRL_Pin LP_ST_EN_Pin */
+  GPIO_InitStruct.Pin = STATUS_Pin|USB_A1_CTRL_Pin|USB_A2_CTRL_Pin|LP_ST_EN_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : ENCOD_BUTT_Pin */
-  GPIO_InitStruct.Pin = ENCOD_BUTT_Pin;
+  /*Configure GPIO pins : ENCOD_BUTT_Pin LP_ST_INT_Pin */
+  GPIO_InitStruct.Pin = ENCOD_BUTT_Pin|LP_ST_INT_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(ENCOD_BUTT_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pins : DISP_CS_Pin DISP_DC_Pin */
   GPIO_InitStruct.Pin = DISP_CS_Pin|DISP_DC_Pin;
@@ -85,12 +85,18 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : DISP_RST_Pin */
-  GPIO_InitStruct.Pin = DISP_RST_Pin;
+  /*Configure GPIO pins : DISP_RST_Pin HP_EN_OTG_Pin */
+  GPIO_InitStruct.Pin = DISP_RST_Pin|HP_EN_OTG_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(DISP_RST_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : HP_CHRG_OK_Pin HP_PD_IRQ_Pin */
+  GPIO_InitStruct.Pin = HP_CHRG_OK_Pin|HP_PD_IRQ_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pins : LAB_ENABLER_Pin USB_C2_ENABLER_Pin */
   GPIO_InitStruct.Pin = LAB_ENABLER_Pin|USB_C2_ENABLER_Pin;
