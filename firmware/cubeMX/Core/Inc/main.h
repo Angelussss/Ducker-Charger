@@ -63,20 +63,28 @@ void Error_Handler(void);
 #define ENCOD_BUTT_GPIO_Port GPIOC
 #define USB_A1_CTRL_Pin GPIO_PIN_1
 #define USB_A1_CTRL_GPIO_Port GPIOC
-#define USB_A2_CTTL_Pin GPIO_PIN_2
-#define USB_A2_CTTL_GPIO_Port GPIOC
-#define PD_IRQ_Pin GPIO_PIN_3
-#define PD_IRQ_GPIO_Port GPIOC
+#define USB_A2_CTRL_Pin GPIO_PIN_2
+#define USB_A2_CTRL_GPIO_Port GPIOC
 #define DISP_CS_Pin GPIO_PIN_0
 #define DISP_CS_GPIO_Port GPIOB
 #define DISP_DC_Pin GPIO_PIN_1
 #define DISP_DC_GPIO_Port GPIOB
 #define DISP_RST_Pin GPIO_PIN_2
 #define DISP_RST_GPIO_Port GPIOB
+#define HP_CHRG_OK_Pin GPIO_PIN_13
+#define HP_CHRG_OK_GPIO_Port GPIOB
+#define HP_PD_IRQ_Pin GPIO_PIN_14
+#define HP_PD_IRQ_GPIO_Port GPIOB
+#define HP_EN_OTG_Pin GPIO_PIN_15
+#define HP_EN_OTG_GPIO_Port GPIOB
 #define LAB_ENABLER_Pin GPIO_PIN_11
 #define LAB_ENABLER_GPIO_Port GPIOA
 #define USB_C2_ENABLER_Pin GPIO_PIN_12
 #define USB_C2_ENABLER_GPIO_Port GPIOA
+#define LP_ST_EN_Pin GPIO_PIN_11
+#define LP_ST_EN_GPIO_Port GPIOC
+#define LP_ST_INT_Pin GPIO_PIN_12
+#define LP_ST_INT_GPIO_Port GPIOC
 
 /* USER CODE BEGIN Private defines */
 
