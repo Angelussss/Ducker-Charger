@@ -91,6 +91,43 @@ The system uses two separate I2C buses to isolate High Power (PD) negotiation fr
 
 <br> Set voltage and monitor Faults. |
 
+### 3.2.1 BQ34Z100-R2 Register Map (Fuel Gauge, I2C_LP @ 0x55)
+
+These are the standard/extended commands the firmware reads from the fuel gauge.
+Addresses, byte order, and units verified against the **BQ34Z100-R2 Technical
+Reference Manual (SLUUCO5A)**. Multi-byte values are **little-endian** (low byte at
+the lower address). The bundled `docs/bq34z100-r2.pdf` is the *datasheet* and does
+**not** contain this table — it is sourced from the TRM.
+
+| Command | Addr (LSB/MSB) | Bytes | Unit | Firmware field (`FuelGaugeSensors`) |
+| :--- | :--- | :---: | :--- | :--- |
+| `StateOfCharge()`      | 0x02       | 1 | %       | `SoC` |
+| `Voltage()`            | 0x08/0x09  | 2 | mV      | `voltage` |
+| `AverageCurrent()`     | 0x0A/0x0B  | 2 | mA      | `avgCurrent` |
+| `Temperature()`        | 0x0C/0x0D  | 2 | 0.1 K   | `externalTemperature` |
+| `Flags()`              | 0x0E/0x0F  | 2 | bitfield| `flags` (see below) |
+| `Current()`            | 0x10/0x11  | 2 | mA      | `current` |
+| `AverageTimeToEmpty()` | 0x18/0x19  | 2 | minutes | `avgTimeToEmpty` |
+| `AverageTimeToFull()`  | 0x1A/0x1B  | 2 | minutes | `avgTimeToFull` |
+| `VoltScale()`          | 0x20       | 1 | —       | `voltageScale` |
+| `CurrScale()`          | 0x21       | 1 | —       | `currentScale` |
+| `InternalTemperature()`| 0x2A/0x2B  | 2 | 0.1 K   | `internalTemperature` |
+| `CycleCount()`         | 0x2C/0x2D  | 2 | counts  | `cycleCount` |
+| `StateOfHealth()`      | 0x2E/0x2F  | 2 | %       | `stateOfHealth` |
+
+**Scaling note (per TRM §2.2):** when `VoltScale()` / `CurrScale()` return a value
+> 1, the raw `Voltage()` / `Current()`, `AverageCurrent()`, and capacity readings
+must be multiplied by that scale to obtain real units.
+
+**`Flags()` bit definitions (TRM Table 2-6):**
+
+| Byte | Bit 7 | Bit 6 | Bit 5 | Bit 4 | Bit 3 | Bit 2 | Bit 1 | Bit 0 |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| High | OTC | OTD | BATHI | BATLOW | CHG_INH | XCHG | FC | CHG |
+| Low  | REST | RSVD | RSVD | CF | RSVD | SOC1 | SOCF | DSG |
+
+The firmware decodes all high-byte bits and `DSG` from the low byte.
+
 ---
 
 ## 4. GPIO Control & Interrupts
