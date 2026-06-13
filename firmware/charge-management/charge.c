@@ -2,12 +2,6 @@
 #include "stm32f4xx_hal.h"
 #include "i2c.h"
 
-/*
-Still to be implemented (for the sensor part):
-    - Get value of the sensor of the HP.IBAT	PA7	IN7	Battery Current (Charge/Discharge)
-
-*/
-
 // To be configured during ADC Initialization
 extern ADC_HandleTypeDef hadcTZ1;
 extern ADC_HandleTypeDef hadcTZ2;
@@ -19,6 +13,7 @@ extern ADC_HandleTypeDef hadcTSP;
 
 // I2C1 -> STUSB4710 STPD01PUR INA3221 BQ34Z100
 // I2C2 -> TPS25750
+
 volatile I2C_ReadState currentlyReading;
 uint8_t buffer[2];      // Buffer of 2 for storing both MSB and LSB if necessary (each one in a 8-bit register, so, for example, using size = 2 I'll read both 0x2a and 0x2B)
 int16_t rawI2C;         // Variable for Size = 1 cases
@@ -42,39 +37,8 @@ int USBA2_STATUS = GPIO_PIN_RESET;
 int EN_OTG_STATUS = GPIO_PIN_RESET;
 int ST_EN_STATUS = GPIO_PIN_RESET;
 
-
-
 SensorData sensor_data;
 FuelGaugeSensors fuelGaugeSensors;
-
-/*  Read via ADC1; VREF+ = VDD (+3.3V)
-    Signal Name     STM32 Pin	ADC Channel	Description
-    ----------------------------------------------------------------------
-    NTC_1	        PA0	        IN0	            Temp Zone 1 (General/FETs)
-    ----------------------------------------------------------------------
-    NTC_2	        PA1	        IN1	            Temp Zone 2
-    ----------------------------------------------------------------------
-    NTC_3	        PA2	        IN2	            Temp Zone 3
-    ----------------------------------------------------------------------
-    NTC_4	        PA3	        IN3	            Temp Zone 4
-    ----------------------------------------------------------------------
-    HP.IADPT	    PA6	        IN6	            USB-C Input Current
-    ----------------------------------------------------------------------
-    HP.IBAT	        PA7	        IN7	            Battery Current (Charge/Discharge)
-    ----------------------------------------------------------------------
-    HP.PSYS	        PC4	        IN14	        Total System Power
-*/
-
-/*  ADC:
-*** Polling mode IO operation ***
-     =================================
-     [..]
-       (+) Start the ADC peripheral using HAL_ADC_Start()
-       (+) Wait for end of conversion using HAL_ADC_PollForConversion(), at this stage
-           user can specify the value of timeout according to his end application
-       (+) To read the ADC converted values, use the HAL_ADC_GetValue() function.
-       (+) Stop the ADC peripheral using HAL_ADC_Stop()
-*/
 
 void init() {
     // Initialize INA3221 (I2C_LP) immediately to provide OCP (Over Current Protection) for USB-A ports
@@ -145,39 +109,98 @@ void readSensors() {
     HAL_ADC_PollForConversion(&hadcTSP, timeout);
     raw = HAL_ADC_GetValue(&hadcTSP);
     sensor_data.power_sys_W = (toVoltage(raw) / 1000.0f) * 60.0f;
-    //batteryCurrent = ;       // I < 0: charging; I > 0: discharging
     HAL_ADC_Stop(&hadcTSP);
 
     // --- FUEL GAUGE SENSORS ---
+    uint16_t rawI2C;
     currentlyReading = READ_INTERNAL_TEMPERATURE;       // (0x2A/0x2B)
-    HAL_I2C_Mem_Read_IT(&hi2c1, FUEL_GAUGE_ADDR, 0x2A, I2C_MEMADD_SIZE_8BIT, buffer, 2);
+    HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x2A, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY);
+    // T is received in units of 0.1 K
+    rawI2C = (uint16_t)((buffer[1] << 8) | buffer[0]);
+    fuelGaugeSensors.internalTemperature = (rawI2C * 0.1f) - 273.15f;      // Converting to ºC
+
     currentlyReading = READ_EXTERNAL_TEMPERATURE;       // (0x0C/0x0D)
-    HAL_I2C_Mem_Read_IT(&hi2c1, FUEL_GAUGE_ADDR, 0x0C, I2C_MEMADD_SIZE_8BIT, buffer, 2);
+    HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x0C, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY);
+    rawI2C = (uint16_t)((buffer[1] << 8) | buffer[0]);
+    fuelGaugeSensors.externalTemperature = (rawI2C * 0.1f) - 273.15f;      // Converting to ºC
+
     currentlyReading = READ_VOLTAGE_SCALE;      // (0x20)
-    HAL_I2C_Mem_Read_IT(&hi2c1, FUEL_GAUGE_ADDR, 0x20, I2C_MEMADD_SIZE_8BIT, buffer, 1);
+    HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x20, I2C_MEMADD_SIZE_8BIT, buffer, 1, HAL_MAX_DELAY);
+    fuelGaugeSensors.voltageScale = buffer[0];
+
     currentlyReading = READ_VOLTAGE;            // (0x08/0x09)
-    HAL_I2C_Mem_Read_IT(&hi2c1, FUEL_GAUGE_ADDR, 0x08, I2C_MEMADD_SIZE_8BIT, buffer, 2);
+    HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x08, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY);
+    rawI2C = (uint16_t)((buffer[1] << 8) | buffer[0]);
+    if (fuelGaugeSensors.voltageScale > 1) {
+        fuelGaugeSensors.voltage = rawI2C * fuelGaugeSensors.voltageScale;
+    } else {
+        fuelGaugeSensors.voltage = rawI2C;
+    }
+
     currentlyReading = READ_CURRENT_SCALE;      // (0x21)
-    HAL_I2C_Mem_Read_IT(&hi2c1, FUEL_GAUGE_ADDR, 0x21, I2C_MEMADD_SIZE_8BIT, buffer, 1);
+    HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x21, I2C_MEMADD_SIZE_8BIT, buffer, 1, HAL_MAX_DELAY);
+    fuelGaugeSensors.currentScale = buffer[0];
+
     currentlyReading = READ_CURRENT;            // (0x10/0x11)
-    HAL_I2C_Mem_Read_IT(&hi2c1, FUEL_GAUGE_ADDR, 0x10, I2C_MEMADD_SIZE_8BIT, buffer, 2);
+    HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x10, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY);
+    rawI2C = (uint16_t)((buffer[1] << 8) | buffer[0]);
+    if (fuelGaugeSensors.currentScale > 1) {
+        fuelGaugeSensors.current = rawI2C * fuelGaugeSensors.currentScale;
+    } else {
+        fuelGaugeSensors.current = rawI2C;
+    }
+
     currentlyReading = READ_AVG_CURRENT;        // (0x0A/0x0B)
-    HAL_I2C_Mem_Read_IT(&hi2c1, FUEL_GAUGE_ADDR, 0x0A, I2C_MEMADD_SIZE_8BIT, buffer, 2);
+    HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x0A, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY);
+    rawI2C = (uint16_t)((buffer[1] << 8) | buffer[0]);
+    if (fuelGaugeSensors.currentScale > 1) {
+        fuelGaugeSensors.avgCurrent = rawI2C * fuelGaugeSensors.currentScale;
+    } else {
+        fuelGaugeSensors.avgCurrent = rawI2C;
+    }
+
     currentlyReading = READ_SOC;                // (0x02)
-    HAL_I2C_Mem_Read_IT(&hi2c1, FUEL_GAUGE_ADDR, 0x02, I2C_MEMADD_SIZE_8BIT, buffer, 1);
+    HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x02, I2C_MEMADD_SIZE_8BIT, buffer, 1, HAL_MAX_DELAY);
+    fuelGaugeSensors.SoC = buffer[0];
+
     currentlyReading = READ_AVG_TIME_TO_EMPTY;  // (0x18/0x19)
-    HAL_I2C_Mem_Read_IT(&hi2c1, FUEL_GAUGE_ADDR, 0x18, I2C_MEMADD_SIZE_8BIT, buffer, 1);
+    HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x18, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY);
+    fuelGaugeSensors.avgTimeToEmpty = (uint16_t)((buffer[1] << 8) | buffer[0]);
+
     currentlyReading = READ_AVG_TIME_TO_FULL;   // (0x1A/0x1B)
-    HAL_I2C_Mem_Read_IT(&hi2c1, FUEL_GAUGE_ADDR, 0x1A, I2C_MEMADD_SIZE_8BIT, buffer, 1);
+    HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x1A, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY);
+    fuelGaugeSensors.avgTimeToFull = (uint16_t)((buffer[1] << 8) | buffer[0]);
+
     currentlyReading = READ_CYCLE_COUNT;        // (0x2C/0x2D)
-    HAL_I2C_Mem_Read_IT(&hi2c1, FUEL_GAUGE_ADDR, 0x2C, I2C_MEMADD_SIZE_8BIT, buffer, 2);
+    HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x2C, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY);
+    fuelGaugeSensors.cycleCount = (uint16_t)((buffer[1] << 8) | buffer[0]);
+
     currentlyReading = READ_STATE_OF_HEALTH;    // (0x2E/0x2F)
-    HAL_I2C_Mem_Read_IT(&hi2c1, FUEL_GAUGE_ADDR, 0x2E, I2C_MEMADD_SIZE_8BIT, buffer, 2);
+    HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x2E, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY);
+    fuelGaugeSensors.stateOfHealth = (uint16_t)((buffer[1] << 8) | buffer[0]);
+
     currentlyReading = READ_FLAGS;              // (0x0E/0x0F)
-    HAL_I2C_Mem_Read_IT(&hi2c1, FUEL_GAUGE_ADDR, 0x0E, I2C_MEMADD_SIZE_8BIT, buffer, 2);
+    HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x0E, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY);
+    // Little-endian order -> buffer[0] contains Low-Byte; buffer[1] contains High-Byte
+    uint8_t rawLow = buffer[0];
+    uint8_t rawHigh = buffer[1];
+
+    // High-Byte
+    fuelGaugeSensors.flags.OTC = (rawHigh >> 7) & 0x01;     // Shift to get bit 7 in position 0 and then mask every other bit
+    fuelGaugeSensors.flags.OTD = (rawHigh >> 6) & 0x01;
+    fuelGaugeSensors.flags.BATHI = (rawHigh >> 5) & 0x01;
+    fuelGaugeSensors.flags.BATLOW = (rawHigh >> 4) & 0x01;
+    fuelGaugeSensors.flags.CHG_INH = (rawHigh >> 3) & 0x01;
+    fuelGaugeSensors.flags.XCHG = (rawHigh >> 2) & 0x01;
+    fuelGaugeSensors.flags.FC = (rawHigh >> 1) & 0x01;
+    fuelGaugeSensors.flags.CHG = (rawHigh >> 0) & 0x01;
+
+    // Low-Byte
+    fuelGaugeSensors.flags.DSG = (rawLow >> 0) & 0x01;
 }
 
-void HAL_I2C_MemTxCpltCallback(I2C_HandleTypeDef *hi2c) {
+/*
+void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c) {
     //if (hi2c == &I2C_LP)
     switch (currentlyReading) {
         case READ_INTERNAL_TEMPERATURE: {       // T is received in units of 0.1 K
@@ -191,7 +214,7 @@ void HAL_I2C_MemTxCpltCallback(I2C_HandleTypeDef *hi2c) {
             break;
         }
         case READ_VOLTAGE_SCALE: {
-            fuelGaugeSensors.voltageScale = (uint16_t)((buffer[1] << 8) | buffer[0]);
+            fuelGaugeSensors.voltageScale = buffer[0];
             break;
         }
         case READ_VOLTAGE: {
@@ -204,7 +227,7 @@ void HAL_I2C_MemTxCpltCallback(I2C_HandleTypeDef *hi2c) {
             break;
         }
         case READ_CURRENT_SCALE: {
-            fuelGaugeSensors.currentScale = (uint16_t)((buffer[1] << 8) | buffer[0]);
+            fuelGaugeSensors.currentScale = buffer[0];
             break;
         }
         case READ_CURRENT: {
@@ -265,6 +288,7 @@ void HAL_I2C_MemTxCpltCallback(I2C_HandleTypeDef *hi2c) {
         }
     }
 }
+*/
 
 void readCS() {        // Check and update critical signals and their status (e.g., CHRG_OK)
     // Read HP.PD_IRQ (PB14) and update PD_IRQ status
