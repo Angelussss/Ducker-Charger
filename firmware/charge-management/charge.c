@@ -140,13 +140,6 @@ void readSensors() {
 
     HAL_ADC_Stop(&hadcUSBCIC);
 
-        // --- Battery Current (Charge/Discharge) ---
-    HAL_ADC_Start(&hadcBC);
-    HAL_ADC_PollForConversion(&hadcBC, timeout);
-    raw = HAL_ADC_GetValue(&hadcBC);
-    // vedi datasheet integrato
-    HAL_ADC_Stop(&hadcBC);
-
         // --- Total System Power ---
     HAL_ADC_Start(&hadcTSP);
     HAL_ADC_PollForConversion(&hadcTSP, timeout);
@@ -189,19 +182,19 @@ void HAL_I2C_MemTxCpltCallback(I2C_HandleTypeDef *hi2c) {
     switch (currentlyReading) {
         case READ_INTERNAL_TEMPERATURE: {       // T is received in units of 0.1 K
             uint16_t raw = (uint16_t)((buffer[1] << 8) | buffer[0]);
-            fuelGaugeSensors.internalTemperature = (raw * 0.1f) - 273.15f;
+            fuelGaugeSensors.internalTemperature = (raw * 0.1f) - 273.15f;      // Converting to ºC
             break;
         }
         case READ_EXTERNAL_TEMPERATURE: {
             uint16_t raw = (uint16_t)((buffer[1] << 8) | buffer[0]);
-            fuelGaugeSensors.externalTemperature = (raw * 0.1f) - 273.15f;
+            fuelGaugeSensors.externalTemperature = (raw * 0.1f) - 273.15f;      // Converting to ºC
             break;
         }
         case READ_VOLTAGE_SCALE: {
             fuelGaugeSensors.voltageScale = (uint16_t)((buffer[1] << 8) | buffer[0]);
             break;
         }
-        case READ_VOLTAGE: {        // To check if mV
+        case READ_VOLTAGE: {
             uint16_t raw = (uint16_t)((buffer[1] << 8) | buffer[0]);
             if (fuelGaugeSensors.voltageScale > 1) {
                 fuelGaugeSensors.voltage = raw * fuelGaugeSensors.voltageScale;
@@ -214,7 +207,7 @@ void HAL_I2C_MemTxCpltCallback(I2C_HandleTypeDef *hi2c) {
             fuelGaugeSensors.currentScale = (uint16_t)((buffer[1] << 8) | buffer[0]);
             break;
         }
-        case READ_CURRENT: {        // To check if mA
+        case READ_CURRENT: {
             uint16_t raw = (uint16_t)((buffer[1] << 8) | buffer[0]);
             if (fuelGaugeSensors.currentScale > 1) {
                 fuelGaugeSensors.current = raw * fuelGaugeSensors.currentScale;
@@ -246,6 +239,10 @@ void HAL_I2C_MemTxCpltCallback(I2C_HandleTypeDef *hi2c) {
         }
         case READ_CYCLE_COUNT: {
             fuelGaugeSensors.cycleCount = (uint16_t)((buffer[1] << 8) | buffer[0]);
+            break;
+        }
+        case READ_STATE_OF_HEALTH: {
+            fuelGaugeSensors.stateOfHealth = (uint16_t)((buffer[1] << 8) | buffer[0]);
             break;
         }
         case READ_FLAGS: {
@@ -283,6 +280,7 @@ void readCS() {        // Check and update critical signals and their status (e.
     // Before end of function throw eventual errors due to faults/interrupts
     if (ST_INT == GPIO_PIN_RESET) {     // (Normal: ST_INT is set to HIGH)
         // Throw Handle Aux Converter Fault (Overcurrent/Temp)
+        // To confirm overtemperature check OTD / OTC flags
     }
 
     if (CHRG_OK == GPIO_PIN_RESET) {
