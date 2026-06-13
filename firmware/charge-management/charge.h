@@ -62,6 +62,10 @@ typedef enum {      // Possible reading states for I2C
 // Fuel Gauge Mapping
 #define FUEL_GAUGE_ADDR ((uint16_t)(0x55 << 1))     // Convert 7-bit address to 8-bit and then cast to 16-bit
 
+// TPS25750 Mapping
+// TO CHECK --> 0x20 / 0x21 ?
+#define PD_CONTROLLER_ADDR ((uint16_t)(0x20 << 1))     // Convert 7-bit address to 8-bit and then cast to 16-bit
+
 // Critical Signals Mapping
 #define USB_IRQ_CTRL_Pin GPIO_PIN_14        // IRQ Pin is the number 14
 #define USB_IRQ_CTRL_GPIO_Port GPIOB        // IRQ GPIO channel is the B (PB14)
