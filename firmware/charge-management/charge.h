@@ -7,7 +7,6 @@
 typedef struct {
     float tempZone[4];
     float usbCInputCurrent;
-    float batteryCurrent;
     float power_sys_W;
 } SensorData;
 
@@ -27,13 +26,13 @@ typedef struct {
 } Flags;
 
 typedef struct {
-    float internalTemperature;
-    float externalTemperature;
+    float internalTemperature;  // Expressed in ºC
+    float externalTemperature;  // Expressed in ºC
     int voltageScale;
-    float voltage;
+    float voltage;              // Expressed in mV
     int currentScale;
-    float current;
-    float avgCurrent;
+    float current;              // Expressed in mA
+    float avgCurrent;           // Expressed in mA
     float SoC;                  // State of Charge in % (referred to the Full Charge Capacity)
     float avgTimeToEmpty;       // Expressed in minutes; a value of 65535 indicates the battery is not being discharged
     float avgTimeToFull;        // Expressed in minutes; a value of 65535 indicates the battery is not charging
