@@ -65,6 +65,20 @@ typedef enum {      // Possible reading states for I2C
 // TPS25750 Mapping
 // TO CHECK --> 0x20 / 0x21 ?
 #define PD_CONTROLLER_ADDR ((uint16_t)(0x20 << 1))     // Convert 7-bit address to 8-bit and then cast to 16-bit
+#define INT_EVENT1_REG_ADDR 0x14
+#define INT_MASK1_REG_ADDR 0x16
+#define INT_CLEAR1_REG_ADDR 0x18
+#define POWER_STATUS_REG_ADDR 0x3F
+#define ACTIVE_CONTRACT_PDO_REG_ADDR 0x34
+#define ACTIVE_CONTRACT_RDO_REG_ADDR 0x35
+
+typedef struct {
+    bool isSink;
+    bool isPlugged;
+    float voltage;
+    float maxCurrent;
+    float operatingCurrent;
+} PDContract;
 
 // Critical Signals Mapping
 #define USB_IRQ_CTRL_Pin GPIO_PIN_14        // IRQ Pin is the number 14
@@ -96,9 +110,9 @@ float toCelsius(float temp);
 
 void readCS();
 
-void pluggedINT();
+void primaryUSBC_ConnectionINT();
 
-void unpluggedINT();
+void secondaryUSBC_ConnectionINT();
 
 
 
