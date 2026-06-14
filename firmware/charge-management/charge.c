@@ -12,11 +12,9 @@ extern ADC_HandleTypeDef hadcBC;
 extern ADC_HandleTypeDef hadcTSP;
 
 // I2C1 -> STUSB4710 STPD01PUR INA3221 BQ34Z100
-// I2C2 -> TPS25750
+// I2C3 -> TPS25750
 
 volatile I2C_ReadState currentlyReading;
-uint8_t buffer[2];      // Buffer of 2 for storing both MSB and LSB if necessary (each one in a 8-bit register, so, for example, using size = 2 I'll read both 0x2a and 0x2B)
-int16_t rawI2C;         // Variable for Size = 1 cases
 
 // (Interrupt solo per Fuel Gauge)
 const int timeout = 10;         // In ms
@@ -39,9 +37,14 @@ int ST_EN_STATUS = GPIO_PIN_RESET;
 
 SensorData sensor_data;
 FuelGaugeSensors fuelGaugeSensors;
+PDContract primaryUSBC_Contract;
+PDContract secondaryUSBC_PDContract;
+// secondaryUSBC_PDContract.isSink = false;
+
+// Ports: USB-A1; USB-A2; USB-C (primary, via TPS25750); USB-C (secondary, via STUSB4710A)
 
 void init() {
-    // Initialize INA3221 (I2C_LP) immediately to provide OCP (Over Current Protection) for USB-A ports
+    // Initialize INA3221 (I2C_LP) immediately to provide OCP (Overcurrent Protection) for USB-A ports
     // Enable USB ports (USB-A1 and USB-A2) and enable Aux (LP_ST_EN - PC11)
     HAL_GPIO_WritePin(USB_A1_CTRL_GPIO_Port, USB_A1_CTRL_Pin, GPIO_PIN_SET);
     HAL_GPIO_WritePin(USB_A2_CTRL_GPIO_Port, USB_A2_CTRL_Pin, GPIO_PIN_SET);
@@ -112,6 +115,7 @@ void readSensors() {
     HAL_ADC_Stop(&hadcTSP);
 
     // --- FUEL GAUGE SENSORS ---
+    uint8_t buffer[2];      // Buffer of 2 for storing both MSB and LSB if necessary (each one in a 8-bit register, so, for example, using size = 2 I'll read both 0x2a and 0x2B)
     uint16_t rawI2C;
     currentlyReading = READ_INTERNAL_TEMPERATURE;       // (0x2A/0x2B)
     HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x2A, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY);
@@ -311,6 +315,10 @@ void readCS() {        // Check and update critical signals and their status (e.
         // Throw high-current path not ok
     }
 
+    if (PD_IRQ == GPIO_PIN_RESET) {
+        primaryUSBC_ConnectionINT();
+    }
+    /*
     if (PD_IRQ != PD_IRQ_PREV && PD_IRQ == GPIO_PIN_RESET) {
         // Throw interrupt (device has been pluggled)
         pluggedINT();
@@ -318,6 +326,7 @@ void readCS() {        // Check and update critical signals and their status (e.
         // Throw interrupt (device has been unplugged)
         unpluggedINT();
     }
+    */
 }
 
 void readNCS() {        // Check and update NON-critical signals and their status (e.g., USBA1_STATUS)
@@ -327,9 +336,78 @@ void readNCS() {        // Check and update NON-critical signals and their statu
     ST_EN_STATUS = HAL_GPIO_ReadPin(USB_ST_EN_CTRL_GPIO_Port, USB_ST_EN_CTRL_Pin);
 }
 
-void pluggedINT() {}
+/*
+    INT_EVENT1: Interrupt event bit field for I2Cs_IRQ. If any bit in this register is 1, then the I2Cs_IRQ pin is pulled low
+    INT_CLEAR1: Interrupt clear bit field for INT_EVENT1. Bits set in this register are cleared from INT_EVENT1
+    Note: PDO = Power Data Object; RDO = Request Data Object
+*/
 
-void unpluggedINT() {}
+void primaryUSBC_ConnectionINT() {
+    // Read INT_EVENT1 (0x14) [Little-endian]
+    uint8_t eventBuffer[11];
+    HAL_I2C_Mem_Read(&hi2c3, PD_CONTROLLER_ADDR, INT_EVENT1_REG_ADDR, I2C_MEMADD_SIZE_8BIT, eventBuffer, 11, HAL_MAX_DELAY);
+    // Read from INT_EVENT1
+    bool plugInsertOrRemoval = (eventBuffer[0] >> 3) & 0x01;    // USB Plug Status has Changed
+    bool newContractAsCons = (eventBuffer[1] >> 4) & 0x01;      // Far-end source has accepted an RDO sent by the PD Controller as a Sink
+    bool newContractAsProv = (eventBuffer[1] >> 5) & 0x01;      // An RDO from the far-end device has been accepted and the PD Controller is a Source
+    bool usbHostPresent = (eventBuffer[2] >> 4) & 0x01;         // Set when STATUS.UsbHostPresent transitions to 11b
+    bool usbHostPresentNoLonger = (eventBuffer[2] >> 5) & 0x01;          // Set when STATUS.UsbHostPresent transitions to anything other than 11b
+    bool powerStatusUpdate = (eventBuffer[3] >> 0) & 0x01;      // Set if Power Status changes
+
+    // Read from PowerStatus
+    bool powerConnection;       // Asserted if there is a connection
+    bool sourceSink;            // Source / Sink indicator
+    uint8_t typeCCurrent;       // If the port is connected as source, the field is updated upon initial connection only (useful for sink mode only)
+    // For having more details about newContractAsCons and newContractAsProv, see ACTIVE_CONTRACT_PDO register (0x34) and ACTIVE_CONTRACT_RDO register (0x35)
+
+    if (powerStatusUpdate) {
+        uint8_t powerStatusBuffer[2];
+        // Read POWER_STATUS Register
+        HAL_I2C_Mem_Read(&hi2c3, PD_CONTROLLER_ADDR, POWER_STATUS_REG_ADDR, I2C_MEMADD_SIZE_8BIT, powerStatusBuffer, 2, HAL_MAX_DELAY);
+        powerConnection = (powerStatusBuffer[0] >> 0) & 0x01;
+        sourceSink = (powerStatusBuffer[0] >> 1) & 0x01;
+        typeCCurrent = (powerStatusBuffer[0] >> 2) & 0x03;
+    }
+
+    if (plugInsertOrRemoval && powerStatusUpdate) {
+        primaryUSBC_Contract.isPlugged = powerConnection;
+        if (primaryUSBC_Contract.isPlugged) {
+            // Determine whether the powerbank is the source or the sink
+            primaryUSBC_Contract.isSink = sourceSink;        // 1 -> is sink; 0 -> is source
+        }
+    }
+
+    if (primaryUSBC_Contract.isPlugged && (newContractAsCons || newContractAsProv)) {
+        // Read incoming contract
+        uint8_t activeContractPDOBuffer[6];
+        uint8_t activeContractRDOBuffer[4];
+
+        // Read PDO for fetching Voltage a maximum Current
+        HAL_I2C_Mem_Read(&hi2c3, PD_CONTROLLER_ADDR, ACTIVE_CONTRACT_PDO_REG_ADDR, I2C_MEMADD_SIZE_8BIT, activeContractPDOBuffer, 6, HAL_MAX_DELAY);
+        uint16_t voltageRaw = ((activeContractPDOBuffer[2] & 0x0F) << 6) | ((activeContractPDOBuffer[1] >> 2) & 0x3F);  // (19:10)
+        uint16_t maxCurrentRaw = ((activeContractPDOBuffer[1] & 0x03) << 8) | activeContractPDOBuffer[0];       // (9:0)
+
+        // Read RDO for fetching contracted current
+        HAL_I2C_Mem_Read(&hi2c3, PD_CONTROLLER_ADDR, ACTIVE_CONTRACT_RDO_REG_ADDR, I2C_MEMADD_SIZE_8BIT, activeContractRDOBuffer, 4, HAL_MAX_DELAY);
+        uint16_t operatingCurrentRaw = ((activeContractRDOBuffer[2] & 0x0F) << 6) | ((activeContractRDOBuffer[1] >> 2) & 0x03F);        // (19:10)
+
+        // Convert fetched values accordingly
+        primaryUSBC_Contract.voltage = voltageRaw * 50.0f;                    // To get mV (as stated in the USB_PD standard)
+        primaryUSBC_Contract.maxCurrent = maxCurrentRaw * 10.0f;              // To get mA (as stated in the USB_PD standard)
+        primaryUSBC_Contract.operatingCurrent = operatingCurrentRaw * 10.0f;  // To get mA (as stated in the USB_PD standard)
+
+        // INA3221?
+    }
+
+    // Clear INT_EVENT1 to make I2Cs_IRQ back to HIGH (only bits previously read are cleared to be able to get possibly new occurring interrupts)
+    HAL_I2C_Mem_Write(&hi2c3, PD_CONTROLLER_ADDR, INT_CLEAR1_REG_ADDR, I2C_MEMADD_SIZE_8BIT, eventBuffer, 11, HAL_MAX_DELAY);
+}
+
+void secondaryUSBC_ConnectionINT() {
+
+}
+
+// void unpluggedINT() {}
 
 
 
