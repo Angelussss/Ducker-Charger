@@ -1,0 +1,305 @@
+/**
+ * @file    gfx.c
+ * @brief   Graphics primitives implementation: text, lines, shapes.
+ *          Implementazione delle primitive grafiche: testo, linee, forme.
+ *
+ * BITMAP FONT FORMAT / FORMATO DEL FONT BITMAP:
+ *   Each character is stored as char_h bytes, one per row.
+ *   The most significant bit of each byte corresponds to the leftmost pixel.
+ *   Ogni carattere e' memorizzato come char_h byte, uno per riga.
+ *   Il bit piu' significativo di ogni byte corrisponde al pixel piu' a sinistra.
+ *
+ *   Example for 'A' (in binary) / Esempio per 'A' (in binario):
+ *     0b00011000   <- row 0 (top)    / riga 0 (in alto)
+ *     0b00100100
+ *     0b01000010
+ *     0b01111110
+ *     0b01000010
+ *     0b01000010
+ *     0b00000000
+ *     0b00000000   <- row 7 (bottom) / riga 7 (in basso)
+ */
+
+#include "display/gfx.h"
+#include <stdio.h>    /* snprintf */
+#include <string.h>   /* strlen   */
+
+/* =========================================================
+ * BITMAP FONT DATA – Small 6x8
+ *
+ * Covers ASCII characters 32 (' ') through 122 ('z').
+ * Contains: digits (48–57), uppercase (65–90), lowercase (97–122)
+ * and common punctuation. Sufficient for the project UI.
+ * For a complete font a library such as u8g2 can be used.
+ *
+ * Copre i caratteri ASCII da 32 (' ') a 122 ('z').
+ * Contiene: numeri (48–57), maiuscole (65–90), minuscole (97–122)
+ * e punteggiatura comune. Sufficiente per la UI del progetto.
+ * Per un font completo si puo' usare una libreria come u8g2.
+ * ========================================================= */
+static const uint8_t _font_small_data[] = {
+    /* Chars 32–47 – space and basic punctuation / Spazio e punteggiatura base */
+    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,  /* ' ' (32) */
+    0x00,0x00,0x5F,0x00,0x00,0x00,0x00,0x00,  /* '!' (33) */
+    0x00,0x07,0x00,0x07,0x00,0x00,0x00,0x00,  /* '"' (34) */
+    0x14,0x7F,0x14,0x7F,0x14,0x00,0x00,0x00,  /* '#' (35) */
+    0x24,0x2A,0x7F,0x2A,0x12,0x00,0x00,0x00,  /* '$' (36) */
+    0x23,0x13,0x08,0x64,0x62,0x00,0x00,0x00,  /* '%' (37) */
+    0x36,0x49,0x55,0x22,0x50,0x00,0x00,0x00,  /* '&' (38) */
+    0x00,0x05,0x03,0x00,0x00,0x00,0x00,0x00,  /* ''' (39) */
+    0x00,0x1C,0x22,0x41,0x00,0x00,0x00,0x00,  /* '(' (40) */
+    0x00,0x41,0x22,0x1C,0x00,0x00,0x00,0x00,  /* ')' (41) */
+    0x0A,0x04,0x1F,0x04,0x0A,0x00,0x00,0x00,  /* '*' (42) */
+    0x08,0x08,0x3E,0x08,0x08,0x00,0x00,0x00,  /* '+' (43) */
+    0x00,0x50,0x30,0x00,0x00,0x00,0x00,0x00,  /* ',' (44) */
+    0x08,0x08,0x08,0x08,0x08,0x00,0x00,0x00,  /* '-' (45) */
+    0x00,0x60,0x60,0x00,0x00,0x00,0x00,0x00,  /* '.' (46) */
+    0x20,0x10,0x08,0x04,0x02,0x00,0x00,0x00,  /* '/' (47) */
+    /* Digits 48–57 / Numeri */
+    0x3E,0x51,0x49,0x45,0x3E,0x00,0x00,0x00,  /* '0' (48) */
+    0x00,0x42,0x7F,0x40,0x00,0x00,0x00,0x00,  /* '1' (49) */
+    0x42,0x61,0x51,0x49,0x46,0x00,0x00,0x00,  /* '2' (50) */
+    0x21,0x41,0x45,0x4B,0x31,0x00,0x00,0x00,  /* '3' (51) */
+    0x18,0x14,0x12,0x7F,0x10,0x00,0x00,0x00,  /* '4' (52) */
+    0x27,0x45,0x45,0x45,0x39,0x00,0x00,0x00,  /* '5' (53) */
+    0x3C,0x4A,0x49,0x49,0x30,0x00,0x00,0x00,  /* '6' (54) */
+    0x01,0x71,0x09,0x05,0x03,0x00,0x00,0x00,  /* '7' (55) */
+    0x36,0x49,0x49,0x49,0x36,0x00,0x00,0x00,  /* '8' (56) */
+    0x06,0x49,0x49,0x29,0x1E,0x00,0x00,0x00,  /* '9' (57) */
+    /* Punctuation 58–64 / Punteggiatura */
+    0x00,0x36,0x36,0x00,0x00,0x00,0x00,0x00,  /* ':' (58) */
+    0x00,0x56,0x36,0x00,0x00,0x00,0x00,0x00,  /* ';' (59) */
+    0x08,0x14,0x22,0x41,0x00,0x00,0x00,0x00,  /* '<' (60) */
+    0x14,0x14,0x14,0x14,0x14,0x00,0x00,0x00,  /* '=' (61) */
+    0x00,0x41,0x22,0x14,0x08,0x00,0x00,0x00,  /* '>' (62) */
+    0x02,0x01,0x51,0x09,0x06,0x00,0x00,0x00,  /* '?' (63) */
+    0x32,0x49,0x79,0x41,0x3E,0x00,0x00,0x00,  /* '@' (64) */
+    /* Uppercase letters 65–90 / Lettere maiuscole */
+    0x7E,0x11,0x11,0x11,0x7E,0x00,0x00,0x00,  /* 'A' (65) */
+    0x7F,0x49,0x49,0x49,0x36,0x00,0x00,0x00,  /* 'B' (66) */
+    0x3E,0x41,0x41,0x41,0x22,0x00,0x00,0x00,  /* 'C' (67) */
+    0x7F,0x41,0x41,0x22,0x1C,0x00,0x00,0x00,  /* 'D' (68) */
+    0x7F,0x49,0x49,0x49,0x41,0x00,0x00,0x00,  /* 'E' (69) */
+    0x7F,0x09,0x09,0x09,0x01,0x00,0x00,0x00,  /* 'F' (70) */
+    0x3E,0x41,0x49,0x49,0x7A,0x00,0x00,0x00,  /* 'G' (71) */
+    0x7F,0x08,0x08,0x08,0x7F,0x00,0x00,0x00,  /* 'H' (72) */
+    0x00,0x41,0x7F,0x41,0x00,0x00,0x00,0x00,  /* 'I' (73) */
+    0x20,0x40,0x41,0x3F,0x01,0x00,0x00,0x00,  /* 'J' (74) */
+    0x7F,0x08,0x14,0x22,0x41,0x00,0x00,0x00,  /* 'K' (75) */
+    0x7F,0x40,0x40,0x40,0x40,0x00,0x00,0x00,  /* 'L' (76) */
+    0x7F,0x02,0x0C,0x02,0x7F,0x00,0x00,0x00,  /* 'M' (77) */
+    0x7F,0x04,0x08,0x10,0x7F,0x00,0x00,0x00,  /* 'N' (78) */
+    0x3E,0x41,0x41,0x41,0x3E,0x00,0x00,0x00,  /* 'O' (79) */
+    0x7F,0x09,0x09,0x09,0x06,0x00,0x00,0x00,  /* 'P' (80) */
+    0x3E,0x41,0x51,0x21,0x5E,0x00,0x00,0x00,  /* 'Q' (81) */
+    0x7F,0x09,0x19,0x29,0x46,0x00,0x00,0x00,  /* 'R' (82) */
+    0x46,0x49,0x49,0x49,0x31,0x00,0x00,0x00,  /* 'S' (83) */
+    0x01,0x01,0x7F,0x01,0x01,0x00,0x00,0x00,  /* 'T' (84) */
+    0x3F,0x40,0x40,0x40,0x3F,0x00,0x00,0x00,  /* 'U' (85) */
+    0x1F,0x20,0x40,0x20,0x1F,0x00,0x00,0x00,  /* 'V' (86) */
+    0x3F,0x40,0x38,0x40,0x3F,0x00,0x00,0x00,  /* 'W' (87) */
+    0x63,0x14,0x08,0x14,0x63,0x00,0x00,0x00,  /* 'X' (88) */
+    0x07,0x08,0x70,0x08,0x07,0x00,0x00,0x00,  /* 'Y' (89) */
+    0x61,0x51,0x49,0x45,0x43,0x00,0x00,0x00,  /* 'Z' (90) */
+    /* Misc 91–96 */
+    0x00,0x7F,0x41,0x41,0x00,0x00,0x00,0x00,  /* '[' (91) */
+    0x02,0x04,0x08,0x10,0x20,0x00,0x00,0x00,  /* '\' (92) */
+    0x00,0x41,0x41,0x7F,0x00,0x00,0x00,0x00,  /* ']' (93) */
+    0x04,0x02,0x01,0x02,0x04,0x00,0x00,0x00,  /* '^' (94) */
+    0x40,0x40,0x40,0x40,0x40,0x00,0x00,0x00,  /* '_' (95) */
+    0x00,0x01,0x02,0x04,0x00,0x00,0x00,0x00,  /* '`' (96) */
+    /* Lowercase letters 97–122 / Lettere minuscole */
+    0x20,0x54,0x54,0x54,0x78,0x00,0x00,0x00,  /* 'a' (97) */
+    0x7F,0x48,0x44,0x44,0x38,0x00,0x00,0x00,  /* 'b' (98) */
+    0x38,0x44,0x44,0x44,0x20,0x00,0x00,0x00,  /* 'c' (99) */
+    0x38,0x44,0x44,0x48,0x7F,0x00,0x00,0x00,  /* 'd' (100) */
+    0x38,0x54,0x54,0x54,0x18,0x00,0x00,0x00,  /* 'e' (101) */
+    0x08,0x7E,0x09,0x01,0x02,0x00,0x00,0x00,  /* 'f' (102) */
+    0x0C,0x52,0x52,0x52,0x3E,0x00,0x00,0x00,  /* 'g' (103) */
+    0x7F,0x08,0x04,0x04,0x78,0x00,0x00,0x00,  /* 'h' (104) */
+    0x00,0x44,0x7D,0x40,0x00,0x00,0x00,0x00,  /* 'i' (105) */
+    0x20,0x40,0x44,0x3D,0x00,0x00,0x00,0x00,  /* 'j' (106) */
+    0x7F,0x10,0x28,0x44,0x00,0x00,0x00,0x00,  /* 'k' (107) */
+    0x00,0x41,0x7F,0x40,0x00,0x00,0x00,0x00,  /* 'l' (108) */
+    0x7C,0x04,0x18,0x04,0x78,0x00,0x00,0x00,  /* 'm' (109) */
+    0x7C,0x08,0x04,0x04,0x78,0x00,0x00,0x00,  /* 'n' (110) */
+    0x38,0x44,0x44,0x44,0x38,0x00,0x00,0x00,  /* 'o' (111) */
+    0x7C,0x14,0x14,0x14,0x08,0x00,0x00,0x00,  /* 'p' (112) */
+    0x08,0x14,0x14,0x18,0x7C,0x00,0x00,0x00,  /* 'q' (113) */
+    0x7C,0x08,0x04,0x04,0x08,0x00,0x00,0x00,  /* 'r' (114) */
+    0x48,0x54,0x54,0x54,0x20,0x00,0x00,0x00,  /* 's' (115) */
+    0x04,0x3F,0x44,0x40,0x20,0x00,0x00,0x00,  /* 't' (116) */
+    0x3C,0x40,0x40,0x20,0x7C,0x00,0x00,0x00,  /* 'u' (117) */
+    0x1C,0x20,0x40,0x20,0x1C,0x00,0x00,0x00,  /* 'v' (118) */
+    0x3C,0x40,0x30,0x40,0x3C,0x00,0x00,0x00,  /* 'w' (119) */
+    0x44,0x28,0x10,0x28,0x44,0x00,0x00,0x00,  /* 'x' (120) */
+    0x0C,0x50,0x50,0x50,0x3C,0x00,0x00,0x00,  /* 'y' (121) */
+    0x44,0x64,0x54,0x4C,0x44,0x00,0x00,0x00,  /* 'z' (122) */
+};
+
+/* =========================================================
+ * PUBLIC FONT DESCRIPTORS / DESCRITTORI FONT PUBBLICI
+ *
+ * FontMedium and FontLarge use the same data as a placeholder.
+ * They should be replaced with proper larger font arrays when
+ * the display hardware is available for testing.
+ *
+ * FontMedium e FontLarge usano gli stessi dati come placeholder.
+ * Vanno sostituiti con array di font piu' grandi appropriati quando
+ * l'hardware del display e' disponibile per i test.
+ * ========================================================= */
+const GFX_Font_t GFX_FontSmall  = { _font_small_data, 6, 8  };
+const GFX_Font_t GFX_FontMedium = { _font_small_data, 6, 8  }; /* placeholder */
+const GFX_Font_t GFX_FontLarge  = { _font_small_data, 6, 8  }; /* placeholder */
+
+/* =========================================================
+ * IMPLEMENTATION / IMPLEMENTAZIONE
+ * ========================================================= */
+
+void GFX_DrawChar(uint16_t x, uint16_t y, char c,
+                  const GFX_Font_t *font, uint16_t fg_color, uint16_t bg_color)
+{
+    /* Silently skip out-of-range characters.
+     * Salta silenziosamente i caratteri fuori range. */
+    if (c < 32 || c > 122) return;
+
+    uint8_t char_index = (uint8_t)c - 32;
+    const uint8_t *char_data = &font->data[char_index * font->char_h];
+
+    for (uint8_t row = 0; row < font->char_h; row++)
+    {
+        uint8_t row_data = char_data[row];
+        for (uint8_t col = 0; col < font->char_w; col++)
+        {
+            /* Test the bit corresponding to the current column.
+             * The MSB (0x80) corresponds to column 0 (left).
+             * Testa il bit corrispondente alla colonna corrente.
+             * Il MSB (0x80) corrisponde alla colonna 0 (sinistra). */
+            uint16_t color = (row_data & (0x80 >> col)) ? fg_color : bg_color;
+            ILI9341_DrawPixel(x + col, y + row, color);
+        }
+    }
+}
+
+void GFX_DrawString(uint16_t x, uint16_t y, const char *str,
+                    const GFX_Font_t *font, uint16_t fg_color, uint16_t bg_color)
+{
+    if (str == NULL) return;
+
+    uint16_t cursor_x = x;
+    while (*str)
+    {
+        GFX_DrawChar(cursor_x, y, *str, font, fg_color, bg_color);
+        cursor_x += font->char_w;  /* Advance cursor by one character width.
+                                    * Avanza il cursore di una larghezza carattere. */
+        str++;
+    }
+}
+
+void GFX_DrawInt(uint16_t x, uint16_t y, int32_t value,
+                 const GFX_Font_t *font, uint16_t fg_color, uint16_t bg_color)
+{
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%ld", (long)value);
+    GFX_DrawString(x, y, buf, font, fg_color, bg_color);
+}
+
+void GFX_DrawHLine(uint16_t x, uint16_t y, uint16_t w, uint16_t color)
+{
+    /* A horizontal line is just a 1-pixel-tall rectangle.
+     * Una linea orizzontale e' semplicemente un rettangolo alto 1 pixel. */
+    ILI9341_FillRect(x, y, w, 1, color);
+}
+
+void GFX_DrawVLine(uint16_t x, uint16_t y, uint16_t h, uint16_t color)
+{
+    /* A vertical line is a 1-pixel-wide rectangle.
+     * Una linea verticale e' un rettangolo largo 1 pixel. */
+    ILI9341_FillRect(x, y, 1, h, color);
+}
+
+void GFX_DrawRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color)
+{
+    GFX_DrawHLine(x,         y,         w, color);  /* top    / lato superiore */
+    GFX_DrawHLine(x,         y + h - 1, w, color);  /* bottom / lato inferiore */
+    GFX_DrawVLine(x,         y,         h, color);  /* left   / lato sinistro  */
+    GFX_DrawVLine(x + w - 1, y,         h, color);  /* right  / lato destro    */
+}
+
+void GFX_DrawLine(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, uint16_t color)
+{
+    /* Bresenham's line algorithm.
+     * This is the standard algorithm for rasterising a line on a pixel display
+     * because it uses only integer additions and subtractions (no floating point).
+     *
+     * Algoritmo di Bresenham per rasterizzare una linea.
+     * E' lo standard per display raster perche' usa solo addizioni e sottrazioni
+     * intere (niente virgola mobile). */
+    int16_t dx =  (int16_t)(x1 > x0 ? x1 - x0 : x0 - x1);
+    int16_t dy = -(int16_t)(y1 > y0 ? y1 - y0 : y0 - y1);
+    int16_t sx = (x0 < x1) ? 1 : -1;
+    int16_t sy = (y0 < y1) ? 1 : -1;
+    int16_t err = dx + dy;
+
+    while (1)
+    {
+        ILI9341_DrawPixel(x0, y0, color);
+        if (x0 == x1 && y0 == y1) break;
+        int16_t e2 = 2 * err;
+        if (e2 >= dy) { err += dy; x0 = (uint16_t)((int16_t)x0 + sx); }
+        if (e2 <= dx) { err += dx; y0 = (uint16_t)((int16_t)y0 + sy); }
+    }
+}
+
+void GFX_DrawRoundRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
+                       uint16_t r, uint16_t color)
+{
+    /* Straight sides / Lati rettilinei */
+    GFX_DrawHLine(x + r,     y,         w - 2*r, color); /* top    */
+    GFX_DrawHLine(x + r,     y + h - 1, w - 2*r, color); /* bottom */
+    GFX_DrawVLine(x,         y + r,     h - 2*r, color); /* left   */
+    GFX_DrawVLine(x + w - 1, y + r,     h - 2*r, color); /* right  */
+    /* TODO: add corner arcs once display hardware is available for testing.
+     * TODO: aggiungere gli archi agli angoli quando il display e' disponibile. */
+}
+
+void GFX_FillRoundRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
+                       uint16_t r, uint16_t color)
+{
+    /* Central body + top and bottom strips / Corpo centrale + strisce superiore e inferiore */
+    ILI9341_FillRect(x,     y + r,     w,       h - 2*r, color);
+    ILI9341_FillRect(x + r, y,         w - 2*r, r,       color);
+    ILI9341_FillRect(x + r, y + h - r, w - 2*r, r,       color);
+    /* TODO: fill corner arcs / TODO: riempire gli archi degli angoli */
+}
+
+void GFX_DrawCircle(uint16_t cx, uint16_t cy, uint16_t r, uint16_t color)
+{
+    /* Midpoint circle algorithm (Bresenham for circles).
+     * Thanks to 8-fold symmetry, we compute only 1/8 of the circle and
+     * mirror it onto the other 7 octants.
+     *
+     * Algoritmo midpoint circle (Bresenham per cerchi).
+     * Grazie alla simmetria a 8 settori, calcoliamo solo 1/8 del cerchio
+     * e riflettiamo il risultato sugli altri 7 ottanti. */
+    int16_t x = 0, y = (int16_t)r, d = (int16_t)(3 - 2*r);
+
+    while (x <= y)
+    {
+        /* Plot all 8 symmetric points at once.
+         * Disegna tutti gli 8 punti simmetrici in una volta. */
+        ILI9341_DrawPixel(cx + (uint16_t)x, cy + (uint16_t)y, color);
+        ILI9341_DrawPixel(cx - (uint16_t)x, cy + (uint16_t)y, color);
+        ILI9341_DrawPixel(cx + (uint16_t)x, cy - (uint16_t)y, color);
+        ILI9341_DrawPixel(cx - (uint16_t)x, cy - (uint16_t)y, color);
+        ILI9341_DrawPixel(cx + (uint16_t)y, cy + (uint16_t)x, color);
+        ILI9341_DrawPixel(cx - (uint16_t)y, cy + (uint16_t)x, color);
+        ILI9341_DrawPixel(cx + (uint16_t)y, cy - (uint16_t)x, color);
+        ILI9341_DrawPixel(cx - (uint16_t)y, cy - (uint16_t)x, color);
+
+        /* Update the decision variable / Aggiorna la variabile di decisione */
+        if (d < 0) { d += 4*x + 6; }
+        else       { d += 4*(x - y) + 10; y--; }
+        x++;
+    }
+}
