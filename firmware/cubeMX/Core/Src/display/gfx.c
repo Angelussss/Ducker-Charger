@@ -1,23 +1,20 @@
 /**
  * @file    gfx.c
  * @brief   Graphics primitives implementation: text, lines, shapes.
- *          Implementazione delle primitive grafiche: testo, linee, forme.
  *
- * BITMAP FONT FORMAT / FORMATO DEL FONT BITMAP:
+ * BITMAP FONT FORMAT:
  *   Each character is stored as char_h bytes, one per row.
  *   The most significant bit of each byte corresponds to the leftmost pixel.
- *   Ogni carattere e' memorizzato come char_h byte, uno per riga.
- *   Il bit piu' significativo di ogni byte corrisponde al pixel piu' a sinistra.
  *
- *   Example for 'A' (in binary) / Esempio per 'A' (in binario):
- *     0b00011000   <- row 0 (top)    / riga 0 (in alto)
+ *   Example for 'A' (in binary):
+ *     0b00011000   <- row 0 (top)
  *     0b00100100
  *     0b01000010
  *     0b01111110
  *     0b01000010
  *     0b01000010
  *     0b00000000
- *     0b00000000   <- row 7 (bottom) / riga 7 (in basso)
+ *     0b00000000   <- row 7 (bottom)
  */
 
 #include "display/gfx.h"
@@ -31,11 +28,6 @@
  * Contains: digits (48–57), uppercase (65–90), lowercase (97–122)
  * and common punctuation. Sufficient for the project UI.
  * For a complete font a library such as u8g2 can be used.
- *
- * Copre i caratteri ASCII da 32 (' ') a 122 ('z').
- * Contiene: numeri (48–57), maiuscole (65–90), minuscole (97–122)
- * e punteggiatura comune. Sufficiente per la UI del progetto.
- * Per un font completo si puo' usare una libreria come u8g2.
  * ========================================================= */
 static const uint8_t _font_small_data[] = {
     /* Chars 32–47 – space and basic punctuation / Spazio e punteggiatura base */
@@ -138,29 +130,24 @@ static const uint8_t _font_small_data[] = {
 };
 
 /* =========================================================
- * PUBLIC FONT DESCRIPTORS / DESCRITTORI FONT PUBBLICI
+ * PUBLIC FONT DESCRIPTORS
  *
  * FontMedium and FontLarge use the same data as a placeholder.
  * They should be replaced with proper larger font arrays when
  * the display hardware is available for testing.
- *
- * FontMedium e FontLarge usano gli stessi dati come placeholder.
- * Vanno sostituiti con array di font piu' grandi appropriati quando
- * l'hardware del display e' disponibile per i test.
  * ========================================================= */
 const GFX_Font_t GFX_FontSmall  = { _font_small_data, 6, 8  };
 const GFX_Font_t GFX_FontMedium = { _font_small_data, 6, 8  }; /* placeholder */
 const GFX_Font_t GFX_FontLarge  = { _font_small_data, 6, 8  }; /* placeholder */
 
 /* =========================================================
- * IMPLEMENTATION / IMPLEMENTAZIONE
+ * IMPLEMENTATION
  * ========================================================= */
 
 void GFX_DrawChar(uint16_t x, uint16_t y, char c,
                   const GFX_Font_t *font, uint16_t fg_color, uint16_t bg_color)
 {
-    /* Silently skip out-of-range characters.
-     * Salta silenziosamente i caratteri fuori range. */
+    /* Silently skip out-of-range characters. */
     if (c < 32 || c > 122) return;
 
     uint8_t char_index = (uint8_t)c - 32;
@@ -172,9 +159,7 @@ void GFX_DrawChar(uint16_t x, uint16_t y, char c,
         for (uint8_t col = 0; col < font->char_w; col++)
         {
             /* Test the bit corresponding to the current column.
-             * The MSB (0x80) corresponds to column 0 (left).
-             * Testa il bit corrispondente alla colonna corrente.
-             * Il MSB (0x80) corrisponde alla colonna 0 (sinistra). */
+             * The MSB (0x80) corresponds to column 0 (left). */
             uint16_t color = (row_data & (0x80 >> col)) ? fg_color : bg_color;
             ILI9341_DrawPixel(x + col, y + row, color);
         }
@@ -190,8 +175,7 @@ void GFX_DrawString(uint16_t x, uint16_t y, const char *str,
     while (*str)
     {
         GFX_DrawChar(cursor_x, y, *str, font, fg_color, bg_color);
-        cursor_x += font->char_w;  /* Advance cursor by one character width.
-                                    * Avanza il cursore di una larghezza carattere. */
+        cursor_x += font->char_w;  /* Advance cursor by one character width. */
         str++;
     }
 }
@@ -206,15 +190,13 @@ void GFX_DrawInt(uint16_t x, uint16_t y, int32_t value,
 
 void GFX_DrawHLine(uint16_t x, uint16_t y, uint16_t w, uint16_t color)
 {
-    /* A horizontal line is just a 1-pixel-tall rectangle.
-     * Una linea orizzontale e' semplicemente un rettangolo alto 1 pixel. */
+    /* A horizontal line is just a 1-pixel-tall rectangle. */
     ILI9341_FillRect(x, y, w, 1, color);
 }
 
 void GFX_DrawVLine(uint16_t x, uint16_t y, uint16_t h, uint16_t color)
 {
-    /* A vertical line is a 1-pixel-wide rectangle.
-     * Una linea verticale e' un rettangolo largo 1 pixel. */
+    /* A vertical line is a 1-pixel-wide rectangle. */
     ILI9341_FillRect(x, y, 1, h, color);
 }
 
@@ -230,11 +212,7 @@ void GFX_DrawLine(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, uint16_t c
 {
     /* Bresenham's line algorithm.
      * This is the standard algorithm for rasterising a line on a pixel display
-     * because it uses only integer additions and subtractions (no floating point).
-     *
-     * Algoritmo di Bresenham per rasterizzare una linea.
-     * E' lo standard per display raster perche' usa solo addizioni e sottrazioni
-     * intere (niente virgola mobile). */
+     * because it uses only integer additions and subtractions (no floating point). */
     int16_t dx =  (int16_t)(x1 > x0 ? x1 - x0 : x0 - x1);
     int16_t dy = -(int16_t)(y1 > y0 ? y1 - y0 : y0 - y1);
     int16_t sx = (x0 < x1) ? 1 : -1;
@@ -254,34 +232,29 @@ void GFX_DrawLine(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, uint16_t c
 void GFX_DrawRoundRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
                        uint16_t r, uint16_t color)
 {
-    /* Straight sides / Lati rettilinei */
+    /* Straight sides */
     GFX_DrawHLine(x + r,     y,         w - 2*r, color); /* top    */
     GFX_DrawHLine(x + r,     y + h - 1, w - 2*r, color); /* bottom */
     GFX_DrawVLine(x,         y + r,     h - 2*r, color); /* left   */
     GFX_DrawVLine(x + w - 1, y + r,     h - 2*r, color); /* right  */
-    /* TODO: add corner arcs once display hardware is available for testing.
-     * TODO: aggiungere gli archi agli angoli quando il display e' disponibile. */
+    /* TODO: add corner arcs once display hardware is available for testing. */
 }
 
 void GFX_FillRoundRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
                        uint16_t r, uint16_t color)
 {
-    /* Central body + top and bottom strips / Corpo centrale + strisce superiore e inferiore */
+    /* Central body + top and bottom strips */
     ILI9341_FillRect(x,     y + r,     w,       h - 2*r, color);
     ILI9341_FillRect(x + r, y,         w - 2*r, r,       color);
     ILI9341_FillRect(x + r, y + h - r, w - 2*r, r,       color);
-    /* TODO: fill corner arcs / TODO: riempire gli archi degli angoli */
+    /* TODO: fill corner arcs */
 }
 
 void GFX_DrawCircle(uint16_t cx, uint16_t cy, uint16_t r, uint16_t color)
 {
     /* Midpoint circle algorithm (Bresenham for circles).
      * Thanks to 8-fold symmetry, we compute only 1/8 of the circle and
-     * mirror it onto the other 7 octants.
-     *
-     * Algoritmo midpoint circle (Bresenham per cerchi).
-     * Grazie alla simmetria a 8 settori, calcoliamo solo 1/8 del cerchio
-     * e riflettiamo il risultato sugli altri 7 ottanti. */
+     * mirror it onto the other 7 octants. */
     int16_t x = 0, y = (int16_t)r, d = (int16_t)(3 - 2*r);
 
     while (x <= y)
