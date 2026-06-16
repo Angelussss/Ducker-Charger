@@ -14,6 +14,15 @@ extern ADC_HandleTypeDef hadcTSP;
 // I2C1 -> STUSB4710 STPD01PUR INA3221 BQ34Z100
 // I2C3 -> TPS25750
 
+/*
+    To do:
+        - Check after I2C_Mem_read -> if !HAL_OK to throw possible error
+        - Compress PDO configuration selection into one single function
+        - Re-check interrupt handling for both primary and secondary USB-C ports
+        - (Optional) Read assigned V and I_max to STPD01
+
+*/
+
 volatile I2C_ReadState currentlyReading;
 
 // (Interrupt solo per Fuel Gauge)
@@ -33,12 +42,14 @@ int CHRG_OK = GPIO_PIN_RESET;
 int USBA1_STATUS = GPIO_PIN_RESET;
 int USBA2_STATUS = GPIO_PIN_RESET;
 int EN_OTG_STATUS = GPIO_PIN_RESET;
-int ST_EN_STATUS = GPIO_PIN_RESET;
+int STPD01_EN_STATUS = GPIO_PIN_RESET;
+int USBC2_STATUS = GPIO_PIN_RESET;
 
 SensorData sensor_data;
 FuelGaugeSensors fuelGaugeSensors;
 PDContract primaryUSBC_Contract;
 PDContract secondaryUSBC_PDContract;
+STPD01_Status stpd01_status;
 // secondaryUSBC_PDContract.isSink = false;
 
 // Ports: USB-A1; USB-A2; USB-C (primary, via TPS25750); USB-C (secondary, via STUSB4710A)
@@ -48,7 +59,12 @@ void init() {
     // Enable USB ports (USB-A1 and USB-A2) and enable Aux (LP_ST_EN - PC11)
     HAL_GPIO_WritePin(USB_A1_CTRL_GPIO_Port, USB_A1_CTRL_Pin, GPIO_PIN_SET);
     HAL_GPIO_WritePin(USB_A2_CTRL_GPIO_Port, USB_A2_CTRL_Pin, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(USB_ST_EN_CTRL_GPIO_Port, USB_ST_EN_CTRL_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(USB_STPD01_EN_CTRL_GPIO_Port, USB_STPD01_EN_CTRL_Pin, GPIO_PIN_SET);
+
+    // Secondary USB-C is always the source
+    secondaryUSBC_PDContract.isSink = false;
+    primaryUSBC_Contract.isNegotiationDone = false;
+    secondaryUSBC_PDContract.isNegotiationDone = false;
 }
 
 float toVoltage(uint32_t raw) {
@@ -318,22 +334,17 @@ void readCS() {        // Check and update critical signals and their status (e.
     if (PD_IRQ == GPIO_PIN_RESET) {
         primaryUSBC_ConnectionINT();
     }
-    /*
-    if (PD_IRQ != PD_IRQ_PREV && PD_IRQ == GPIO_PIN_RESET) {
-        // Throw interrupt (device has been pluggled)
-        pluggedINT();
-    } else if (PD_IRQ != PD_IRQ_PREV && PD_IRQ == GPIO_PIN_SET) {
-        // Throw interrupt (device has been unplugged)
-        unpluggedINT();
-    }
-    */
+
+    // Remember to add the secondary USB-C interrupt + handling
+
 }
 
 void readNCS() {        // Check and update NON-critical signals and their status (e.g., USBA1_STATUS)
     USBA1_STATUS = HAL_GPIO_ReadPin(USB_A1_CTRL_GPIO_Port, USB_A1_CTRL_Pin);
     USBA2_STATUS = HAL_GPIO_ReadPin(USB_A2_CTRL_GPIO_Port, USB_A2_CTRL_Pin);
+    USBC2_STATUS = HAL_GPIO_ReadPin(USB_C2_EN_GPIO_Port, USB_C2_EN_Pin);
     EN_OTG_STATUS = HAL_GPIO_ReadPin(USB_OTG_CTRL_GPIO_Port, USB_OTG_CTRL_Pin);
-    ST_EN_STATUS = HAL_GPIO_ReadPin(USB_ST_EN_CTRL_GPIO_Port, USB_ST_EN_CTRL_Pin);
+    STPD01_EN_STATUS = HAL_GPIO_ReadPin(USB_STPD01_EN_CTRL_GPIO_Port, USB_STPD01_EN_CTRL_Pin);
 }
 
 /*
@@ -345,7 +356,7 @@ void readNCS() {        // Check and update NON-critical signals and their statu
 void primaryUSBC_ConnectionINT() {
     // Read INT_EVENT1 (0x14) [Little-endian]
     uint8_t eventBuffer[11];
-    HAL_I2C_Mem_Read(&hi2c3, PD_CONTROLLER_ADDR, INT_EVENT1_REG_ADDR, I2C_MEMADD_SIZE_8BIT, eventBuffer, 11, HAL_MAX_DELAY);
+    HAL_I2C_Mem_Read(&hi2c3, TPS25750_PD_CONTROLLER_ADDR, INT_EVENT1_REG_ADDR, I2C_MEMADD_SIZE_8BIT, eventBuffer, 11, HAL_MAX_DELAY);
     // Read from INT_EVENT1
     bool plugInsertOrRemoval = (eventBuffer[0] >> 3) & 0x01;    // USB Plug Status has Changed
     bool newContractAsCons = (eventBuffer[1] >> 4) & 0x01;      // Far-end source has accepted an RDO sent by the PD Controller as a Sink
@@ -363,7 +374,7 @@ void primaryUSBC_ConnectionINT() {
     if (powerStatusUpdate) {
         uint8_t powerStatusBuffer[2];
         // Read POWER_STATUS Register
-        HAL_I2C_Mem_Read(&hi2c3, PD_CONTROLLER_ADDR, POWER_STATUS_REG_ADDR, I2C_MEMADD_SIZE_8BIT, powerStatusBuffer, 2, HAL_MAX_DELAY);
+        HAL_I2C_Mem_Read(&hi2c3, TPS25750_PD_CONTROLLER_ADDR, POWER_STATUS_REG_ADDR, I2C_MEMADD_SIZE_8BIT, powerStatusBuffer, 2, HAL_MAX_DELAY);
         powerConnection = (powerStatusBuffer[0] >> 0) & 0x01;
         sourceSink = (powerStatusBuffer[0] >> 1) & 0x01;
         typeCCurrent = (powerStatusBuffer[0] >> 2) & 0x03;
@@ -374,21 +385,24 @@ void primaryUSBC_ConnectionINT() {
         if (primaryUSBC_Contract.isPlugged) {
             // Determine whether the powerbank is the source or the sink
             primaryUSBC_Contract.isSink = sourceSink;        // 1 -> is sink; 0 -> is source
+        } else {        // if not plugged
+            primaryUSBC_Contract.isNegotiationDone = false;
         }
     }
 
     if (primaryUSBC_Contract.isPlugged && (newContractAsCons || newContractAsProv)) {
+        primaryUSBC_Contract.isNegotiationDone = true;
         // Read incoming contract
         uint8_t activeContractPDOBuffer[6];
         uint8_t activeContractRDOBuffer[4];
 
         // Read PDO for fetching Voltage a maximum Current
-        HAL_I2C_Mem_Read(&hi2c3, PD_CONTROLLER_ADDR, ACTIVE_CONTRACT_PDO_REG_ADDR, I2C_MEMADD_SIZE_8BIT, activeContractPDOBuffer, 6, HAL_MAX_DELAY);
+        HAL_I2C_Mem_Read(&hi2c3, TPS25750_PD_CONTROLLER_ADDR, ACTIVE_CONTRACT_PDO_REG_ADDR, I2C_MEMADD_SIZE_8BIT, activeContractPDOBuffer, 6, HAL_MAX_DELAY);
         uint16_t voltageRaw = ((activeContractPDOBuffer[2] & 0x0F) << 6) | ((activeContractPDOBuffer[1] >> 2) & 0x3F);  // (19:10)
         uint16_t maxCurrentRaw = ((activeContractPDOBuffer[1] & 0x03) << 8) | activeContractPDOBuffer[0];       // (9:0)
 
-        // Read RDO for fetching contracted current
-        HAL_I2C_Mem_Read(&hi2c3, PD_CONTROLLER_ADDR, ACTIVE_CONTRACT_RDO_REG_ADDR, I2C_MEMADD_SIZE_8BIT, activeContractRDOBuffer, 4, HAL_MAX_DELAY);
+        // Read RDO for fetching negotiated current
+        HAL_I2C_Mem_Read(&hi2c3, TPS25750_PD_CONTROLLER_ADDR, ACTIVE_CONTRACT_RDO_REG_ADDR, I2C_MEMADD_SIZE_8BIT, activeContractRDOBuffer, 4, HAL_MAX_DELAY);
         uint16_t operatingCurrentRaw = ((activeContractRDOBuffer[2] & 0x0F) << 6) | ((activeContractRDOBuffer[1] >> 2) & 0x03F);        // (19:10)
 
         // Convert fetched values accordingly
@@ -400,15 +414,266 @@ void primaryUSBC_ConnectionINT() {
     }
 
     // Clear INT_EVENT1 to make I2Cs_IRQ back to HIGH (only bits previously read are cleared to be able to get possibly new occurring interrupts)
-    HAL_I2C_Mem_Write(&hi2c3, PD_CONTROLLER_ADDR, INT_CLEAR1_REG_ADDR, I2C_MEMADD_SIZE_8BIT, eventBuffer, 11, HAL_MAX_DELAY);
+    HAL_I2C_Mem_Write(&hi2c3, TPS25750_PD_CONTROLLER_ADDR, INT_CLEAR1_REG_ADDR, I2C_MEMADD_SIZE_8BIT, eventBuffer, 11, HAL_MAX_DELAY);
 }
 
 void secondaryUSBC_ConnectionINT() {
+    uint8_t alertBuffer[2];
+    uint8_t activeContractRDOBuffer[4];
+    // Read alert status register (the register is read and clear)
+    HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, ALERT_STATUS_REG_ADDR, I2C_MEMADD_SIZE_8BIT, alertBuffer, 1, HAL_MAX_DELAY);
+    bool CC_HW_FAULT_STATUS_AL = (alertBuffer[0] >> 4) & 0x01;      // Need to handle the alert
+    bool TYPEC_MONITORING_STATUS_AL = (alertBuffer[0] >> 5) & 0x01; // Need to handle the alert
+    bool PORT_STATUS_AL = (alertBuffer[0] >> 6) & 0x01;             // Need to handle the alert
+
+    // Read port status register if alert is fired
+    if (PORT_STATUS_AL) {
+        HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, CC_CONNECTION_STATUS_REG_ADDR, I2C_MEMADD_SIZE_8BIT, alertBuffer, 1, HAL_MAX_DELAY);
+        switch ((alertBuffer[0] >> 5) & 0x07) {
+            case 0: {       // NONE_ATT: Not connected
+                secondaryUSBC_PDContract.isPlugged = false;
+                secondaryUSBC_PDContract.isNegotiationDone = false;
+                disable_USBC2();
+                disable_STPD01();
+                break;
+            }
+            case 1: {       // SNK_ATT: Sink device connected
+                secondaryUSBC_PDContract.isPlugged = true;
+                break;
+            }
+            case 2: {       // SRC_ATT: Source device connected
+                secondaryUSBC_PDContract.isPlugged = false;     // Reject connection
+                secondaryUSBC_PDContract.isNegotiationDone = false;
+                disable_USBC2();
+                disable_STPD01();
+                //secondaryUSBC_PDContract.isSink = true;
+                // Throw error: secondary USB-C is source-only
+                break;
+            }
+            default: {      // DBG_ATT / AUD_ATT / POW_ACC_ATT
+                // Throw unexpected flag
+            }
+        }
+    }
+
+    if (secondaryUSBC_PDContract.isPlugged && !secondaryUSBC_PDContract.isNegotiationDone && !secondaryUSBC_PDContract.isSink) {
+        // Fetch (if RDO negotiated the PDO configuration)
+        HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, SRC_RDO_REG_ADDR, I2C_MEMADD_SIZE_8BIT, activeContractRDOBuffer, 4, HAL_MAX_DELAY);
+        uint8_t PDOConfiguration = (activeContractRDOBuffer[3] >> 4) & 0x07;
+        switch (PDOConfiguration) {
+            case 0: {
+                // No negotiated contract
+                break;
+            }
+            case 1: {
+                secondaryUSBC_PDContract.isNegotiationDone = true;
+                selectPDO1();
+                break;
+            }
+            case 2: {
+                secondaryUSBC_PDContract.isNegotiationDone = true;
+                selectPDO2();
+                break;
+            }
+            case 3: {
+                secondaryUSBC_PDContract.isNegotiationDone = true;
+                selectPDO3();
+                break;
+            }
+            case 4: {
+                secondaryUSBC_PDContract.isNegotiationDone = true;
+                selectPDO4();
+                break;
+            }
+            case 5: {
+                secondaryUSBC_PDContract.isNegotiationDone = true;
+                selectPDO5();
+                break;
+            }
+            default: {
+                // Throw error
+            }
+        }
+
+        if (PDOConfiguration > 0 && PDOConfiguration <= 5) {
+            uint16_t operatingCurrentRaw = ((activeContractRDOBuffer[2] & 0x0F) << 6) | ((activeContractRDOBuffer[1] >> 2) & 0x03F);        // (19:10)
+            secondaryUSBC_PDContract.operatingCurrent = operatingCurrentRaw * 10.0f;  // To get mA (as stated in the USB_PD standard)
+            setupSTPD01(secondaryUSBC_PDContract.voltage, secondaryUSBC_PDContract.maxCurrent);
+
+            // After setup, enable STPD01, wait to let it stabilize and then check for its flags and VBUS
+            enable_STPD01();
+            HAL_Delay(10);      // Wait for 10ms
+            // Check VBUS_EN_SRC and STPD01 flags, if everything ok enable charging
+            if (checkSTPD01()) {
+                // Check VBUS_EN_SRC to confirm power path is alive, if ok enable USB-C2 port
+                uint8_t vbusBuffer;
+                HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, VBUS_ENABLE_STATUS_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &vbusBuffer, 1, HAL_MAX_DELAY);
+                if (vbusBuffer & 0x01) {
+                    enable_USBC2();
+                }
+            } else {
+                disable_STPD01();
+                if (stpd01_status.shortCircuitProtection) {
+                    // Throw STPD01 short-circuit handling
+                    // Probably disables both STPD01 and USB-C2 (if enabled)
+                } else if (stpd01_status.overVoltageProtection) {
+                    // Throw STPD01 over voltage handling
+                    // Probably disables both STPD01 and USB-C2 (if enabled)
+                } else if (stpd01_status.overTemperatureWarning) {
+                    // Throw over temperature warning handling
+                    // (Possibly enables anyway the std01 and continues charging procedure)
+                } else if (stpd01_status.overTemperatureProtection) {
+                    // Throw STPD01 over temperature handling
+                    // Probably disables both STPD01 and USB-C2 (if enabled)
+                } else {
+                    // Throw inductor peak current protection handling
+                    // Probably disables both STPD01 and USB-C2 (if enabled)
+                }
+            }
+
+        }
+
+    }
+
+    // To do: manage VBUS_EN_SRC
 
 }
 
-// void unpluggedINT() {}
+void setupSTPD01(float voltage_mV, float current_mA) {
+    // First, ensure STPD01 is disabled
+    disable_STPD01();
+    // --- Convert max voltage and max current into the correspontent addresses
+    // Clamp values to STPD operational range
+    if (voltage_mV < 3000) {
+        voltage_mV = 3000;
+    } else if (voltage_mV > 20000) {
+        voltage_mV = 20000;
+    }
 
+    if (current_mA < 100) {
+        current_mA = 100;
+    } else if (current_mA > 3000) {
+        current_mA = 3000;
+    }
 
+    int v = (int)voltage_mV;
+    int c = (int)current_mA;
 
+    uint8_t voltageReg;
+    if (v < 5900) {
+        voltageReg = (uint8_t)((v - 3000) / 20);          // 0x00 base, 20mV steps
+    } else if (v < 11000) {
+        voltageReg = 0x91 + (uint8_t)((v - 5900) / 100);  // 0x91 base, 100mV steps
+    } else {
+        voltageReg = 0xC4 + (uint8_t)((v - 11000) / 200); // 0xC4 base, 200mV steps
+    }
 
+    uint8_t currentReg = (uint8_t)((c - 100) / 100);      // 0x00 = 100mA, steps of 100mA
+
+    // --- Provide max voltage and max current addresses to STPD01
+    HAL_I2C_Mem_Write(&hi2c1, STPD01_PD_ADDR, VOUT_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &voltageReg, 1, HAL_MAX_DELAY);
+    HAL_I2C_Mem_Write(&hi2c1, STPD01_PD_ADDR, ILIM_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &currentReg, 1, HAL_MAX_DELAY);
+}
+
+bool checkSTPD01() {
+    uint8_t buffer;
+    HAL_I2C_Mem_Read(&hi2c1, STPD01_PD_ADDR, INT_STAT_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &buffer, 1, HAL_MAX_DELAY);
+    stpd01_status.overVoltageProtection = (buffer >> 0) & 0x01;
+    stpd01_status.shortCircuitProtection = (buffer >> 2) & 0x01;
+    stpd01_status.powerOn = (buffer >> 3) & 0x01;
+    // OR:
+    // stpd01_status.powerOn = HAL_GPIO_ReadPin(USB_STPD01_EN_CTRL_GPIO_Port, USB_STPD01_EN_CTRL_Pin);   //(already implemented in NCS reading)
+    // stpd01_status.powerOn = STPD01_EN_STATUS;
+    stpd01_status.overTemperatureProtection = (buffer >> 5) & 0x01;
+    stpd01_status.overTemperatureWarning = (buffer >> 6) & 0x01;
+    stpd01_status.inductorPeakCurrentProtection = (buffer >> 7) & 0x01;
+    if (stpd01_status.overVoltageProtection ||
+        stpd01_status.shortCircuitProtection ||
+        stpd01_status.overTemperatureProtection ||
+        stpd01_status.overTemperatureWarning ||
+        stpd01_status.inductorPeakCurrentProtection) {
+        return false;
+    }
+    return true;
+}
+
+void enable_STPD01 () {
+    HAL_GPIO_WritePin(USB_STPD01_EN_CTRL_GPIO_Port, USB_STPD01_EN_CTRL_Pin, GPIO_PIN_SET);
+    STPD01_EN_STATUS = true;
+}
+
+void disable_STPD01 () {
+    HAL_GPIO_WritePin(USB_STPD01_EN_CTRL_GPIO_Port, USB_STPD01_EN_CTRL_Pin, GPIO_PIN_RESET);
+    STPD01_EN_STATUS = false;
+}
+
+void enable_USBC2() {
+    HAL_GPIO_WritePin(USB_C2_EN_GPIO_Port, USB_C2_EN_Pin, GPIO_PIN_SET);
+    USBC2_STATUS = true;
+}
+
+void disable_USBC2() {
+    HAL_GPIO_WritePin(USB_C2_EN_GPIO_Port, USB_C2_EN_Pin, GPIO_PIN_RESET);
+    USBC2_STATUS = false;
+}
+
+// Selection functions for PDO configuration for secondary USB-C
+void selectPDO1() {
+    uint8_t activeContractPDOBuffer[4];
+    // Read PDO for fetching Voltage a maximum Current
+    HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, SRC_PDO1_REG_ADDR, I2C_MEMADD_SIZE_8BIT, activeContractPDOBuffer, 4, HAL_MAX_DELAY);
+    uint16_t voltageRaw = ((activeContractPDOBuffer[2] & 0x0F) << 6) | ((activeContractPDOBuffer[1] >> 2) & 0x3F);  // (19:10)
+    uint16_t maxCurrentRaw = ((activeContractPDOBuffer[1] & 0x03) << 8) | activeContractPDOBuffer[0];       // (9:0)
+
+    // Convert fetched values accordingly
+    secondaryUSBC_PDContract.voltage = voltageRaw * 50.0f;                    // To get mV (as stated in the USB_PD standard)
+    secondaryUSBC_PDContract.maxCurrent = maxCurrentRaw * 10.0f;              // To get mA (as stated in the USB_PD standard)
+}
+
+void selectPDO2() {
+    uint8_t activeContractPDOBuffer[4];
+    // Read PDO for fetching Voltage a maximum Current
+    HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, SRC_PDO2_REG_ADDR, I2C_MEMADD_SIZE_8BIT, activeContractPDOBuffer, 4, HAL_MAX_DELAY);
+    uint16_t voltageRaw = ((activeContractPDOBuffer[2] & 0x0F) << 6) | ((activeContractPDOBuffer[1] >> 2) & 0x3F);  // (19:10)
+    uint16_t maxCurrentRaw = ((activeContractPDOBuffer[1] & 0x03) << 8) | activeContractPDOBuffer[0];       // (9:0)
+
+    // Convert fetched values accordingly
+    secondaryUSBC_PDContract.voltage = voltageRaw * 50.0f;                    // To get mV (as stated in the USB_PD standard)
+    secondaryUSBC_PDContract.maxCurrent = maxCurrentRaw * 10.0f;              // To get mA (as stated in the USB_PD standard)
+}
+
+void selectPDO3() {
+    uint8_t activeContractPDOBuffer[4];
+    // Read PDO for fetching Voltage a maximum Current
+    HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, SRC_PDO3_REG_ADDR, I2C_MEMADD_SIZE_8BIT, activeContractPDOBuffer, 4, HAL_MAX_DELAY);
+    uint16_t voltageRaw = ((activeContractPDOBuffer[2] & 0x0F) << 6) | ((activeContractPDOBuffer[1] >> 2) & 0x3F);  // (19:10)
+    uint16_t maxCurrentRaw = ((activeContractPDOBuffer[1] & 0x03) << 8) | activeContractPDOBuffer[0];       // (9:0)
+
+    // Convert fetched values accordingly
+    secondaryUSBC_PDContract.voltage = voltageRaw * 50.0f;                    // To get mV (as stated in the USB_PD standard)
+    secondaryUSBC_PDContract.maxCurrent = maxCurrentRaw * 10.0f;              // To get mA (as stated in the USB_PD standard)
+}
+
+void selectPDO4() {
+    uint8_t activeContractPDOBuffer[4];
+    // Read PDO for fetching Voltage a maximum Current
+    HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, SRC_PDO4_REG_ADDR, I2C_MEMADD_SIZE_8BIT, activeContractPDOBuffer, 4, HAL_MAX_DELAY);
+    uint16_t voltageRaw = ((activeContractPDOBuffer[2] & 0x0F) << 6) | ((activeContractPDOBuffer[1] >> 2) & 0x3F);  // (19:10)
+    uint16_t maxCurrentRaw = ((activeContractPDOBuffer[1] & 0x03) << 8) | activeContractPDOBuffer[0];       // (9:0)
+
+    // Convert fetched values accordingly
+    secondaryUSBC_PDContract.voltage = voltageRaw * 50.0f;                    // To get mV (as stated in the USB_PD standard)
+    secondaryUSBC_PDContract.maxCurrent = maxCurrentRaw * 10.0f;              // To get mA (as stated in the USB_PD standard)
+}
+
+void selectPDO5() {
+    uint8_t activeContractPDOBuffer[4];
+    // Read PDO for fetching Voltage a maximum Current
+    HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, SRC_PDO5_REG_ADDR, I2C_MEMADD_SIZE_8BIT, activeContractPDOBuffer, 4, HAL_MAX_DELAY);
+    uint16_t voltageRaw = ((activeContractPDOBuffer[2] & 0x0F) << 6) | ((activeContractPDOBuffer[1] >> 2) & 0x3F);  // (19:10)
+    uint16_t maxCurrentRaw = ((activeContractPDOBuffer[1] & 0x03) << 8) | activeContractPDOBuffer[0];       // (9:0)
+
+    // Convert fetched values accordingly
+    secondaryUSBC_PDContract.voltage = voltageRaw * 50.0f;                    // To get mV (as stated in the USB_PD standard)
+    secondaryUSBC_PDContract.maxCurrent = maxCurrentRaw * 10.0f;              // To get mA (as stated in the USB_PD standard)
+}

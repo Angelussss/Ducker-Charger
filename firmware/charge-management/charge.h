@@ -23,7 +23,7 @@ typedef struct {
 
     // Low-Byte
     bool DSG;           // (BIT0) Discharging detected. True when set
-} Flags;
+} fuelGaugeFlags;
 
 typedef struct {
     float internalTemperature;  // Expressed in ºC
@@ -40,7 +40,7 @@ typedef struct {
     unsigned int stateOfHealth; // Expressed in percentage
     // Available energy
     // Average power
-    Flags flags;
+    fuelGaugeFlags flags;
 } FuelGaugeSensors;
 
 typedef enum {      // Possible reading states for I2C
@@ -64,7 +64,7 @@ typedef enum {      // Possible reading states for I2C
 
 // TPS25750 Mapping
 // TO CHECK --> 0x20 / 0x21 ?
-#define PD_CONTROLLER_ADDR ((uint16_t)(0x20 << 1))     // Convert 7-bit address to 8-bit and then cast to 16-bit
+#define TPS25750_PD_CONTROLLER_ADDR ((uint16_t)(0x20 << 1))     // Convert 7-bit address to 8-bit and then cast to 16-bit
 #define INT_EVENT1_REG_ADDR 0x14
 #define INT_MASK1_REG_ADDR 0x16
 #define INT_CLEAR1_REG_ADDR 0x18
@@ -72,13 +72,44 @@ typedef enum {      // Possible reading states for I2C
 #define ACTIVE_CONTRACT_PDO_REG_ADDR 0x34
 #define ACTIVE_CONTRACT_RDO_REG_ADDR 0x35
 
+// STUSB4710 Mapping
+#define STUSB4710_PD_CONTROLLER_ADDR ((uint16_t)(0x28 << 1))
+#define ALERT_STATUS_REG_ADDR 0x0B
+#define CC_CONNECTION_STATUS_REG_ADDR 0x0E      // Equivalent of PORT_STATUS_1 register of the STUSB4700
+#define VBUS_ENABLE_STATUS_REG_ADDR 0x27                 // To check if power path is alive
+#define SRC_PDO1_REG_ADDR 0x71
+#define SRC_PDO2_REG_ADDR 0x75
+#define SRC_PDO3_REG_ADDR 0x79
+#define SRC_PDO4_REG_ADDR 0x7D
+#define SRC_PDO5_REG_ADDR 0x81
+#define SRC_RDO_REG_ADDR 0x91
+
+// STPD01 Mapping
+// (Power supply for secondary USB-C)
+#define STPD01_PD_ADDR ((uint16_t)(0x54 << 1))      // To be verified (according to GitHub repo's)
+#define VOUT_REG_ADDR 0x00
+#define ILIM_REG_ADDR 0x01
+#define INT_STAT_REG_ADDR 0x02
+//#define SERVICES_REG_ADDR 0x05        // Contains the discharge toggle ON/OFF (default if ON)
+#define DIGITAL_ENABLE_REG_ADDR 0x06
+
 typedef struct {
     bool isSink;
     bool isPlugged;
+    bool isNegotiationDone;
     float voltage;
     float maxCurrent;
     float operatingCurrent;
 } PDContract;
+
+typedef struct {
+    bool overVoltageProtection;
+    bool shortCircuitProtection;
+    bool powerOn;
+    bool overTemperatureProtection;
+    bool overTemperatureWarning;
+    bool inductorPeakCurrentProtection;
+} STPD01_Status;
 
 // Critical Signals Mapping
 #define USB_IRQ_CTRL_Pin GPIO_PIN_14        // IRQ Pin is the number 14
@@ -95,8 +126,10 @@ typedef struct {
 #define USB_A2_CTRL_GPIO_Port GPIOC
 #define USB_OTG_CTRL_Pin GPIO_PIN_15
 #define USB_OTG_CTRL_GPIO_Port GPIOB
-#define USB_ST_EN_CTRL_Pin GPIO_PIN_11
-#define USB_ST_EN_CTRL_GPIO_Port GPIOC
+#define USB_STPD01_EN_CTRL_Pin GPIO_PIN_11
+#define USB_STPD01_EN_CTRL_GPIO_Port GPIOC
+#define USB_C2_EN_Pin GPIO_PIN_12
+#define USB_C2_EN_GPIO_Port GPIOA
 
 extern SensorData sensor_data;
 
@@ -114,9 +147,26 @@ void primaryUSBC_ConnectionINT();
 
 void secondaryUSBC_ConnectionINT();
 
+void setupSTPD01(float voltage, float current);
 
+bool checkSTPD01();
 
+void enable_STPD01 ();
 
+void disable_STPD01 ();
 
+void enable_USBC2();
+
+void disable_USBC2();
+
+void selectPDO1();
+
+void selectPDO2();
+
+void selectPDO3();
+
+void selectPDO4();
+
+void selectPDO5();
 
 #endif
