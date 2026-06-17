@@ -1,31 +1,31 @@
 #include "charge.h"
 #include "stm32f4xx_hal.h"
+#include "adc.h"
 #include "i2c.h"
 
-// To be configured during ADC Initialization
-extern ADC_HandleTypeDef hadcTZ1;
-extern ADC_HandleTypeDef hadcTZ2;
-extern ADC_HandleTypeDef hadcTZ3;
-extern ADC_HandleTypeDef hadcTZ4;
-extern ADC_HandleTypeDef hadcUSBCIC;
-extern ADC_HandleTypeDef hadcBC;
-extern ADC_HandleTypeDef hadcTSP;
 
 // I2C1 -> STUSB4710 STPD01PUR INA3221 BQ34Z100
 // I2C3 -> TPS25750
 
 /*
     To do:
+        - Check whether STPD01 EN (PC11) needs to be asserted early in init() to power internal peripherals, or only after
+          PD negotiation for USB-C2 output. Current behavior: enabled after negotiation
+        - Check V_25 for temperature sensors (actual V_25 is for STM32 internal T-sensor) / Steinhart-Hart equation?
         - Check after I2C_Mem_read -> if !HAL_OK to throw possible error
         - Compress PDO configuration selection into one single function
         - Re-check interrupt handling for both primary and secondary USB-C ports
         - (Optional) Read assigned V and I_max to STPD01
+        - If I2C reading with interrupt is ok -> delete currentlyReading logic
+        - Check if ADC supports/is configured in scan mode (instead of single conversion mode)
+            -> If so, start ADC before reading all sensors and stop it after the last read
+        - Finalize throws for fault/overtemperature (fuel gauge) etc.
+        - Check for the INA3221
 
 */
 
 volatile I2C_ReadState currentlyReading;
 
-// (Interrupt solo per Fuel Gauge)
 const int timeout = 10;         // In ms
 const float VREF = 3300;        // In mV
 const float VMAX = 4095;        // 2^12 - 1
@@ -51,15 +51,16 @@ PDContract primaryUSBC_Contract;
 PDContract secondaryUSBC_PDContract;
 STPD01_Status stpd01_status;
 // secondaryUSBC_PDContract.isSink = false;
+HAL_StatusTypeDef status;
 
 // Ports: USB-A1; USB-A2; USB-C (primary, via TPS25750); USB-C (secondary, via STUSB4710A)
 
 void init() {
     // Initialize INA3221 (I2C_LP) immediately to provide OCP (Overcurrent Protection) for USB-A ports
     // Enable USB ports (USB-A1 and USB-A2) and enable Aux (LP_ST_EN - PC11)
-    HAL_GPIO_WritePin(USB_A1_CTRL_GPIO_Port, USB_A1_CTRL_Pin, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(USB_A2_CTRL_GPIO_Port, USB_A2_CTRL_Pin, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(USB_STPD01_EN_CTRL_GPIO_Port, USB_STPD01_EN_CTRL_Pin, GPIO_PIN_SET);
+    enable_USBA1();
+    enable_USBA2();
+    //HAL_GPIO_WritePin(USB_STPD01_EN_CTRL_GPIO_Port, USB_STPD01_EN_CTRL_Pin, GPIO_PIN_SET);
 
     // Secondary USB-C is always the source
     secondaryUSBC_PDContract.isSink = false;
@@ -71,64 +72,63 @@ float toVoltage(uint32_t raw) {
     return ((float)raw / VMAX) * VREF;
 }
 
-float toCelsius(float temp) {
+float toCelsius(float temp) {       // To be changed. For T1, T2, T3, T4 sensors
     return (V_25 - temp) / AVG_SLOPE + 25.0f;
 }
 
 void readSensors() {
     uint32_t raw;
 
-        // --- Temperature Zone 1 Reading ---
     // Start the ADC peripheral
-    HAL_ADC_Start(&hadcTZ1);
+    HAL_ADC_Start(&hadc1);
 
+        // --- Temperature Zone 1 Reading ---
     // Read Temp Zone 1
-    HAL_ADC_PollForConversion(&hadcTZ1, timeout);
-    raw = HAL_ADC_GetValue(&hadcTZ1);
+    HAL_ADC_PollForConversion(&hadc1, timeout);
+    raw = HAL_ADC_GetValue(&hadc1);
     sensor_data.tempZone[0] = toVoltage(raw);
     sensor_data.tempZone[0] = toCelsius(sensor_data.tempZone[0]);
 
-    // Stop the ADC peripheral
-    HAL_ADC_Stop(&hadcTZ1);
-
         // --- Temperature Zone 2 Reading ---
-    HAL_ADC_Start(&hadcTZ2);
-    HAL_ADC_PollForConversion(&hadcTZ2, timeout);
-    raw = HAL_ADC_GetValue(&hadcTZ2);
+    HAL_ADC_PollForConversion(&hadc1, timeout);
+    raw = HAL_ADC_GetValue(&hadc1);
     sensor_data.tempZone[1] = toVoltage(raw);
     sensor_data.tempZone[1] = toCelsius(sensor_data.tempZone[1]);
-    HAL_ADC_Stop(&hadcTZ2);
 
         // --- Temperature Zone 3 Reading ---
-    HAL_ADC_Start(&hadcTZ3);
-    HAL_ADC_PollForConversion(&hadcTZ3, timeout);
-    raw = HAL_ADC_GetValue(&hadcTZ3);
+    HAL_ADC_PollForConversion(&hadc1, timeout);
+    raw = HAL_ADC_GetValue(&hadc1);
     sensor_data.tempZone[2] = toVoltage(raw);
     sensor_data.tempZone[2] = toCelsius(sensor_data.tempZone[2]);
-    HAL_ADC_Stop(&hadcTZ3);
 
         // --- Temperature Zone 4 Reading ---
-    HAL_ADC_Start(&hadcTZ4);
-    HAL_ADC_PollForConversion(&hadcTZ4, timeout);
-    raw = HAL_ADC_GetValue(&hadcTZ4);
+    HAL_ADC_PollForConversion(&hadc1, timeout);
+    raw = HAL_ADC_GetValue(&hadc1);
     sensor_data.tempZone[3] = toVoltage(raw);
     sensor_data.tempZone[3] = toCelsius(sensor_data.tempZone[3]);
-    HAL_ADC_Stop(&hadcTZ4);
+
+        // --- On Board Temperature Reading ---
+    HAL_ADC_PollForConversion(&hadc1, timeout);
+    raw = HAL_ADC_GetValue(&hadc1);
+    sensor_data.onBoardTemperature = toVoltage(raw);
+    sensor_data.onBoardTemperature = (V_25 - sensor_data.onBoardTemperature) / AVG_SLOPE + 25.0f;
 
         // --- USB-C Input Current ---
-    HAL_ADC_Start(&hadcUSBCIC);
-    HAL_ADC_PollForConversion(&hadcUSBCIC, timeout);
-    raw = HAL_ADC_GetValue(&hadcUSBCIC);
-    sensor_data.usbCInputCurrent = toVoltage(raw) / 200.0f;
+    HAL_ADC_PollForConversion(&hadc1, timeout);
+    raw = HAL_ADC_GetValue(&hadc1);
+    sensor_data.usbCInputCurrent = toVoltage(raw) / 0.2f;       // Result in mA
 
-    HAL_ADC_Stop(&hadcUSBCIC);
+        // --- Battery Charge/Discahrge Current ---
+    HAL_ADC_PollForConversion(&hadc1, timeout);
+    raw = HAL_ADC_GetValue(&hadc1);
 
         // --- Total System Power ---
-    HAL_ADC_Start(&hadcTSP);
-    HAL_ADC_PollForConversion(&hadcTSP, timeout);
-    raw = HAL_ADC_GetValue(&hadcTSP);
+    HAL_ADC_PollForConversion(&hadc1, timeout);
+    raw = HAL_ADC_GetValue(&hadc1);
     sensor_data.power_sys_W = (toVoltage(raw) / 1000.0f) * 60.0f;
-    HAL_ADC_Stop(&hadcTSP);
+
+    // Stop the ADC peripheral
+    HAL_ADC_Stop(&hadc1);
 
     // --- FUEL GAUGE SENSORS ---
     uint8_t buffer[2];      // Buffer of 2 for storing both MSB and LSB if necessary (each one in a 8-bit register, so, for example, using size = 2 I'll read both 0x2a and 0x2B)
@@ -217,7 +217,44 @@ void readSensors() {
 
     // Low-Byte
     fuelGaugeSensors.flags.DSG = (rawLow >> 0) & 0x01;
+
+    // Throw faults
+    if (fuelGaugeSensors.flags.OTC) {
+        // Throw Over Temperature while Charging
+    }
+    if (fuelGaugeSensors.flags.OTD) {
+        // Throw Over Temperature while Discharging
+    }
+    if (fuelGaugeSensors.flags.BATHI) {
+        // Throw High Battery  voltage condition
+    }
+    if (fuelGaugeSensors.flags.BATLOW) {
+        // Throw Low Battery  voltage condition
+    }
+    if (fuelGaugeSensors.flags.CHG_INH) {
+        // Throw unable to start charging
+    }
+    if (fuelGaugeSensors.flags.XCHG) {
+        // Throw charging not allowed
+    }
+    if (fuelGaugeSensors.flags.FC) {
+        // Throw full charge detected                   <----
+    }
+    if (fuelGaugeSensors.flags.CHG) {
+        // Throw fast charging allowed                  <----
+    }
+    if (fuelGaugeSensors.flags.DSG) {
+        // Throw discharging detected                   <----
+    }
 }
+
+/*
+FaultCode checkFaults() {
+
+
+    return FAULT_NONE;
+}
+*/
 
 /*
 void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c) {
@@ -336,7 +373,7 @@ void readCS() {        // Check and update critical signals and their status (e.
     }
 
     // Remember to add the secondary USB-C interrupt + handling
-
+    secondaryUSBC_ConnectionINT();
 }
 
 void readNCS() {        // Check and update NON-critical signals and their status (e.g., USBA1_STATUS)
@@ -428,7 +465,11 @@ void secondaryUSBC_ConnectionINT() {
 
     // Read port status register if alert is fired
     if (PORT_STATUS_AL) {
-        HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, CC_CONNECTION_STATUS_REG_ADDR, I2C_MEMADD_SIZE_8BIT, alertBuffer, 1, HAL_MAX_DELAY);
+        status = HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, CC_CONNECTION_STATUS_REG_ADDR, I2C_MEMADD_SIZE_8BIT, alertBuffer, 1, HAL_MAX_DELAY);
+        if (status != HAL_OK) {
+            // Throw I2C operation error
+            return;
+        }
         switch ((alertBuffer[0] >> 5) & 0x07) {
             case 0: {       // NONE_ATT: Not connected
                 secondaryUSBC_PDContract.isPlugged = false;
@@ -458,7 +499,11 @@ void secondaryUSBC_ConnectionINT() {
 
     if (secondaryUSBC_PDContract.isPlugged && !secondaryUSBC_PDContract.isNegotiationDone && !secondaryUSBC_PDContract.isSink) {
         // Fetch (if RDO negotiated the PDO configuration)
-        HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, SRC_RDO_REG_ADDR, I2C_MEMADD_SIZE_8BIT, activeContractRDOBuffer, 4, HAL_MAX_DELAY);
+        status = HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, SRC_RDO_REG_ADDR, I2C_MEMADD_SIZE_8BIT, activeContractRDOBuffer, 4, HAL_MAX_DELAY);
+        if (status != HAL_OK) {
+            // Throw I2C operation error
+            return;
+        }
         uint8_t PDOConfiguration = (activeContractRDOBuffer[3] >> 4) & 0x07;
         switch (PDOConfiguration) {
             case 0: {
@@ -498,7 +543,10 @@ void secondaryUSBC_ConnectionINT() {
         if (PDOConfiguration > 0 && PDOConfiguration <= 5) {
             uint16_t operatingCurrentRaw = ((activeContractRDOBuffer[2] & 0x0F) << 6) | ((activeContractRDOBuffer[1] >> 2) & 0x03F);        // (19:10)
             secondaryUSBC_PDContract.operatingCurrent = operatingCurrentRaw * 10.0f;  // To get mA (as stated in the USB_PD standard)
-            setupSTPD01(secondaryUSBC_PDContract.voltage, secondaryUSBC_PDContract.maxCurrent);
+            if (!setupSTPD01(secondaryUSBC_PDContract.voltage, secondaryUSBC_PDContract.maxCurrent)) {
+                // Throw STPD01 setup error + don't enable STPD01
+                return;
+            }
 
             // After setup, enable STPD01, wait to let it stabilize and then check for its flags and VBUS
             enable_STPD01();
@@ -507,9 +555,16 @@ void secondaryUSBC_ConnectionINT() {
             if (checkSTPD01()) {
                 // Check VBUS_EN_SRC to confirm power path is alive, if ok enable USB-C2 port
                 uint8_t vbusBuffer;
-                HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, VBUS_ENABLE_STATUS_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &vbusBuffer, 1, HAL_MAX_DELAY);
+                status = HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, VBUS_ENABLE_STATUS_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &vbusBuffer, 1, HAL_MAX_DELAY);
+                if (status != HAL_OK) {
+                    // Throw I2C operation error
+                    disable_STPD01();
+                    return;
+                }
                 if (vbusBuffer & 0x01) {
                     enable_USBC2();
+                } else {
+                    // Throw VBUS_EN_SRC -> power path not available
                 }
             } else {
                 disable_STPD01();
@@ -534,12 +589,9 @@ void secondaryUSBC_ConnectionINT() {
         }
 
     }
-
-    // To do: manage VBUS_EN_SRC
-
 }
 
-void setupSTPD01(float voltage_mV, float current_mA) {
+bool setupSTPD01(float voltage_mV, float current_mA) {
     // First, ensure STPD01 is disabled
     disable_STPD01();
     // --- Convert max voltage and max current into the correspontent addresses
@@ -571,8 +623,17 @@ void setupSTPD01(float voltage_mV, float current_mA) {
     uint8_t currentReg = (uint8_t)((c - 100) / 100);      // 0x00 = 100mA, steps of 100mA
 
     // --- Provide max voltage and max current addresses to STPD01
-    HAL_I2C_Mem_Write(&hi2c1, STPD01_PD_ADDR, VOUT_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &voltageReg, 1, HAL_MAX_DELAY);
-    HAL_I2C_Mem_Write(&hi2c1, STPD01_PD_ADDR, ILIM_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &currentReg, 1, HAL_MAX_DELAY);
+    status = HAL_I2C_Mem_Write(&hi2c1, STPD01_PD_ADDR, VOUT_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &voltageReg, 1, HAL_MAX_DELAY);
+    if (status != HAL_OK) {
+        // Throw I2C operation error
+        return false;
+    }
+    status = HAL_I2C_Mem_Write(&hi2c1, STPD01_PD_ADDR, ILIM_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &currentReg, 1, HAL_MAX_DELAY);
+    if (status != HAL_OK) {
+        // Throw I2C operation error
+        return false;
+    }
+    return true;
 }
 
 bool checkSTPD01() {
@@ -597,6 +658,26 @@ bool checkSTPD01() {
     return true;
 }
 
+void enable_USBA1() {
+    HAL_GPIO_WritePin(USB_A1_CTRL_GPIO_Port, USB_A1_CTRL_Pin, GPIO_PIN_SET);
+    USBA1_STATUS = true;
+}
+
+void disable_USBA1() {
+    HAL_GPIO_WritePin(USB_A1_CTRL_GPIO_Port, USB_A1_CTRL_Pin, GPIO_PIN_RESET);
+    USBA1_STATUS = false;
+}
+
+void enable_USBA2() {
+    HAL_GPIO_WritePin(USB_A2_CTRL_GPIO_Port, USB_A2_CTRL_Pin, GPIO_PIN_SET);
+    USBA2_STATUS = true;
+}
+
+void disable_USBA2() {
+    HAL_GPIO_WritePin(USB_A2_CTRL_GPIO_Port, USB_A2_CTRL_Pin, GPIO_PIN_RESET);
+    USBA2_STATUS = false;
+}
+
 void enable_STPD01 () {
     HAL_GPIO_WritePin(USB_STPD01_EN_CTRL_GPIO_Port, USB_STPD01_EN_CTRL_Pin, GPIO_PIN_SET);
     STPD01_EN_STATUS = true;
@@ -615,6 +696,47 @@ void enable_USBC2() {
 void disable_USBC2() {
     HAL_GPIO_WritePin(USB_C2_EN_GPIO_Port, USB_C2_EN_Pin, GPIO_PIN_RESET);
     USBC2_STATUS = false;
+}
+
+// Get data functions
+SensorData getSensorData() {
+    return sensor_data;
+}
+
+FuelGaugeSensors getFuelGaugeData() {
+    return fuelGaugeSensors;
+}
+
+STPD01_Status getSTPD01_Status() {
+    return stpd01_status;
+}
+
+PDContract getPrimaryUSBC_Contract() {
+    return primaryUSBC_Contract;
+}
+
+PDContract getSecondaryUSBC_Contract() {
+    return secondaryUSBC_PDContract;
+}
+
+int get_USBA1_Status() {
+    return USBA1_STATUS;
+}
+
+int get_USBA2_Status() {
+    return USBA2_STATUS;
+}
+
+int get_USBC2_Status() {
+    return USBC2_STATUS;
+}
+
+int get_OTG_Status() {
+    return EN_OTG_STATUS;
+}
+
+int get_STPD01_Enabled() {
+    return STPD01_EN_STATUS;        // getSTPD01_Status() provides isPowerOn
 }
 
 // Selection functions for PDO configuration for secondary USB-C
