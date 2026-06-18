@@ -12,7 +12,7 @@
  *   1 = pixel on (foreground colour), 0 = pixel off (background colour).
  *
  *
- * COORDINATE SYSTEM / SISTEMA DI COORDINATE:
+ * COORDINATE SYSTEM:
  *   Origin (0,0) = TOP-LEFT corner of the screen.
  *   X grows rightward, Y grows downward.
  *
@@ -50,7 +50,7 @@ extern "C" {
 #define GFX_FONT_LARGE_H   24
 
 /* =========================================================
- * FONT TYPE DEFINITION / DEFINIZIONE DEL TIPO FONT
+ * FONT TYPE DEFINITION
  * ========================================================= */
 
 /**
