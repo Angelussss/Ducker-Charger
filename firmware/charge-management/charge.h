@@ -62,7 +62,7 @@ typedef struct {
     bool inductorPeakCurrentProtection;
 } STPD01_Status;
 
-typedef enum {      // Possible reading states for I2C
+typedef enum {
     READ_INTERNAL_TEMPERATURE,
     READ_EXTERNAL_TEMPERATURE,
     READ_VOLTAGE_SCALE,
@@ -77,16 +77,6 @@ typedef enum {      // Possible reading states for I2C
     READ_STATE_OF_HEALTH,
     READ_FLAGS
 } I2C_ReadState;
-
-/*
-typedef enum {
-    FAULT_NONE = 0,
-    FAULT_OVERTEMPERATURE,
-    FAULT_BATTERY_HIGH,
-    FAULT_BATTERY_LOW,
-
-} FaultCode;
-*/
 
 // Fuel Gauge Mapping
 #define FUEL_GAUGE_ADDR ((uint16_t)(0x55 << 1))     // Convert 7-bit address to 8-bit and then cast to 16-bit
