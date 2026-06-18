@@ -10,12 +10,12 @@
  * Questo modulo legge periodicamente tutti i sensori (fuel gauge, charger)
  * via I2C e salva tutto in una struttura centrale che tutta la UI puo' leggere.
  *
- * ARCHITECTURE / ARCHITETTURA:
+ * ARCHITECTURE:
  *   BQ34Z100 (I2C3) ──┐
  *   BQ25713  (I2C1) ──┼──> Telemetry_Poll() ──> SystemTelemetry_t
  *   NTC ADC        ──┘
  *
- * TYPICAL USE / USO TIPICO:
+ * TYPICAL USE:
  *   // In the main loop, every 500 ms / Nel loop principale, ogni 500ms:
  *   Telemetry_Poll();
  *   uint8_t soc = telemetry.soc_percent;
@@ -46,7 +46,7 @@ extern "C" {
 #define TELEMETRY_POLL_INTERVAL_MS  500
 
 /* =========================================================
- * I2C CHIP ADDRESSES / INDIRIZZI I2C DEI CHIP
+ * I2C CHIP ADDRESSES
  * ========================================================= */
 
 /**

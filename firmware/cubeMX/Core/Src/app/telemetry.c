@@ -7,6 +7,12 @@
  *   - I2C3 (hi2c3): battery side, ISOLATED via ISO1540. Connects BQ34Z100.
  *   Never mix the two buses! The fuel gauge references -BATT which may
  *   float relative to GND when the protection FETs open.
+ *
+ * NOTE (merge): Questo modulo legge BQ34Z100 e BQ25713 direttamente via I2C
+ *   usando funzioni locali. Al merge con il branch di Francesco, le letture
+ *   I2C vanno sostituite con le sue funzioni get (getFuelGaugeData(),
+ *   getPrimaryUSBC_Contract()).
+ *   Vedi i TODO inline in Telemetry_ForcePoll().
  */
 
 #include "app/telemetry.h"
@@ -37,6 +43,9 @@ static I2C_HandleTypeDef *_hi2c3 = NULL;   /* BQ34Z100 */
  * @param  reg  Register address 
  * @param  out  Pointer where the 16-bit value will be written
  * @retval HAL_OK if successful, HAL_ERROR otherwise 
+ *
+ * TODO (merge): Rimuovere questa funzione e read_bq25713_reg() quando
+ *   Telemetry_ForcePoll() usa getFuelGaugeData() di Francesco.
  */
 static HAL_StatusTypeDef read_bq34z100_reg(uint8_t reg, uint16_t *out)
 {
@@ -93,6 +102,8 @@ static void push_to_history(int16_t sample)
  * PUBLIC FUNCTIONS 
  * ========================================================= */
 
+/* TODO (merge): Rimuovere i parametri hi2c1_ptr e hi2c3_ptr quando
+ *   Telemetry_ForcePoll() non accede più al bus I2C direttamente. */
 void Telemetry_Init(I2C_HandleTypeDef *hi2c1_ptr, I2C_HandleTypeDef *hi2c3_ptr)
 {
     /* Save the I2C handle pointers for later use.*/
@@ -128,11 +139,16 @@ void Telemetry_ForcePoll(void)
 
     /* ---- Read BQ34Z100 (fuel gauge, on I2C3) ---- */
 
+    /* TODO (merge): Sostituire le letture BQ34Z100 qui sotto con:
+     *     FuelGaugeSensors fg = getFuelGaugeData();
+     *   Voltage e current sono in mV e mA */
+
     /* State of Charge: the register returns a value in 0.01 % units. */
     if (read_bq34z100_reg(BQ34Z100_REG_SOC, &raw) == HAL_OK)
     {
         telemetry.soc_percent = (uint8_t)(raw / 100);
         if (telemetry.soc_percent > 100) telemetry.soc_percent = 100;
+        /* TODO (merge): telemetry.soc_percent = (uint8_t)fg.SoC; */
     }
     else { all_ok = 0; }
 
@@ -140,6 +156,7 @@ void Telemetry_ForcePoll(void)
     if (read_bq34z100_reg(BQ34Z100_REG_VOLTAGE, &raw) == HAL_OK)
     {
         telemetry.voltage_mV = raw;
+        /* TODO (merge): telemetry.voltage_mV = (uint16_t)fg.voltage; */
     }
     else { all_ok = 0; }
 
@@ -150,6 +167,7 @@ void Telemetry_ForcePoll(void)
     if (read_bq34z100_reg(BQ34Z100_REG_CURRENT, &raw) == HAL_OK)
     {
         telemetry.current_mA = (int16_t)raw;
+        /* TODO (merge): telemetry.current_mA = (int16_t)fg.current; */
     }
     else { all_ok = 0; }
 
@@ -160,6 +178,8 @@ void Telemetry_ForcePoll(void)
     if (read_bq34z100_reg(BQ34Z100_REG_TEMP, &raw) == HAL_OK)
     {
         telemetry.temp_celsius = (int16_t)((raw / 10) - 273);
+        /* TODO (merge): telemetry.temp_celsius = (int16_t)fg.internalTemperature;
+         *   Nota: La conversione K->°C la fa già charge.c, il valore arriva già in °C. */
     }
     else { all_ok = 0; }
 
@@ -169,24 +189,33 @@ void Telemetry_ForcePoll(void)
         telemetry.is_full     = (raw & BQ34Z100_FLAG_FC)  ? 1 : 0;
         telemetry.is_charging = (raw & BQ34Z100_FLAG_CHG) ? 1 : 0;
         telemetry.over_temp   = (raw & BQ34Z100_FLAG_OT)  ? 1 : 0;
+        /* TODO (merge):
+         *   telemetry.is_full     = fg.flags.FC;
+         *   telemetry.is_charging = fg.flags.CHG;
+         *   telemetry.over_temp   = fg.flags.OTC; */
     }
     else { all_ok = 0; }
 
     /* ---- Read BQ25713 (charger, on I2C1) ---- */
+
+    /* TODO (merge): Sostituire le letture BQ25713 qui sotto con:
+     *     PDContract contract = getPrimaryUSBC_Contract(); */
 
     /* Charger status: bits [7:5] of CHGSTATUS0 = VBUS_STAT.
      * 000 = no input; any other value = input present.*/
     if (read_bq25713_reg(BQ25713_REG_CHGSTATUS0, &raw8) == HAL_OK)
     {
         telemetry.vbus_present = ((raw8 >> 5) != 0) ? 1 : 0;
+        /* TODO (merge): telemetry.vbus_present = contract.isPlugged; */
     }
     else { all_ok = 0; }
 
-    /* Charge phase from CHGSTATUS1, bits [2:0] = CHRG_STAT.
-     * Fase di carica da CHGSTATUS1, bit [2:0] = CHRG_STAT. */
+    /* Charge phase from CHGSTATUS1, bits [2:0] = CHRG_STAT. */
     if (read_bq25713_reg(BQ25713_REG_CHGSTATUS1, &raw8) == HAL_OK)
     {
         telemetry.charge_phase = raw8 & 0x07;
+        /* FIXME (merge): charge_phase (CHRG_STAT del BQ25713) non ha un
+         *   equivalente in charge.h. Mantenere direttamente questa lettura? */
     }
     else { all_ok = 0; }
 
@@ -205,5 +234,8 @@ void Telemetry_ForcePoll(void)
     push_to_history(telemetry.current_mA);
 
     /* Update the sensor health flag. */
+    /* TODO (merge): Le funzioni get di Francesco non restituiscono HAL_OK/HAL_ERROR,
+     *   quindi sensor_ok non si può più derivare. Concordare 
+     *   un modo per rilevare errori di lettura. */
     telemetry.sensor_ok = all_ok;
 }

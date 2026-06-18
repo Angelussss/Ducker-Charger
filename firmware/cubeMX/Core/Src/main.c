@@ -25,16 +25,13 @@
 #include "usart.h"
 #include "gpio.h"
 
-#include "app/telemetry.h"
-#include "app/encoder.h"
-#include "display/ili9341.h"
-#include "display/gfx.h"
-#include "ui/widgets.h"
-#include "ui/screens.h"
-#include "ui/ui_state.h"
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+
+ #include "app/telemetry.h"   // sensor polling
+ #include "app/encoder.h"     // rotary encoder
+ #include "display/ili9341.h" // SPI display driver
+ #include "ui/ui_state.h"     // UI state machine
 
 /* USER CODE END Includes */
 
@@ -107,6 +104,20 @@ int main(void)
   MX_I2C3_Init();
   /* USER CODE BEGIN 2 */
 
+  // Initialise the SPI display (hardware reset + wake-up sequence).
+  ILI9341_Init(&hspi1);
+  
+  // Initialise telemetry with both I2C buses:
+  // hi2c1 --> BQ25713 charger (system side, GND)
+  // hi2c3 --> BQ34Z100 fuel gauge (battery side, isolated via ISO1540)
+  Telemetry_Init(&hi2c1, &hi2c3);
+  
+  // Initialise the rotary encoder on TIM3 (configured in encoder mode by CubeMX).
+  Encoder_Init(&htim3);
+
+  // Start the UI: shows the boot screen, then automatically moves to MAIN.
+  UI_Init();
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -116,6 +127,12 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    // UI_Tick() handles everything: encoder reading, sensor polling, screen refresh.
+    // It does not block — returns immediately if there is nothing to do.
+    UI_Tick();
+ 
+    // Small delay to yield time to the HAL and avoid a busy-loop at 84 MHz.
+    HAL_Delay(10);
   }
   /* USER CODE END 3 */
 }
