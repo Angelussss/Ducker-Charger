@@ -1,26 +1,29 @@
 #include "charge.h"
+#include "math.h"
 #include "stm32f4xx_hal.h"
 #include "adc.h"
 #include "i2c.h"
 
-
+// Ports: USB-A1; USB-A2; USB-C (primary, via TPS25750); USB-C (secondary, via STUSB4710A)
 // I2C1 -> STUSB4710 STPD01PUR INA3221 BQ34Z100
 // I2C3 -> TPS25750
 
 /*
     To do:
+
+        --- Hardware checks ---
+        - Check constants for temperature sensors
+        - Check STPD01_PD_ADDR if it's actually 0x54 (needs to be verified according to GitHub repo)
+        - Check TPS25750_PD_CONTROLLER_ADDR if it's 0x20 or 0x21 (currently using 0x20)
         - Check whether STPD01 EN (PC11) needs to be asserted early in init() to power internal peripherals, or only after
           PD negotiation for USB-C2 output. Current behavior: enabled after negotiation
-        - Check V_25 for temperature sensors (actual V_25 is for STM32 internal T-sensor) / Steinhart-Hart equation?
-        - Check after I2C_Mem_read -> if !HAL_OK to throw possible error
-        - Compress PDO configuration selection into one single function
-        - Re-check interrupt handling for both primary and secondary USB-C ports
-        - (Optional) Read assigned V and I_max to STPD01
+
+        --- Software checks ---
+        - Finalize throws for faults, overtemperature, short-circuit, etc...
         - If I2C reading with interrupt is ok -> delete currentlyReading logic
-        - Check if ADC supports/is configured in scan mode (instead of single conversion mode)
-            -> If so, start ADC before reading all sensors and stop it after the last read
-        - Finalize throws for fault/overtemperature (fuel gauge) etc.
         - Check for the INA3221
+        - (Optional) Compress PDO configuration selection into one single function
+        - (Optional) Read assigned V and I_max to STPD01
 
 */
 
@@ -31,6 +34,12 @@ const float VREF = 3300;        // In mV
 const float VMAX = 4095;        // 2^12 - 1
 const float V_25 = 760;         // Voltage at 25ºC (in mV)
 const float AVG_SLOPE = 2.5f;   // mV/ºC
+
+// Thermistors variables (for temperature zones 1-4 + onBoardTemperature)
+const float R_PULLUP = 10000.0f;
+const float R0 = 10000.0f;      // To check in thermistor's datasheet
+const float T0 = 298.15;        // Temperature (expressed in K) at 25ºC
+const float BETA = 3950.0;      // To check in thermistor's datasheet
 
 // Critical Signals
 int PD_IRQ = GPIO_PIN_RESET;
@@ -53,10 +62,7 @@ STPD01_Status stpd01_status;
 // secondaryUSBC_PDContract.isSink = false;
 HAL_StatusTypeDef status;
 
-// Ports: USB-A1; USB-A2; USB-C (primary, via TPS25750); USB-C (secondary, via STUSB4710A)
-
 void init() {
-    // Initialize INA3221 (I2C_LP) immediately to provide OCP (Overcurrent Protection) for USB-A ports
     // Enable USB ports (USB-A1 and USB-A2) and enable Aux (LP_ST_EN - PC11)
     enable_USBA1();
     enable_USBA2();
@@ -72,46 +78,55 @@ float toVoltage(uint32_t raw) {
     return ((float)raw / VMAX) * VREF;
 }
 
-float toCelsius(float temp) {       // To be changed. For T1, T2, T3, T4 sensors
-    return (V_25 - temp) / AVG_SLOPE + 25.0f;
+float toResistance(float vout) {        // For calculating R_NTC
+    if (vout <= 0.1f) return 1e9f;       // Avoid divide by zero
+    if (vout >= 3299.0f)  return 1.0f;       // Saturated high
+
+    return R_PULLUP * (vout / (VREF - vout));
+}
+
+float toCelsius(float resistance) {       // To be checked. For T1, T2, T3, T4 sensors
+    float tempK = 1.0f / ( (1.0f / T0) + (1.0f / BETA) * logf(resistance / R0) );
+    return tempK - 273.15f;
 }
 
 void readSensors() {
     uint32_t raw;
+    float voltage;
 
     // Start the ADC peripheral
     HAL_ADC_Start(&hadc1);
 
         // --- Temperature Zone 1 Reading ---
-    // Read Temp Zone 1
     HAL_ADC_PollForConversion(&hadc1, timeout);
     raw = HAL_ADC_GetValue(&hadc1);
-    sensor_data.tempZone[0] = toVoltage(raw);
-    sensor_data.tempZone[0] = toCelsius(sensor_data.tempZone[0]);
+    voltage = toVoltage(raw);
+    sensor_data.tempZone[0] = toCelsius(toResistance(voltage));
 
         // --- Temperature Zone 2 Reading ---
     HAL_ADC_PollForConversion(&hadc1, timeout);
     raw = HAL_ADC_GetValue(&hadc1);
-    sensor_data.tempZone[1] = toVoltage(raw);
-    sensor_data.tempZone[1] = toCelsius(sensor_data.tempZone[1]);
+    voltage = toVoltage(raw);
+    sensor_data.tempZone[1] = toCelsius(toResistance(voltage));
 
         // --- Temperature Zone 3 Reading ---
     HAL_ADC_PollForConversion(&hadc1, timeout);
     raw = HAL_ADC_GetValue(&hadc1);
-    sensor_data.tempZone[2] = toVoltage(raw);
-    sensor_data.tempZone[2] = toCelsius(sensor_data.tempZone[2]);
+    voltage = toVoltage(raw);
+    sensor_data.tempZone[2] = toCelsius(toResistance(voltage));
 
         // --- Temperature Zone 4 Reading ---
     HAL_ADC_PollForConversion(&hadc1, timeout);
     raw = HAL_ADC_GetValue(&hadc1);
-    sensor_data.tempZone[3] = toVoltage(raw);
-    sensor_data.tempZone[3] = toCelsius(sensor_data.tempZone[3]);
+    voltage = toVoltage(raw);
+    sensor_data.tempZone[3] = toCelsius(toResistance(voltage));
 
         // --- On Board Temperature Reading ---
     HAL_ADC_PollForConversion(&hadc1, timeout);
     raw = HAL_ADC_GetValue(&hadc1);
-    sensor_data.onBoardTemperature = toVoltage(raw);
-    sensor_data.onBoardTemperature = (V_25 - sensor_data.onBoardTemperature) / AVG_SLOPE + 25.0f;
+    voltage = toVoltage(raw);
+    sensor_data.onBoardTemperature = toCelsius(toResistance(voltage));
+    //sensor_data.onBoardTemperature = (V_25 - sensor_data.onBoardTemperature) / AVG_SLOPE + 25.0f;
 
         // --- USB-C Input Current ---
     HAL_ADC_PollForConversion(&hadc1, timeout);
@@ -121,6 +136,7 @@ void readSensors() {
         // --- Battery Charge/Discahrge Current ---
     HAL_ADC_PollForConversion(&hadc1, timeout);
     raw = HAL_ADC_GetValue(&hadc1);
+    // Not added since it is also read via I2C. Need to read it anyway to continue scan sequence
 
         // --- Total System Power ---
     HAL_ADC_PollForConversion(&hadc1, timeout);
@@ -247,14 +263,6 @@ void readSensors() {
         // Throw discharging detected                   <----
     }
 }
-
-/*
-FaultCode checkFaults() {
-
-
-    return FAULT_NONE;
-}
-*/
 
 /*
 void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c) {
