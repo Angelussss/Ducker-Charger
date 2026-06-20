@@ -50,3 +50,6 @@ fp-info-cache
 .idea
 CMakeLists.txt
 
+# obsidian
+.obsidian/
+
