@@ -62,6 +62,15 @@ typedef struct {
     bool inductorPeakCurrentProtection;
 } STPD01_Status;
 
+typedef struct {
+    float current_channel1;
+    float current_channel2;
+    float current_channel3;
+    bool critical_alert_channel1;
+    bool critical_alert_channel2;
+    bool critical_alert_channel3;
+} INA3221_Sensors;
+
 typedef enum {
     READ_INTERNAL_TEMPERATURE,
     READ_EXTERNAL_TEMPERATURE,
@@ -112,6 +121,13 @@ typedef enum {
 //#define SERVICES_REG_ADDR 0x05        // Contains the discharge toggle ON/OFF (default is ON)
 #define DIGITAL_ENABLE_REG_ADDR 0x06
 
+// INA3221 Mapping
+#define INA3221_ADDR ((uint16_t)(0x40 << 1))
+#define SHUNT_VOLTAGE_CH1_REG_ADDR 0x01
+#define SHUNT_VOLTAGE_CH2_REG_ADDR 0x03
+#define SHUNT_VOLTAGE_CH3_REG_ADDR 0x05
+#define MASK_ENABLE_REG_ADDR 0x0F
+
 // Critical Signals Mapping
 #define USB_IRQ_CTRL_Pin GPIO_PIN_14        // IRQ Pin is the number 14
 #define USB_IRQ_CTRL_GPIO_Port GPIOB        // IRQ GPIO channel is the B (PB14)
@@ -141,6 +157,8 @@ void readSensors();
 float toVoltage(uint32_t raw);
 
 float toCelsius(float temp);
+
+void readINA();
 
 void readCS();
 
@@ -184,6 +202,8 @@ SensorData getSensorData();
 FuelGaugeSensors getFuelGaugeData();
 
 STPD01_Status getSTPD01_Status();
+
+INA3221_Sensors getINA3221_Sensors();
 
 PDContract getPrimaryUSBC_Contract();
 

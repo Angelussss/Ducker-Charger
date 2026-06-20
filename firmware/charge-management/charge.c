@@ -59,6 +59,7 @@ FuelGaugeSensors fuelGaugeSensors;
 PDContract primaryUSBC_Contract;
 PDContract secondaryUSBC_PDContract;
 STPD01_Status stpd01_status;
+INA3221_Sensors ina3221_sensors;
 // secondaryUSBC_PDContract.isSink = false;
 HAL_StatusTypeDef status;
 
@@ -264,6 +265,44 @@ void readSensors() {
     }
 }
 
+float voltageToCurrentChannel(const uint8_t buffer[2]) {
+    int16_t raw;
+    raw = (int16_t)((buffer[0] << 8) | buffer[1]);      // MSB first
+    int16_t counts = raw >> 3;                          // Arithmetic shift since raw is signed
+    float shuntVoltage_mV = counts * 0.04f;             // 40 µV = 0.04 mV per count
+    return shuntVoltage_mV / 0.01f;                     // 10 mΩ shunt; mV / mΩ = mA,
+}
+
+void readINA() {
+    uint8_t buffer[2];
+    // Read shunt voltage and calculate currents for the 3 channels
+    HAL_I2C_Mem_Read(&hi2c1, INA3221_ADDR, SHUNT_VOLTAGE_CH1_REG_ADDR, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY);
+    ina3221_sensors.current_channel1 = voltageToCurrentChannel(buffer);
+    HAL_I2C_Mem_Read(&hi2c1, INA3221_ADDR, SHUNT_VOLTAGE_CH2_REG_ADDR, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY);
+    ina3221_sensors.current_channel2 = voltageToCurrentChannel(buffer);
+    HAL_I2C_Mem_Read(&hi2c1, INA3221_ADDR, SHUNT_VOLTAGE_CH3_REG_ADDR, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY);
+    ina3221_sensors.current_channel3 = voltageToCurrentChannel(buffer);
+
+    // Read critical alerts flag indicators for the 3 channels
+    HAL_I2C_Mem_Read(&hi2c1, INA3221_ADDR, MASK_ENABLE_REG_ADDR, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY);
+    uint16_t maskEnable = (uint16_t)((buffer[0] << 8) | buffer[1]);
+
+    // Critical-alert flag indicators Channels 1-3: bits 9-7 respectively
+    ina3221_sensors.critical_alert_channel1 = (maskEnable >> 9) & 0x01;     // Channel 1 critical alert flag
+    ina3221_sensors.critical_alert_channel2 = (maskEnable >> 8) & 0x01;     // Channel 2 critical alert flag
+    ina3221_sensors.critical_alert_channel3 = (maskEnable >> 7) & 0x01;     // Channel 3 critical alert flag
+
+    if (ina3221_sensors.critical_alert_channel1) {
+        // Throw channel 1 critical alert flag
+    }
+    if (ina3221_sensors.critical_alert_channel2) {
+        // Throw channel 2 critical alert flag
+    }
+    if (ina3221_sensors.critical_alert_channel3) {
+        // Throw channel 3 critical alert flag
+    }
+}
+
 /*
 void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c) {
     //if (hi2c == &I2C_LP)
@@ -396,6 +435,7 @@ void readNCS() {        // Check and update NON-critical signals and their statu
     INT_EVENT1: Interrupt event bit field for I2Cs_IRQ. If any bit in this register is 1, then the I2Cs_IRQ pin is pulled low
     INT_CLEAR1: Interrupt clear bit field for INT_EVENT1. Bits set in this register are cleared from INT_EVENT1
     Note: PDO = Power Data Object; RDO = Request Data Object
+    // First PDO is always fixed at 5V
 */
 
 void primaryUSBC_ConnectionINT() {
@@ -441,21 +481,27 @@ void primaryUSBC_ConnectionINT() {
         uint8_t activeContractPDOBuffer[6];
         uint8_t activeContractRDOBuffer[4];
 
-        // Read PDO for fetching Voltage a maximum Current
+        // Check PDO type is compatible, otherwise throw a warning and ignore it
         HAL_I2C_Mem_Read(&hi2c3, TPS25750_PD_CONTROLLER_ADDR, ACTIVE_CONTRACT_PDO_REG_ADDR, I2C_MEMADD_SIZE_8BIT, activeContractPDOBuffer, 6, HAL_MAX_DELAY);
-        uint16_t voltageRaw = ((activeContractPDOBuffer[2] & 0x0F) << 6) | ((activeContractPDOBuffer[1] >> 2) & 0x3F);  // (19:10)
-        uint16_t maxCurrentRaw = ((activeContractPDOBuffer[1] & 0x03) << 8) | activeContractPDOBuffer[0];       // (9:0)
+        uint8_t pdoType = (activeContractPDOBuffer[3] >> 6) & 0x03;     // Bits 31:30
+        if (pdoType != 0x00) {
+            // Throw "Uncompatible PDO contract type" (not Fixed)
+        } else {
+            // Read PDO for fetching Voltage a maximum Current
+            uint16_t voltageRaw = ((activeContractPDOBuffer[2] & 0x0F) << 6) | ((activeContractPDOBuffer[1] >> 2) & 0x3F);  // (19:10)
+            uint16_t maxCurrentRaw = ((activeContractPDOBuffer[1] & 0x03) << 8) | activeContractPDOBuffer[0];       // (9:0)
 
-        // Read RDO for fetching negotiated current
-        HAL_I2C_Mem_Read(&hi2c3, TPS25750_PD_CONTROLLER_ADDR, ACTIVE_CONTRACT_RDO_REG_ADDR, I2C_MEMADD_SIZE_8BIT, activeContractRDOBuffer, 4, HAL_MAX_DELAY);
-        uint16_t operatingCurrentRaw = ((activeContractRDOBuffer[2] & 0x0F) << 6) | ((activeContractRDOBuffer[1] >> 2) & 0x03F);        // (19:10)
+            // Read RDO for fetching negotiated current
+            HAL_I2C_Mem_Read(&hi2c3, TPS25750_PD_CONTROLLER_ADDR, ACTIVE_CONTRACT_RDO_REG_ADDR, I2C_MEMADD_SIZE_8BIT, activeContractRDOBuffer, 4, HAL_MAX_DELAY);
+            uint16_t operatingCurrentRaw = ((activeContractRDOBuffer[2] & 0x0F) << 6) | ((activeContractRDOBuffer[1] >> 2) & 0x03F);        // (19:10)
 
-        // Convert fetched values accordingly
-        primaryUSBC_Contract.voltage = voltageRaw * 50.0f;                    // To get mV (as stated in the USB_PD standard)
-        primaryUSBC_Contract.maxCurrent = maxCurrentRaw * 10.0f;              // To get mA (as stated in the USB_PD standard)
-        primaryUSBC_Contract.operatingCurrent = operatingCurrentRaw * 10.0f;  // To get mA (as stated in the USB_PD standard)
+            // Convert fetched values accordingly
+            primaryUSBC_Contract.voltage = voltageRaw * 50.0f;                    // To get mV (as stated in the USB_PD standard)
+            primaryUSBC_Contract.maxCurrent = maxCurrentRaw * 10.0f;              // To get mA (as stated in the USB_PD standard)
+            primaryUSBC_Contract.operatingCurrent = operatingCurrentRaw * 10.0f;  // To get mA (as stated in the USB_PD standard)
 
-        // INA3221?
+            // INA3221?
+        }
     }
 
     // Clear INT_EVENT1 to make I2Cs_IRQ back to HIGH (only bits previously read are cleared to be able to get possibly new occurring interrupts)
@@ -512,6 +558,9 @@ void secondaryUSBC_ConnectionINT() {
             // Throw I2C operation error
             return;
         }
+
+        // Important note: the following configured PDOs readings are assumed to be always of Fixed-Voltage type;
+        // if not we need to add a guard like for the primary USB-C case
         uint8_t PDOConfiguration = (activeContractRDOBuffer[3] >> 4) & 0x07;
         switch (PDOConfiguration) {
             case 0: {
@@ -717,6 +766,10 @@ FuelGaugeSensors getFuelGaugeData() {
 
 STPD01_Status getSTPD01_Status() {
     return stpd01_status;
+}
+
+INA3221_Sensors getINA3221_Sensors() {
+    return ina3221_sensors;
 }
 
 PDContract getPrimaryUSBC_Contract() {
