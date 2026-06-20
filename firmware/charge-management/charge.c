@@ -500,7 +500,6 @@ void primaryUSBC_ConnectionINT() {
             primaryUSBC_Contract.maxCurrent = maxCurrentRaw * 10.0f;              // To get mA (as stated in the USB_PD standard)
             primaryUSBC_Contract.operatingCurrent = operatingCurrentRaw * 10.0f;  // To get mA (as stated in the USB_PD standard)
 
-            // INA3221?
         }
     }
 
