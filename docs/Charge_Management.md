@@ -43,6 +43,7 @@ All sensors are read via **ADC1** (12-bit resolution) according to the following
 | `HP.IADPT`  | PA6       | IN6         | USB-C Input Current                |
 | `HP.IBAT`   | PA7       | IN7         | Battery Current (Charge/Discharge) |
 | `HP.PSYS`   | PC4       | IN14        | Total System Power                 |
+
 *Note:* HP.IBAT is not memorized since the charge/discharge battery current is also fetched via I2C from the Fuel Gauge (`BQ34Z100-R2`). We need to read it anyway to continue the ADC scan sequence.
 
 #### Data Conversion
@@ -176,6 +177,7 @@ Where:
 |  15  | `SIGN`     | R      | Sign bit.  <br>0 = positive number  <br>1 = negative number in two's complement format |
 | 14-3 | `SD11-0`   | R      | Channel's shunt-voltage data bits                                                      |
 | 2-0  | `Reserved` | R      | Reserved                                                                               |
+
 *Note:* the firmware right-shifts the 16-bit read by 3 positions to discard the reserved bits and isolate the signed 12-bit value
 
 - **`Mask/Enable` bit definitions (Table 20):** (only those used by the firmware are specified)
@@ -266,6 +268,7 @@ Where:
 | 5   | `Overtemperature protection`       | Junction temperature 165 °C |
 | 6   | `Overtemperature warning`          | Junction temperature 145 °C |
 | 7   | `Inductor peak current protection` |                             |
+
 *Note:* the firmware decodes all bits except numbers 1 and 4
 
 ### I2C3
@@ -279,6 +282,7 @@ Where:
 | `POWER_STATUS`        | 0x3F           | RO     |   2   | Details about the power of the connection                                                                                                       |
 | `ACTIVE_CONTRACT_PDO` | 0x34           | RO     |   6   | Power data object for active contract. This register stores `PDO` data for the current explicit USB PD contract, or all zeroes if no contract   |
 | `ACTIVE_CONTRACT_RDO` | 0x35           | RO     |   4   | Power data object for the active contract. This register stores the `RDO` of the current explicit USB PD contract, or all zeroes if no contract |
+
 *Note:* `PDO` = Power Data Object; `RDO` = Request Data Object
 
 - **`EVENT1` interrupt register description:**
@@ -304,6 +308,7 @@ Where:
 | 5-6   | 15:10 | `Reserved`            | Reserved                                                                 |
 | 5-6   | 9:0   | `firstPDOControlBits` | Contains bits 29:20 of the first PDO                                     |
 | 1-4   | 31:0  | `ActivePDO`           | Power data object. This field contains the contents of the PDO Requested |
+
 *Note:* the firmware extracts bits of 1-4 bytes; which contain the actual PDO contract (treated as 32-bit little endian value). The PDO contract follows the [USB Power Delivery Standard](#usb-power-delivery-standard), according to which the firmware extracts the PDO type (`pdoType`), the voltage, (`voltageRaw`) and the maximum current (`maxCurrentRaw`), the latter two are then converted respectively in `mV` and `mA`
 
 **`ACTIVE_CONTRACT_RDO` register description:**
@@ -391,4 +396,5 @@ In this section we provide the complete PDO and RDO register bit mappings used f
 | 21...20 | `Reserved`                              | **Reserved**, receiver **Shall** ignore this field.                                                                        |
 | 19...10 | `Operating Current`                     | Operating current, **in 10mA units**<br><br>Indicates the highest current the Sink will draw during the Explicit Contract. |
 | 9...0   | `Maximum Operating Current`             | **Deprecated**, transmitter **Shall** set this field equal to "Operating Current", receiver should ignore this field.      |
+
 *Note:* the firmware extracts **Operating Current** (bits 19:10) from every RDO contract. For the secondary USB-C, it additionally extracts the PDO **Object Position** using bits 30:28 (3 bits) rather than the full 31:28 field. This is sufficient since object positions only range from 1 to 7
