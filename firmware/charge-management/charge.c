@@ -396,7 +396,7 @@ void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c) {
 
 void readCS() {        // Check and update critical signals and their status (e.g., CHRG_OK)
     // Read HP.PD_IRQ (PB14) and update PD_IRQ status
-    PD_IRQ_PREV = PD_IRQ;   // Remember PD_IRQ status before updating it
+    //PD_IRQ_PREV = PD_IRQ;   // Remember PD_IRQ status before updating it
     PD_IRQ = HAL_GPIO_ReadPin(USB_IRQ_CTRL_GPIO_Port, USB_IRQ_CTRL_Pin);
 
     // Read LP_ST_INT (PC12) and update ST_INT status
@@ -465,6 +465,7 @@ void primaryUSBC_ConnectionINT() {
         typeCCurrent = (powerStatusBuffer[0] >> 2) & 0x03;
     }
 
+    // Check the AND gate in the if below
     if (plugInsertOrRemoval && powerStatusUpdate) {
         primaryUSBC_Contract.isPlugged = powerConnection;
         if (primaryUSBC_Contract.isPlugged) {
