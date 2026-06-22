@@ -313,6 +313,7 @@ Where:
 *Note:* the firmware extracts bits of 1-4 bytes; which contain the actual PDO contract (treated as 32-bit little endian value). The PDO contract follows the [USB Power Delivery Standard](#usb-power-delivery-standard), according to which the firmware extracts the PDO type (`pdoType`), the voltage, (`voltageRaw`) and the maximum current (`maxCurrentRaw`), the latter two are then converted respectively in `mV` and `mA`
 
 - **`ACTIVE_CONTRACT_RDO` register description:**
+
 *Note:* the firmware extracts bits of 1-4 bytes; which contain the actual RDO contract (treated as 32-bit little endian value). The RDO contract follows the [USB Power Delivery Standard](#usb-power-delivery-standard), according to which the firmware extracts the operating current (`operatingCurrentRaw`) and converts it into `mA`
 
 ---
