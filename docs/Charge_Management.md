@@ -158,6 +158,7 @@ the lower address). The bundled [`bq34z100-r2.pdf`](../PCB/Ducker-Charger/docs/b
 | `Channel-2 Shunt Voltage` | 0x03           | R      |   2   | Averaged shunt voltage value                                               |
 | `Channel-3 Shunt Voltage` | 0x05           | R      |   2   | Averaged shunt voltage value                                               |
 | `Mask/Enable`             | 0x0F           | R/W    |   2   | Alert configuration, alert status indication, summation control and status |
+
 *Note:* All data bytes are transmitted MSB first
 
 **Data conversion:** in order to get the value of current (expressed in mA) that is passing through each channel, we need to convert the average shunt voltage value according to the following formula:
@@ -311,7 +312,7 @@ Where:
 
 *Note:* the firmware extracts bits of 1-4 bytes; which contain the actual PDO contract (treated as 32-bit little endian value). The PDO contract follows the [USB Power Delivery Standard](#usb-power-delivery-standard), according to which the firmware extracts the PDO type (`pdoType`), the voltage, (`voltageRaw`) and the maximum current (`maxCurrentRaw`), the latter two are then converted respectively in `mV` and `mA`
 
-**`ACTIVE_CONTRACT_RDO` register description:**
+- **`ACTIVE_CONTRACT_RDO` register description:**
 *Note:* the firmware extracts bits of 1-4 bytes; which contain the actual RDO contract (treated as 32-bit little endian value). The RDO contract follows the [USB Power Delivery Standard](#usb-power-delivery-standard), according to which the firmware extracts the operating current (`operatingCurrentRaw`) and converts it into `mA`
 
 ---
