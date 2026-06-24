@@ -5692,6 +5692,12 @@
 		(uuid "0860a830-3903-497f-a006-5ce02a9b0850")
 	)
 	(junction
+		(at 204.47 99.06)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "0a13c171-5113-44fa-828a-afc6a4b08a1c")
+	)
+	(junction
 		(at 176.53 99.06)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -5878,6 +5884,12 @@
 		(uuid "4f340824-8378-4d1e-8f91-2ea235b74017")
 	)
 	(junction
+		(at 104.14 99.06)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "50195327-66c5-4e44-bfd7-4bf4e432fcb3")
+	)
+	(junction
 		(at 55.88 110.49)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -5956,6 +5968,12 @@
 		(uuid "77007fc1-a56e-4a0c-ad45-06638f209938")
 	)
 	(junction
+		(at 207.01 81.28)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "78d1d259-f13b-4b05-af2a-57c03a3edc4d")
+	)
+	(junction
 		(at 273.05 59.69)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -6008,6 +6026,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "93360bef-ac9a-4a75-a20e-8a34fe1ddb8c")
+	)
+	(junction
+		(at 207.01 88.9)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "93c6253e-38c4-4bb3-901d-2e780e6c3ae2")
 	)
 	(junction
 		(at 102.87 139.7)
@@ -6658,6 +6682,16 @@
 			(type default)
 		)
 		(uuid "0e777285-9c49-457d-9b80-2e525b6a9c09")
+	)
+	(wire
+		(pts
+			(xy 207.01 88.9) (xy 215.9 88.9)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "0f0879b2-f0d8-4592-b03b-ce2ff5bb5add")
 	)
 	(wire
 		(pts
@@ -7791,6 +7825,16 @@
 	)
 	(wire
 		(pts
+			(xy 204.47 81.28) (xy 207.01 81.28)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "626c8d01-61f5-4139-a0ad-51acc1aa1b9a")
+	)
+	(wire
+		(pts
 			(xy 55.88 102.87) (xy 58.42 102.87)
 		)
 		(stroke
@@ -7968,6 +8012,16 @@
 			(type default)
 		)
 		(uuid "6cfacd82-d768-4ca8-9c40-7f566f3590a4")
+	)
+	(wire
+		(pts
+			(xy 100.33 91.44) (xy 104.14 91.44)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "6cfcbd35-db95-4b91-a0ea-b2083cb68c14")
 	)
 	(wire
 		(pts
@@ -8671,6 +8725,16 @@
 	)
 	(wire
 		(pts
+			(xy 204.47 99.06) (xy 212.09 99.06)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "a6159355-9693-403c-8f39-c01550150ab1")
+	)
+	(wire
+		(pts
 			(xy 50.8 190.5) (xy 50.8 185.42)
 		)
 		(stroke
@@ -8731,7 +8795,7 @@
 	)
 	(wire
 		(pts
-			(xy 199.39 99.06) (xy 212.09 99.06)
+			(xy 199.39 99.06) (xy 204.47 99.06)
 		)
 		(stroke
 			(width 0)
@@ -8868,6 +8932,16 @@
 			(type default)
 		)
 		(uuid "bc421759-8482-4040-8479-c5d869ecfef1")
+	)
+	(wire
+		(pts
+			(xy 104.14 99.06) (xy 107.95 99.06)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "bc5446d2-9575-439b-8a26-2da408d91973")
 	)
 	(wire
 		(pts
@@ -9131,7 +9205,7 @@
 	)
 	(wire
 		(pts
-			(xy 99.06 99.06) (xy 107.95 99.06)
+			(xy 99.06 99.06) (xy 104.14 99.06)
 		)
 		(stroke
 			(width 0)
@@ -9481,6 +9555,16 @@
 	)
 	(wire
 		(pts
+			(xy 207.01 81.28) (xy 215.9 81.28)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f2b574ff-f056-4940-a73e-0ea751513910")
+	)
+	(wire
+		(pts
 			(xy 199.39 100.33) (xy 199.39 102.87)
 		)
 		(stroke
@@ -9618,6 +9702,16 @@
 			(type default)
 		)
 		(uuid "fcdbd889-dc7b-40ca-859c-93ea34414252")
+	)
+	(wire
+		(pts
+			(xy 204.47 99.06) (xy 204.47 81.28)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "fd103688-5046-48db-903b-6d390f8c57be")
 	)
 	(wire
 		(pts
@@ -11749,6 +11843,87 @@
 		)
 	)
 	(symbol
+		(lib_id "Device:C")
+		(at 207.01 85.09 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "217177f2-9699-4ea3-be36-ed0e300b4e0b")
+		(property "Reference" "C249"
+			(at 210.058 83.82 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "10n"
+			(at 210.058 86.36 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
+			(at 207.9752 88.9 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 207.01 85.09 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Unpolarized capacitor"
+			(at 207.01 85.09 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "e100f43f-99b8-4681-8007-b0bb03f84c2a")
+		)
+		(pin "2"
+			(uuid "53bee0d1-bd1f-4a06-b04f-7f74d1371ac9")
+		)
+		(instances
+			(project "Ducker-Charger"
+				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/ccd240c6-b24b-451e-a22e-a82e757ea5cc"
+					(reference "C249")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "power:+3V3")
 		(at 52.07 137.16 0)
 		(unit 1)
@@ -12904,6 +13079,83 @@
 	)
 	(symbol
 		(lib_id "power:GND")
+		(at 100.33 91.44 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "3dcd3069-0412-4ec1-9475-1c70800c4362")
+		(property "Reference" "#PWR0235"
+			(at 100.33 97.79 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 100.076 96.266 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 100.33 91.44 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 100.33 91.44 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 100.33 91.44 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "a7216df9-34d9-4d2c-9f77-75acb8aed17b")
+		)
+		(instances
+			(project "Ducker-Charger"
+				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/ccd240c6-b24b-451e-a22e-a82e757ea5cc"
+					(reference "#PWR0235")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:GND")
 		(at 85.09 30.48 0)
 		(unit 1)
 		(body_style 1)
@@ -13053,6 +13305,84 @@
 			(project "Ducker-Charger"
 				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/ccd240c6-b24b-451e-a22e-a82e757ea5cc"
 					(reference "#PWR0248")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 207.01 88.9 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "48a1b57a-9276-46ff-8aa7-2026d9a922f7")
+		(property "Reference" "#PWR0255"
+			(at 207.01 95.25 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 207.01 95.25 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 207.01 88.9 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 207.01 88.9 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 207.01 88.9 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "b9478436-0613-43f9-ad85-e429f1a346ba")
+		)
+		(instances
+			(project "Ducker-Charger"
+				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/ccd240c6-b24b-451e-a22e-a82e757ea5cc"
+					(reference "#PWR0255")
 					(unit 1)
 				)
 			)
@@ -16408,6 +16738,88 @@
 			(project "Ducker-Charger"
 				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/ccd240c6-b24b-451e-a22e-a82e757ea5cc"
 					(reference "R204")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:C")
+		(at 104.14 95.25 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "90e28590-a9fc-4d52-9ee3-c9fdcca10349")
+		(property "Reference" "C247"
+			(at 107.95 93.9799 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "4.7u"
+			(at 107.95 96.5199 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
+			(at 105.1052 99.06 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 104.14 95.25 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Unpolarized capacitor"
+			(at 104.14 95.25 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "2"
+			(uuid "4f33e672-484a-480b-a25f-3f43856a30ab")
+		)
+		(pin "1"
+			(uuid "caaed6f7-9540-4f18-8df2-781d92d8a2db")
+		)
+		(instances
+			(project "Ducker-Charger"
+				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/ccd240c6-b24b-451e-a22e-a82e757ea5cc"
+					(reference "C247")
 					(unit 1)
 				)
 			)
@@ -20746,6 +21158,88 @@
 			(project "Ducker-Charger"
 				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/ccd240c6-b24b-451e-a22e-a82e757ea5cc"
 					(reference "C220")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:C")
+		(at 215.9 85.09 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "e32536df-8b5a-475f-a521-83d61f01df7f")
+		(property "Reference" "C248"
+			(at 219.71 83.8199 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "4.7u"
+			(at 219.71 86.3599 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
+			(at 216.8652 88.9 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 215.9 85.09 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Unpolarized capacitor"
+			(at 215.9 85.09 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "2"
+			(uuid "b5c01b04-1588-4c1c-9474-3c9034b1dc5c")
+		)
+		(pin "1"
+			(uuid "bf098eb1-9488-49d0-ac8c-292514f2cd85")
+		)
+		(instances
+			(project "Ducker-Charger"
+				(path "/74790d6c-a68e-4e6d-b4a9-43de1843f817/ccd240c6-b24b-451e-a22e-a82e757ea5cc"
+					(reference "C248")
 					(unit 1)
 				)
 			)

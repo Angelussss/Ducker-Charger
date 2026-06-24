@@ -52,8 +52,8 @@
         "zones": {
           "border_display_style": 2,
           "border_hatch_pitch": 0.5,
-          "corner_radius": 0.0,
-          "corner_smoothing": 0,
+          "corner_radius": 1.0,
+          "corner_smoothing": 2,
           "fill_mode": 0,
           "hatch_gap": 1.5,
           "hatch_orientation": 0.0,
@@ -76,7 +76,40 @@
           "width": 0.0
         }
       ],
-      "drc_exclusions": [],
+      "drc_exclusions": [
+        [
+          "annular_width|128860000|152960000|f93b83f8-cae0-449f-9695-363196763f55|00000000-0000-0000-0000-000000000000",
+          ""
+        ],
+        [
+          "annular_width|128860000|158760000|ea37f517-dc1e-48ae-86ed-6581a3d2e249|00000000-0000-0000-0000-000000000000",
+          ""
+        ],
+        [
+          "clearance|110715000|153433409|ecc0ce5f-4615-432b-b634-42d4bb2b3215|22dff796-3694-4e2f-88f8-8dacf9ff1f87",
+          ""
+        ],
+        [
+          "clearance|126850000|133260000|ef0f87c7-66c0-43df-aab7-2476fdc4878c|37eb5f20-ba5d-444d-95a5-620c934bec98",
+          ""
+        ],
+        [
+          "clearance|126850000|139060000|4f3c63b4-32cd-42c0-a92f-acfbc3ab94b3|723acc51-9c7f-4d56-a84e-9986f6ef4f6a",
+          ""
+        ],
+        [
+          "courtyards_overlap|110407222|51250000|02e18437-0e77-40df-a02c-0b4a7d97b7e4|55aed2cb-2923-4694-a1d8-182b310a209e",
+          ""
+        ],
+        [
+          "courtyards_overlap|113825000|138205000|1bcd4ad6-4200-4cbe-9ba4-4c61b5481262|a084b5e9-9fd4-43d5-928b-bbce9f84e3f1",
+          ""
+        ],
+        [
+          "courtyards_overlap|116990000|135710000|9bdca28f-37df-4c4c-a8a9-087c3980586c|ae2b6a6b-7dd6-413a-bd6a-106f21ce249d",
+          ""
+        ]
+      ],
       "meta": {
         "version": 2
       },
@@ -780,7 +813,7 @@
         "uuid": "74790d6c-a68e-4e6d-b4a9-43de1843f817"
       }
     ],
-    "used_designators": "#PWR217",
+    "used_designators": "",
     "variants": []
   },
   "sheets": [
