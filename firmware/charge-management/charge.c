@@ -26,7 +26,7 @@
         - (Optional) Read assigned V and I_max to STPD01
 
 */
-
+// 3 larghezza, 2 profondità e 2 altezza
 volatile I2C_ReadState currentlyReading;
 
 const int timeout = 10;         // In ms
@@ -509,22 +509,62 @@ void primaryUSBC_ConnectionINT() {
 }
 
 void secondaryUSBC_ConnectionINT() {
-    uint8_t alertBuffer[2];
-    uint8_t activeContractRDOBuffer[4];
+    uint8_t alertBuffer;
     // Read alert status register (the register is read and clear)
-    HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, ALERT_STATUS_REG_ADDR, I2C_MEMADD_SIZE_8BIT, alertBuffer, 1, HAL_MAX_DELAY);
-    bool CC_HW_FAULT_STATUS_AL = (alertBuffer[0] >> 4) & 0x01;      // Need to handle the alert
-    bool TYPEC_MONITORING_STATUS_AL = (alertBuffer[0] >> 5) & 0x01; // Need to handle the alert
-    bool PORT_STATUS_AL = (alertBuffer[0] >> 6) & 0x01;             // Need to handle the alert
+    if (HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, ALERT_STATUS_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &alertBuffer, 1, HAL_MAX_DELAY) != HAL_OK) {
+        // Throw I2C operation error
+        return;
+    }
+    bool PRT_STATUS_AL = (alertBuffer >> 1) & 0x01;      // If asserted: the PD protocol layer completed a message transaction
+    bool CC_HW_FAULT_STATUS_AL = (alertBuffer >> 4) & 0x01;      // If asserted: a hardware fault was detected on the CC lines
+    bool TYPEC_MONITORING_STATUS_AL = (alertBuffer >> 5) & 0x01;     // If asserted: the STUSB4710's VBUS/VCONN monitoring detected something unexpected
+    bool PORT_STATUS_AL = (alertBuffer >> 6) & 0x01;     // If asserted: the value of CC_CONNECTION_STATUS (register 0x0E) has changed
+    bool HARD_RESET_AL = (alertBuffer >> 7) & 0x01;      // If asserted: the USB PD protocol layer sent or received a Hard Reset message
+
+    // --- Priority 1: hard faults that require immediate port shutdown ---
+    if (CC_HW_FAULT_STATUS_AL) {
+        disable_USBC2();
+        disable_STPD01();
+        secondaryUSBC_PDContract.isNegotiationDone = false;
+        secondaryUSBC_PDContract.isPlugged = false;
+        // Throw: CC hardware fault on secondary USB-C
+        return;
+    }
+
+    if (HARD_RESET_AL) {
+        disable_USBC2();
+        disable_STPD01();
+        secondaryUSBC_PDContract.isNegotiationDone = false;
+        // isPlugged stays true — the device is still physically connected
+        // the STUSB4710 will re-advertise and re-negotiate automatically
+        return;
+    }
+
+    // --- Priority 2: VBUS / monitoring anomaly ---
+
+    if (TYPEC_MONITORING_STATUS_AL) {
+        uint8_t vbusBuffer;
+        HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, VBUS_ENABLE_STATUS_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &vbusBuffer, 1, HAL_MAX_DELAY);
+        if (!(vbusBuffer & 0x01)) {
+            // Power path dropped unexpectedly
+            disable_USBC2();
+            disable_STPD01();
+            secondaryUSBC_PDContract.isNegotiationDone = false;
+            // Throw: VBUS lost during active contract
+        }
+    }
+
+    // --- Priority 3: connection/disconnection ---
 
     // Read port status register if alert is fired
+    // PRT_STATUS_AL (bit 1)
     if (PORT_STATUS_AL) {
-        status = HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, CC_CONNECTION_STATUS_REG_ADDR, I2C_MEMADD_SIZE_8BIT, alertBuffer, 1, HAL_MAX_DELAY);
-        if (status != HAL_OK) {
+        uint8_t ccStatus;
+        if (HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, CC_CONNECTION_STATUS_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &ccStatus, 1, HAL_MAX_DELAY) != HAL_OK) {
             // Throw I2C operation error
             return;
         }
-        switch ((alertBuffer[0] >> 5) & 0x07) {
+        switch ((ccStatus >> 5) & 0x07) {
             case 0: {       // NONE_ATT: Not connected
                 secondaryUSBC_PDContract.isPlugged = false;
                 secondaryUSBC_PDContract.isNegotiationDone = false;
@@ -546,49 +586,51 @@ void secondaryUSBC_ConnectionINT() {
                 break;
             }
             default: {      // DBG_ATT / AUD_ATT / POW_ACC_ATT
+                // Accessory mode is not supported on secondary USB-C
+                secondaryUSBC_PDContract.isPlugged = false;
+                secondaryUSBC_PDContract.isNegotiationDone = false;
+                disable_USBC2();
+                disable_STPD01();
                 // Throw unexpected flag
             }
         }
     }
 
-    if (secondaryUSBC_PDContract.isPlugged && !secondaryUSBC_PDContract.isNegotiationDone && !secondaryUSBC_PDContract.isSink) {
-        // Fetch (if RDO negotiated the PDO configuration)
-        status = HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, SRC_RDO_REG_ADDR, I2C_MEMADD_SIZE_8BIT, activeContractRDOBuffer, 4, HAL_MAX_DELAY);
-        if (status != HAL_OK) {
+    // --- Priority 4: PD negotiation completed ---
+
+    if (PRT_STATUS_AL && secondaryUSBC_PDContract.isPlugged && !secondaryUSBC_PDContract.isNegotiationDone) {
+        // A PD message completed. If we have a plugged sink with no contract yet, check if we now have one
+        uint8_t rdoBuffer[4];
+        if (HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, SRC_RDO_REG_ADDR, I2C_MEMADD_SIZE_8BIT, rdoBuffer, 4, HAL_MAX_DELAY) != HAL_OK) {
             // Throw I2C operation error
             return;
         }
 
         // Important note: the following configured PDOs readings are assumed to be always of Fixed-Voltage type;
         // if not we need to add a guard like for the primary USB-C case
-        uint8_t PDOConfiguration = (activeContractRDOBuffer[3] >> 4) & 0x07;
+        uint8_t PDOConfiguration = (rdoBuffer[3] >> 4) & 0x07;
         switch (PDOConfiguration) {
             case 0: {
                 // No negotiated contract
                 break;
             }
             case 1: {
-                secondaryUSBC_PDContract.isNegotiationDone = true;
                 selectPDO1();
                 break;
             }
             case 2: {
-                secondaryUSBC_PDContract.isNegotiationDone = true;
                 selectPDO2();
                 break;
             }
             case 3: {
-                secondaryUSBC_PDContract.isNegotiationDone = true;
                 selectPDO3();
                 break;
             }
             case 4: {
-                secondaryUSBC_PDContract.isNegotiationDone = true;
                 selectPDO4();
                 break;
             }
             case 5: {
-                secondaryUSBC_PDContract.isNegotiationDone = true;
                 selectPDO5();
                 break;
             }
@@ -598,7 +640,7 @@ void secondaryUSBC_ConnectionINT() {
         }
 
         if (PDOConfiguration > 0 && PDOConfiguration <= 5) {
-            uint16_t operatingCurrentRaw = ((activeContractRDOBuffer[2] & 0x0F) << 6) | ((activeContractRDOBuffer[1] >> 2) & 0x03F);        // (19:10)
+            uint16_t operatingCurrentRaw = ((rdoBuffer[2] & 0x0F) << 6) | ((rdoBuffer[1] >> 2) & 0x03F);        // (19:10)
             secondaryUSBC_PDContract.operatingCurrent = operatingCurrentRaw * 10.0f;  // To get mA (as stated in the USB_PD standard)
             if (!setupSTPD01(secondaryUSBC_PDContract.voltage, secondaryUSBC_PDContract.maxCurrent)) {
                 // Throw STPD01 setup error + don't enable STPD01
@@ -620,6 +662,7 @@ void secondaryUSBC_ConnectionINT() {
                 }
                 if (vbusBuffer & 0x01) {
                     enable_USBC2();
+                    secondaryUSBC_PDContract.isNegotiationDone = true;
                 } else {
                     // Throw VBUS_EN_SRC -> power path not available
                 }
@@ -642,9 +685,7 @@ void secondaryUSBC_ConnectionINT() {
                     // Probably disables both STPD01 and USB-C2 (if enabled)
                 }
             }
-
         }
-
     }
 }
 
@@ -653,8 +694,8 @@ bool setupSTPD01(float voltage_mV, float current_mA) {
     disable_STPD01();
     // --- Convert max voltage and max current into the correspontent addresses
     // Clamp values to STPD operational range
-    if (voltage_mV < 3000) {
-        voltage_mV = 3000;
+    if (voltage_mV < 5000) {
+        voltage_mV = 5000;
     } else if (voltage_mV > 20000) {
         voltage_mV = 20000;
     }

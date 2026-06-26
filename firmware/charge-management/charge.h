@@ -162,6 +162,8 @@ void readINA();
 
 void readCS();
 
+void readNCS();
+
 void primaryUSBC_ConnectionINT();
 
 void secondaryUSBC_ConnectionINT();
