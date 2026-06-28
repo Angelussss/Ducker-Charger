@@ -25,14 +25,6 @@
 #include "usart.h"
 #include "gpio.h"
 
-#include "app/telemetry.h"
-#include "app/encoder.h"
-#include "display/ili9341.h"
-#include "display/gfx.h"
-#include "ui/widgets.h"
-#include "ui/screens.h"
-#include "ui/ui_state.h"
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
