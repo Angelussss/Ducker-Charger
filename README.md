@@ -65,5 +65,16 @@ This is an active, in-progress project.
 
 Take any info here at your own risk until the design is validated.
 
+## Contributing
 
+Issues, suggestions, and pull requests are momentarily suspended, as this is a university course project.
+
+## License
+
+Released under the [Creative Commons Attribution-NonCommercial 4.0 International
+License (CC BY-NC 4.0)](LICENSE). © 2026 Angelo Perotti.
+
+You are free to use, modify, and build upon this work for **non-commercial**
+purposes, as long as you **credit the author**. See [NOTICE](NOTICE) for
+attribution details.
 
