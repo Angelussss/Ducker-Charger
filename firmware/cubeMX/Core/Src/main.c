@@ -27,7 +27,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "app/initialization.h"   /* every-boot IC init (TPS25750 patch, INA3221, STPD01) */
+#include "app/provisioning.h"     /* one-time BQ34Z100 data-flash provisioning */
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -98,7 +99,17 @@ int main(void)
   MX_USART1_UART_Init();
   MX_I2C3_Init();
   /* USER CODE BEGIN 2 */
+  /* Boot camp: every IC with volatile config gets initialized here.
+   * A failed step degrades the boot (report available for the UI),
+   * it never blocks it. */
+  (void)System_Initialization();
 
+  /* Fuel-gauge data flash: one-time, marker-guarded, refuses to run
+   * unless the pack is at rest. No-op on already-provisioned units. */
+  if (Provisioning_Required())
+  {
+    (void)Provisioning_RunGauge();
+  }
   /* USER CODE END 2 */
 
   /* Infinite loop */
