@@ -1,24 +1,46 @@
 # Format documentation: http://kicad-pcb.org/help/file-formats/
+# Patterns are intentionally NOT root-anchored so they also match the
+# KiCad projects living under PCB/<project>/.
 
-# Temporary files
+# --- KiCad temporary / backup / local files ---
 *.000
 *.bak
 *.bck
 *.kicad_pcb-bak
 *.kicad_sch-bak
-*.kicad_prl
 *.sch-bak
+*.tmp
 *~
-*.kicad_pcb.lck
-*.kicad_sch.lck
+
+# Lock files (e.g. ~Project.kicad_pcb.lck, ~Project.kicad_pro.lck)
+*.lck
+
+# Project-local (per-user) settings
+*.kicad_prl
+
+# Autosave
 _autosave-*
 \#auto_saved_files\#
-*.tmp
+#auto_saved_files#/
+
+# Backups (any *-backups/ or **/production/backups/ folder, at any depth)
+*-backups/
+**/production/backups/
 *-save.pro
 *-save.kicad_pcb
+
+# Caches
 fp-info-cache
 *-cache.lib
 
+# hierpcb plugin artifacts
+*.hierpcb.json
+*.hierpcb.log
+
+# kidiff working data
+.kidiff/
+
+# --- Exported / generated files ---
 # Netlist files (exported from Eeschema)
 *.net
 
@@ -31,16 +53,13 @@ fp-info-cache
 *.csv
 
 # PCB output files
-/output/*
+output/
 
-# Backup files
-/*-backups/
-/#auto_saved_files#/*
-# Cubemx config files
-/stm32cubemx/*
+# --- CubeMX ---
+stm32cubemx/*
 !stm32cubemx/*/*.ioc
 
-# Python files
+# --- Python ---
 .ipynb_checkpoints/
 
 # OS
@@ -52,4 +71,3 @@ CMakeLists.txt
 
 # obsidian
 .obsidian/
-

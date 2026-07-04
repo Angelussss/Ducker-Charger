@@ -1,0 +1,24 @@
+--- a/src/app/app.c
++++ b/src/app/app.c
+@@ -45,6 +45,7 @@
+ #include <swap.h>
+ #include <vdm.h>
+ #include <app.h>
++#include <ducker_led.h>   /* Ducker: status LED */
+ #include <vdm_task_mngr.h>
+ #include <timer.h>
+ #if CCG_HPI_ENABLE
+@@ -1717,6 +1718,13 @@
+ 
+ void app_event_handler(uint8_t port, app_evt_t evt, const void* dat)
+ {
++    /* Ducker: drive the status LED from PD events (single insertion
++     * point, keeps clear of the #if/fall-through cascade below). */
++    if (port == 0u)
++    {
++        ducker_led_on_event((uint8_t)evt);
++    }
++
+     const app_req_status_t* result;
+     const pd_contract_info_t* contract_status;
+     bool  skip_soln_cb = false;
