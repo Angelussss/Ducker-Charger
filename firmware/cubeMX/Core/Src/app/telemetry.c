@@ -87,35 +87,32 @@ static void do_poll(void)
         telemetry.over_temp   = (f & BQ34Z100_FLAG_OT)  ? 1u : 0u;
     } else ok = 0u;
 
-    /* Also treat positive current as charging (belt + suspenders) */
+    /* CHG flag can lag; trust current sign too */
     if (telemetry.current_mA > 0)
         telemetry.is_charging = 1u;
 
-    /* BQ25713 unreachable: derive from gauge data */
+    /* BQ25713 not reachable, derive from gauge */
     telemetry.vbus_present = telemetry.is_charging;
     telemetry.charge_phase = telemetry.is_charging ? 2u : 0u;   /* 2 = fast */
 
     /* Power [mW] */
     telemetry.power_mW = (int32_t)telemetry.voltage_mV * telemetry.current_mA / 1000;
 
-    /* Time-to-empty / time-to-full [min] (BQ34Z100 TRM standard commands) */
+    /* TTE / TTF [min] — BQ34Z100 std commands 0x18/0x1A */
     if (gauge_read(0x18u, buf, 2u) == HAL_OK)
         tte_min = (uint16_t)buf[0] | ((uint16_t)buf[1] << 8);
     if (gauge_read(0x1Au, buf, 2u) == HAL_OK)
         ttf_min = (uint16_t)buf[0] | ((uint16_t)buf[1] << 8);
 
-    /* Current history ring buffer */
     telemetry.current_history[telemetry.history_idx] = telemetry.current_mA;
     telemetry.history_idx = (telemetry.history_idx + 1u) % TELEMETRY_HISTORY_SIZE;
     if (telemetry.history_idx == 0u)
         telemetry.history_full = 1u;
 
-    /* Session charge-start counter */
     if (telemetry.is_charging && !_was_charging)
         sys_stats.charge_sessions++;
     _was_charging = telemetry.is_charging;
 
-    /* Per-boot peak tracking */
     if (telemetry.temp_celsius > sys_stats.max_temp_c)
         sys_stats.max_temp_c = telemetry.temp_celsius;
     if (telemetry.current_mA > sys_stats.max_current_in_mA)
@@ -123,10 +120,9 @@ static void do_poll(void)
     if (telemetry.current_mA < -sys_stats.max_current_out_mA)
         sys_stats.max_current_out_mA = (int16_t)(-telemetry.current_mA);
 
-    /* Uptime */
     sys_stats.uptime_s = HAL_GetTick() / 1000u;
 
-    /* Lifetime stats from gauge (read less critical: ignore single failures) */
+    /* gauge flash: non-critical, ignore single read failures */
     if (gauge_read(0x2Au, buf, 2u) == HAL_OK)
         sys_stats.cycle_count = (uint16_t)buf[0] | ((uint16_t)buf[1] << 8);
     if (gauge_read(0x2Eu, buf, 2u) == HAL_OK)

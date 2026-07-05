@@ -200,7 +200,7 @@ void GFX_DrawString(uint16_t x, uint16_t y, const char *str,
     while (*str)
     {
         GFX_DrawChar(cursor_x, y, *str, font, fg_color, bg_color);
-        cursor_x += font->char_w;  /* Advance cursor by one character width. */
+        cursor_x += font->char_w;
         str++;
     }
 }
@@ -284,8 +284,7 @@ void GFX_DrawCircle(uint16_t cx, uint16_t cy, uint16_t r, uint16_t color)
 
     while (x <= y)
     {
-        /* Plot all 8 symmetric points at once.
-         * Disegna tutti gli 8 punti simmetrici in una volta. */
+        /* 8-fold symmetry: plot all octants */
         ILI9341_DrawPixel(cx + (uint16_t)x, cy + (uint16_t)y, color);
         ILI9341_DrawPixel(cx - (uint16_t)x, cy + (uint16_t)y, color);
         ILI9341_DrawPixel(cx + (uint16_t)x, cy - (uint16_t)y, color);
@@ -294,8 +293,6 @@ void GFX_DrawCircle(uint16_t cx, uint16_t cy, uint16_t r, uint16_t color)
         ILI9341_DrawPixel(cx - (uint16_t)y, cy + (uint16_t)x, color);
         ILI9341_DrawPixel(cx + (uint16_t)y, cy - (uint16_t)x, color);
         ILI9341_DrawPixel(cx - (uint16_t)y, cy - (uint16_t)x, color);
-
-        /* Update the decision variable / Aggiorna la variabile di decisione */
         if (d < 0) { d += 4*x + 6; }
         else       { d += 4*(x - y) + 10; y--; }
         x++;

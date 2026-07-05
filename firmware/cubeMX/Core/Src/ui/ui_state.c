@@ -48,10 +48,7 @@ static uint8_t    _sleep_light  = 0;    /* 1 = light sleep: wake show splash */
 static UIScreen_t _boot_dest     = UI_SCREEN_MAIN;
 static uint32_t   _boot_duration = BOOT_SCREEN_DURATION_MS;
 
-/** Tick at which the boot screen was shown, used for the auto-timeout. */
 static uint32_t _boot_start_tick = 0;
-
-/** Duration of the splash screen before automatically moving to MAIN. */
 
 /* =========================================================
  * PUBLIC FUNCTIONS
@@ -59,7 +56,6 @@ static uint32_t _boot_start_tick = 0;
 
 void UI_Init(void)
 {
-    /* Zero-initialise the state struct. */
     ui_state.current_screen    = UI_SCREEN_BOOT;
     ui_state.prev_screen       = UI_SCREEN_BOOT;
     ui_state.needs_full_redraw = 1;
@@ -67,7 +63,6 @@ void UI_Init(void)
     ui_state.btn_press_tick    = 0;
     ui_state.btn_was_held      = 0;
 
-    /* Show the boot/splash screen and record the start time. */
     Screen_Boot_Draw();
     _boot_start_tick = HAL_GetTick();
 }
@@ -88,7 +83,6 @@ void UI_Tick(void)
             _boot_duration = BOOT_SCREEN_DURATION_MS;
         }
 
-        /* Do nothing else while the boot screen is shown. */
         return;
     }
 
