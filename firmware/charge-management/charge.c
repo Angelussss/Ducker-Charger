@@ -44,8 +44,8 @@ const float BETA = 3950.0;      // To check in thermistor's datasheet
 // Critical Signals
 int PD_IRQ = GPIO_PIN_RESET;
 int PD_IRQ_PREV = GPIO_PIN_SET;           // For checking previous state of PD_IRQ after its update; Normal: IRQ is set to HIGH
-int ST_INT = GPIO_PIN_RESET;
-int CHRG_OK = GPIO_PIN_RESET;
+int ST_INT = GPIO_PIN_SET;
+int CHRG_OK = GPIO_PIN_SET;
 
 // NON-Critical Signals
 int USBA1_STATUS = GPIO_PIN_RESET;
@@ -399,17 +399,11 @@ void readCS() {        // Check and update critical signals and their status (e.
     //PD_IRQ_PREV = PD_IRQ;   // Remember PD_IRQ status before updating it
     PD_IRQ = HAL_GPIO_ReadPin(USB_IRQ_CTRL_GPIO_Port, USB_IRQ_CTRL_Pin);
 
-    // Read LP_ST_INT (PC12) and update ST_INT status
+    // Read C2_ST_INT (PC12): STUSB4710 interrupt — PD protocol event
     ST_INT = HAL_GPIO_ReadPin(USB_ST_INT_CTRL_GPIO_Port, USB_ST_INT_CTRL_Pin);
 
     // Read HP.CHRG_OK (PB13) and update CHRG_OK status
     CHRG_OK = HAL_GPIO_ReadPin(USB_CHRG_OK_CTRL_GPIO_Port, USB_CHRG_OK_CTRL_Pin);
-
-    // Before end of function throw eventual errors due to faults/interrupts
-    if (ST_INT == GPIO_PIN_RESET) {     // (Normal: ST_INT is set to HIGH)
-        // Throw Handle Aux Converter Fault (Overcurrent/Temp)
-        // To confirm overtemperature check OTD / OTC flags
-    }
 
     if (CHRG_OK == GPIO_PIN_RESET) {
         // Throw high-current path not ok
@@ -419,8 +413,9 @@ void readCS() {        // Check and update critical signals and their status (e.
         primaryUSBC_ConnectionINT();
     }
 
-    // Remember to add the secondary USB-C interrupt + handling
-    secondaryUSBC_ConnectionINT();
+    if (ST_INT == GPIO_PIN_RESET) {
+        secondaryUSBC_ConnectionINT();
+    }
 }
 
 void readNCS() {        // Check and update NON-critical signals and their status (e.g., USBA1_STATUS)
@@ -544,7 +539,10 @@ void secondaryUSBC_ConnectionINT() {
 
     if (TYPEC_MONITORING_STATUS_AL) {
         uint8_t vbusBuffer;
-        HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, VBUS_ENABLE_STATUS_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &vbusBuffer, 1, HAL_MAX_DELAY);
+        if (HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, VBUS_ENABLE_STATUS_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &vbusBuffer, 1, HAL_MAX_DELAY) != HAL_OK) {
+            // Throw I2C operation error
+            return;
+        }
         if (!(vbusBuffer & 0x01)) {
             // Power path dropped unexpectedly
             disable_USBC2();
@@ -556,8 +554,6 @@ void secondaryUSBC_ConnectionINT() {
 
     // --- Priority 3: connection/disconnection ---
 
-    // Read port status register if alert is fired
-    // PRT_STATUS_AL (bit 1)
     if (PORT_STATUS_AL) {
         uint8_t ccStatus;
         if (HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, CC_CONNECTION_STATUS_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &ccStatus, 1, HAL_MAX_DELAY) != HAL_OK) {
@@ -664,6 +660,7 @@ void secondaryUSBC_ConnectionINT() {
                     enable_USBC2();
                     secondaryUSBC_PDContract.isNegotiationDone = true;
                 } else {
+                    disable_STPD01();
                     // Throw VBUS_EN_SRC -> power path not available
                 }
             } else {
