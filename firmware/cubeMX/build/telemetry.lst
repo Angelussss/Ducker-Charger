@@ -1,0 +1,1060 @@
+ARM GAS  /tmp/ccNu9o0t.s 			page 1
+
+
+   1              		.cpu cortex-m4
+   2              		.arch armv7e-m
+   3              		.fpu fpv4-sp-d16
+   4              		.eabi_attribute 27, 1
+   5              		.eabi_attribute 28, 1
+   6              		.eabi_attribute 20, 1
+   7              		.eabi_attribute 21, 1
+   8              		.eabi_attribute 23, 3
+   9              		.eabi_attribute 24, 1
+  10              		.eabi_attribute 25, 1
+  11              		.eabi_attribute 26, 1
+  12              		.eabi_attribute 30, 1
+  13              		.eabi_attribute 34, 1
+  14              		.eabi_attribute 18, 4
+  15              		.file	"telemetry.c"
+  16              		.text
+  17              	.Ltext0:
+  18              		.cfi_sections	.debug_frame
+  19              		.file 1 "Core/Src/app/telemetry.c"
+  20              		.section	.text.gauge_read,"ax",%progbits
+  21              		.align	1
+  22              		.syntax unified
+  23              		.thumb
+  24              		.thumb_func
+  26              	gauge_read:
+  27              	.LVL0:
+  28              	.LFB220:
+   1:Core/Src/app/telemetry.c **** /**
+   2:Core/Src/app/telemetry.c ****  * @file    telemetry.c
+   3:Core/Src/app/telemetry.c ****  * @brief   Telemetry module: reads BQ34Z100 via I2C1 (I2C_LP / ISO1540).
+   4:Core/Src/app/telemetry.c ****  *
+   5:Core/Src/app/telemetry.c ****  * BQ25713 is on TPS25750's private I2C_EX bus — not reachable from STM32.
+   6:Core/Src/app/telemetry.c ****  * Charge state is derived from BQ34Z100 CHG flag and current sign.
+   7:Core/Src/app/telemetry.c ****  *
+   8:Core/Src/app/telemetry.c ****  * CHECK before first use:
+   9:Core/Src/app/telemetry.c ****  *   - BQ34Z100 register byte order (little-endian per TRM SLUSAW5)
+  10:Core/Src/app/telemetry.c ****  *   - TTE/TTF register addresses (0x18 / 0x1A per TRM "Standard Commands")
+  11:Core/Src/app/telemetry.c ****  *   - Cycle count 0x2A, SoH 0x2E, FCC 0x10 per TRM
+  12:Core/Src/app/telemetry.c ****  */
+  13:Core/Src/app/telemetry.c **** 
+  14:Core/Src/app/telemetry.c **** #include "app/telemetry.h"
+  15:Core/Src/app/telemetry.c **** #include "main.h"
+  16:Core/Src/app/telemetry.c **** #include "i2c.h"     /* hi2c1 (I2C_LP) */
+  17:Core/Src/app/telemetry.c **** 
+  18:Core/Src/app/telemetry.c **** #include <string.h>
+  19:Core/Src/app/telemetry.c **** 
+  20:Core/Src/app/telemetry.c **** /* -----------------------------------------------------------------------
+  21:Core/Src/app/telemetry.c ****  * Globals (declared extern in telemetry.h)
+  22:Core/Src/app/telemetry.c ****  * ----------------------------------------------------------------------- */
+  23:Core/Src/app/telemetry.c **** 
+  24:Core/Src/app/telemetry.c **** SystemTelemetry_t telemetry;
+  25:Core/Src/app/telemetry.c **** PortStats_t       port_stats[5];   /* A1/A2/C1(OTG)/C2/Lab — stubbed for now */
+  26:Core/Src/app/telemetry.c **** uint16_t          cell_mv[4];      /* per-cell not routed to MCU on this PCB */
+  27:Core/Src/app/telemetry.c **** uint16_t          tte_min;
+  28:Core/Src/app/telemetry.c **** uint16_t          ttf_min;
+  29:Core/Src/app/telemetry.c **** SystemStats_t     sys_stats;
+  30:Core/Src/app/telemetry.c **** 
+ARM GAS  /tmp/ccNu9o0t.s 			page 2
+
+
+  31:Core/Src/app/telemetry.c **** /* -----------------------------------------------------------------------
+  32:Core/Src/app/telemetry.c ****  * Private state
+  33:Core/Src/app/telemetry.c ****  * ----------------------------------------------------------------------- */
+  34:Core/Src/app/telemetry.c **** 
+  35:Core/Src/app/telemetry.c **** static I2C_HandleTypeDef *_hi2c_gauge;   /* hi2c1 */
+  36:Core/Src/app/telemetry.c **** static uint8_t            _was_charging; /* detect charge-session starts */
+  37:Core/Src/app/telemetry.c **** 
+  38:Core/Src/app/telemetry.c **** #define GAUGE_ADDR  (0x55u << 1)
+  39:Core/Src/app/telemetry.c **** #define I2C_TO      (50u)
+  40:Core/Src/app/telemetry.c **** 
+  41:Core/Src/app/telemetry.c **** /* -----------------------------------------------------------------------
+  42:Core/Src/app/telemetry.c ****  * Low-level helpers
+  43:Core/Src/app/telemetry.c ****  * ----------------------------------------------------------------------- */
+  44:Core/Src/app/telemetry.c **** 
+  45:Core/Src/app/telemetry.c **** static HAL_StatusTypeDef gauge_read(uint8_t reg, uint8_t *buf, uint8_t n)
+  46:Core/Src/app/telemetry.c **** {
+  29              		.loc 1 46 1 view -0
+  30              		.cfi_startproc
+  31              		@ args = 0, pretend = 0, frame = 8
+  32              		@ frame_needed = 0, uses_anonymous_args = 0
+  33              		.loc 1 46 1 is_stmt 0 view .LVU1
+  34 0000 30B5     		push	{r4, r5, lr}
+  35              	.LCFI0:
+  36              		.cfi_def_cfa_offset 12
+  37              		.cfi_offset 4, -12
+  38              		.cfi_offset 5, -8
+  39              		.cfi_offset 14, -4
+  40 0002 85B0     		sub	sp, sp, #20
+  41              	.LCFI1:
+  42              		.cfi_def_cfa_offset 32
+  43 0004 0D46     		mov	r5, r1
+  44 0006 1446     		mov	r4, r2
+  45 0008 8DF80F00 		strb	r0, [sp, #15]
+  47:Core/Src/app/telemetry.c ****     if (HAL_I2C_Master_Transmit(_hi2c_gauge, GAUGE_ADDR, &reg, 1u, I2C_TO) != HAL_OK)
+  46              		.loc 1 47 5 is_stmt 1 view .LVU2
+  47              		.loc 1 47 9 is_stmt 0 view .LVU3
+  48 000c 3223     		movs	r3, #50
+  49 000e 0093     		str	r3, [sp]
+  50 0010 0123     		movs	r3, #1
+  51 0012 0DF10F02 		add	r2, sp, #15
+  52              	.LVL1:
+  53              		.loc 1 47 9 view .LVU4
+  54 0016 AA21     		movs	r1, #170
+  55              	.LVL2:
+  56              		.loc 1 47 9 view .LVU5
+  57 0018 0848     		ldr	r0, .L6
+  58              	.LVL3:
+  59              		.loc 1 47 9 view .LVU6
+  60 001a 0068     		ldr	r0, [r0]
+  61 001c FFF7FEFF 		bl	HAL_I2C_Master_Transmit
+  62              	.LVL4:
+  63              		.loc 1 47 8 discriminator 1 view .LVU7
+  64 0020 10B1     		cbz	r0, .L5
+  48:Core/Src/app/telemetry.c ****         return HAL_ERROR;
+  65              		.loc 1 48 16 view .LVU8
+  66 0022 0120     		movs	r0, #1
+  67              	.L2:
+ARM GAS  /tmp/ccNu9o0t.s 			page 3
+
+
+  49:Core/Src/app/telemetry.c ****     return HAL_I2C_Master_Receive(_hi2c_gauge, GAUGE_ADDR, buf, n, I2C_TO);
+  50:Core/Src/app/telemetry.c **** }
+  68              		.loc 1 50 1 view .LVU9
+  69 0024 05B0     		add	sp, sp, #20
+  70              	.LCFI2:
+  71              		.cfi_remember_state
+  72              		.cfi_def_cfa_offset 12
+  73              		@ sp needed
+  74 0026 30BD     		pop	{r4, r5, pc}
+  75              	.LVL5:
+  76              	.L5:
+  77              	.LCFI3:
+  78              		.cfi_restore_state
+  49:Core/Src/app/telemetry.c ****     return HAL_I2C_Master_Receive(_hi2c_gauge, GAUGE_ADDR, buf, n, I2C_TO);
+  79              		.loc 1 49 5 is_stmt 1 view .LVU10
+  49:Core/Src/app/telemetry.c ****     return HAL_I2C_Master_Receive(_hi2c_gauge, GAUGE_ADDR, buf, n, I2C_TO);
+  80              		.loc 1 49 12 is_stmt 0 view .LVU11
+  81 0028 3223     		movs	r3, #50
+  82 002a 0093     		str	r3, [sp]
+  83 002c 2346     		mov	r3, r4
+  84 002e 2A46     		mov	r2, r5
+  85 0030 AA21     		movs	r1, #170
+  86 0032 0248     		ldr	r0, .L6
+  87 0034 0068     		ldr	r0, [r0]
+  88 0036 FFF7FEFF 		bl	HAL_I2C_Master_Receive
+  89              	.LVL6:
+  49:Core/Src/app/telemetry.c ****     return HAL_I2C_Master_Receive(_hi2c_gauge, GAUGE_ADDR, buf, n, I2C_TO);
+  90              		.loc 1 49 12 discriminator 1 view .LVU12
+  91 003a F3E7     		b	.L2
+  92              	.L7:
+  93              		.align	2
+  94              	.L6:
+  95 003c 00000000 		.word	_hi2c_gauge
+  96              		.cfi_endproc
+  97              	.LFE220:
+  99              		.section	.text.do_poll,"ax",%progbits
+ 100              		.align	1
+ 101              		.syntax unified
+ 102              		.thumb
+ 103              		.thumb_func
+ 105              	do_poll:
+ 106              	.LFB221:
+  51:Core/Src/app/telemetry.c **** 
+  52:Core/Src/app/telemetry.c **** /* -----------------------------------------------------------------------
+  53:Core/Src/app/telemetry.c ****  * Core poll
+  54:Core/Src/app/telemetry.c ****  * ----------------------------------------------------------------------- */
+  55:Core/Src/app/telemetry.c **** 
+  56:Core/Src/app/telemetry.c **** static void do_poll(void)
+  57:Core/Src/app/telemetry.c **** {
+ 107              		.loc 1 57 1 is_stmt 1 view -0
+ 108              		.cfi_startproc
+ 109              		@ args = 0, pretend = 0, frame = 8
+ 110              		@ frame_needed = 0, uses_anonymous_args = 0
+ 111 0000 10B5     		push	{r4, lr}
+ 112              	.LCFI4:
+ 113              		.cfi_def_cfa_offset 8
+ 114              		.cfi_offset 4, -8
+ARM GAS  /tmp/ccNu9o0t.s 			page 4
+
+
+ 115              		.cfi_offset 14, -4
+ 116 0002 82B0     		sub	sp, sp, #8
+ 117              	.LCFI5:
+ 118              		.cfi_def_cfa_offset 16
+  58:Core/Src/app/telemetry.c ****     uint8_t buf[2];
+ 119              		.loc 1 58 5 view .LVU14
+  59:Core/Src/app/telemetry.c ****     uint8_t ok = 1u;
+ 120              		.loc 1 59 5 view .LVU15
+ 121              	.LVL7:
+  60:Core/Src/app/telemetry.c **** 
+  61:Core/Src/app/telemetry.c ****     /* SoC [%] */
+  62:Core/Src/app/telemetry.c ****     if (gauge_read(BQ34Z100_REG_SOC, buf, 2u) == HAL_OK)
+ 122              		.loc 1 62 5 view .LVU16
+ 123              		.loc 1 62 9 is_stmt 0 view .LVU17
+ 124 0004 0222     		movs	r2, #2
+ 125 0006 01A9     		add	r1, sp, #4
+ 126 0008 1046     		mov	r0, r2
+ 127 000a FFF7FEFF 		bl	gauge_read
+ 128              	.LVL8:
+ 129              		.loc 1 62 8 discriminator 1 view .LVU18
+ 130 000e 0028     		cmp	r0, #0
+ 131 0010 40F00281 		bne	.L26
+  63:Core/Src/app/telemetry.c ****         telemetry.soc_percent = buf[0];
+ 132              		.loc 1 63 9 is_stmt 1 view .LVU19
+ 133              		.loc 1 63 36 is_stmt 0 view .LVU20
+ 134 0014 9DF80420 		ldrb	r2, [sp, #4]	@ zero_extendqisi2
+ 135              		.loc 1 63 31 view .LVU21
+ 136 0018 844B     		ldr	r3, .L32
+ 137 001a 1A70     		strb	r2, [r3]
+  59:Core/Src/app/telemetry.c ****     uint8_t ok = 1u;
+ 138              		.loc 1 59 13 view .LVU22
+ 139 001c 0124     		movs	r4, #1
+ 140              	.L9:
+ 141              	.LVL9:
+  64:Core/Src/app/telemetry.c ****     else ok = 0u;
+  65:Core/Src/app/telemetry.c **** 
+  66:Core/Src/app/telemetry.c ****     /* Voltage [mV], little-endian */
+  67:Core/Src/app/telemetry.c ****     if (gauge_read(BQ34Z100_REG_VOLTAGE, buf, 2u) == HAL_OK)
+ 142              		.loc 1 67 5 is_stmt 1 view .LVU23
+ 143              		.loc 1 67 9 is_stmt 0 view .LVU24
+ 144 001e 0222     		movs	r2, #2
+ 145 0020 01A9     		add	r1, sp, #4
+ 146 0022 0820     		movs	r0, #8
+ 147 0024 FFF7FEFF 		bl	gauge_read
+ 148              	.LVL10:
+ 149              		.loc 1 67 8 discriminator 1 view .LVU25
+ 150 0028 0028     		cmp	r0, #0
+ 151 002a 40F0F780 		bne	.L27
+  68:Core/Src/app/telemetry.c ****         telemetry.voltage_mV = (uint16_t)buf[0] | ((uint16_t)buf[1] << 8);
+ 152              		.loc 1 68 9 is_stmt 1 view .LVU26
+ 153              		.loc 1 68 45 is_stmt 0 view .LVU27
+ 154 002e 9DF80430 		ldrb	r3, [sp, #4]	@ zero_extendqisi2
+ 155              		.loc 1 68 65 view .LVU28
+ 156 0032 9DF80520 		ldrb	r2, [sp, #5]	@ zero_extendqisi2
+ 157              		.loc 1 68 49 view .LVU29
+ 158 0036 43EA0223 		orr	r3, r3, r2, lsl #8
+ 159              		.loc 1 68 30 view .LVU30
+ARM GAS  /tmp/ccNu9o0t.s 			page 5
+
+
+ 160 003a 7C4A     		ldr	r2, .L32
+ 161 003c 5380     		strh	r3, [r2, #2]	@ movhi
+ 162              	.LVL11:
+ 163              	.L10:
+  69:Core/Src/app/telemetry.c ****     else ok = 0u;
+  70:Core/Src/app/telemetry.c **** 
+  71:Core/Src/app/telemetry.c ****     /* Current [mA] signed, little-endian */
+  72:Core/Src/app/telemetry.c ****     if (gauge_read(BQ34Z100_REG_CURRENT, buf, 2u) == HAL_OK)
+ 164              		.loc 1 72 5 is_stmt 1 view .LVU31
+ 165              		.loc 1 72 9 is_stmt 0 view .LVU32
+ 166 003e 0222     		movs	r2, #2
+ 167 0040 01A9     		add	r1, sp, #4
+ 168 0042 0A20     		movs	r0, #10
+ 169 0044 FFF7FEFF 		bl	gauge_read
+ 170              	.LVL12:
+ 171              		.loc 1 72 8 discriminator 1 view .LVU33
+ 172 0048 0028     		cmp	r0, #0
+ 173 004a 40F0E980 		bne	.L28
+  73:Core/Src/app/telemetry.c ****         telemetry.current_mA = (int16_t)((uint16_t)buf[0] | ((uint16_t)buf[1] << 8));
+ 174              		.loc 1 73 9 is_stmt 1 view .LVU34
+ 175              		.loc 1 73 55 is_stmt 0 view .LVU35
+ 176 004e 9DF80430 		ldrb	r3, [sp, #4]	@ zero_extendqisi2
+ 177              		.loc 1 73 75 view .LVU36
+ 178 0052 9DF80520 		ldrb	r2, [sp, #5]	@ zero_extendqisi2
+ 179              		.loc 1 73 32 view .LVU37
+ 180 0056 43EA0223 		orr	r3, r3, r2, lsl #8
+ 181              		.loc 1 73 30 view .LVU38
+ 182 005a 744A     		ldr	r2, .L32
+ 183 005c 9380     		strh	r3, [r2, #4]	@ movhi
+ 184              	.LVL13:
+ 185              	.L11:
+  74:Core/Src/app/telemetry.c ****     else ok = 0u;
+  75:Core/Src/app/telemetry.c **** 
+  76:Core/Src/app/telemetry.c ****     /* Temperature: raw in 0.1 K units → convert to °C */
+  77:Core/Src/app/telemetry.c ****     if (gauge_read(BQ34Z100_REG_TEMP, buf, 2u) == HAL_OK) {
+ 186              		.loc 1 77 5 is_stmt 1 view .LVU39
+ 187              		.loc 1 77 9 is_stmt 0 view .LVU40
+ 188 005e 0222     		movs	r2, #2
+ 189 0060 01A9     		add	r1, sp, #4
+ 190 0062 0C20     		movs	r0, #12
+ 191 0064 FFF7FEFF 		bl	gauge_read
+ 192              	.LVL14:
+ 193              		.loc 1 77 8 discriminator 1 view .LVU41
+ 194 0068 0028     		cmp	r0, #0
+ 195 006a 40F0DB80 		bne	.L29
+ 196              	.LBB2:
+  78:Core/Src/app/telemetry.c ****         uint16_t raw = (uint16_t)buf[0] | ((uint16_t)buf[1] << 8);
+ 197              		.loc 1 78 9 is_stmt 1 view .LVU42
+ 198              		.loc 1 78 37 is_stmt 0 view .LVU43
+ 199 006e 9DF80430 		ldrb	r3, [sp, #4]	@ zero_extendqisi2
+ 200              		.loc 1 78 57 view .LVU44
+ 201 0072 9DF80520 		ldrb	r2, [sp, #5]	@ zero_extendqisi2
+ 202              		.loc 1 78 18 view .LVU45
+ 203 0076 43EA0223 		orr	r3, r3, r2, lsl #8
+ 204              	.LVL15:
+  79:Core/Src/app/telemetry.c ****         telemetry.temp_celsius = (int16_t)((int32_t)raw / 10 - 273);
+ 205              		.loc 1 79 9 is_stmt 1 view .LVU46
+ARM GAS  /tmp/ccNu9o0t.s 			page 6
+
+
+ 206              		.loc 1 79 62 is_stmt 0 view .LVU47
+ 207 007a 6D4A     		ldr	r2, .L32+4
+ 208 007c A2FB0323 		umull	r2, r3, r2, r3
+ 209              	.LVL16:
+ 210              		.loc 1 79 62 view .LVU48
+ 211 0080 DB08     		lsrs	r3, r3, #3
+ 212              		.loc 1 79 34 view .LVU49
+ 213 0082 A3F21113 		subw	r3, r3, #273
+ 214              		.loc 1 79 32 view .LVU50
+ 215 0086 694A     		ldr	r2, .L32
+ 216 0088 D380     		strh	r3, [r2, #6]	@ movhi
+ 217              	.LVL17:
+ 218              	.L12:
+ 219              		.loc 1 79 32 view .LVU51
+ 220              	.LBE2:
+  80:Core/Src/app/telemetry.c ****     } else ok = 0u;
+  81:Core/Src/app/telemetry.c **** 
+  82:Core/Src/app/telemetry.c ****     /* Status flags */
+  83:Core/Src/app/telemetry.c ****     if (gauge_read(BQ34Z100_REG_FLAGS, buf, 2u) == HAL_OK) {
+ 221              		.loc 1 83 5 is_stmt 1 view .LVU52
+ 222              		.loc 1 83 9 is_stmt 0 view .LVU53
+ 223 008a 0222     		movs	r2, #2
+ 224 008c 01A9     		add	r1, sp, #4
+ 225 008e 0620     		movs	r0, #6
+ 226 0090 FFF7FEFF 		bl	gauge_read
+ 227              	.LVL18:
+ 228              		.loc 1 83 8 discriminator 1 view .LVU54
+ 229 0094 0028     		cmp	r0, #0
+ 230 0096 40F0C780 		bne	.L30
+ 231              	.LBB3:
+  84:Core/Src/app/telemetry.c ****         uint16_t f = (uint16_t)buf[0] | ((uint16_t)buf[1] << 8);
+ 232              		.loc 1 84 9 is_stmt 1 view .LVU55
+ 233              		.loc 1 84 35 is_stmt 0 view .LVU56
+ 234 009a 9DF80430 		ldrb	r3, [sp, #4]	@ zero_extendqisi2
+ 235              		.loc 1 84 55 view .LVU57
+ 236 009e 9DF80520 		ldrb	r2, [sp, #5]	@ zero_extendqisi2
+ 237              		.loc 1 84 39 view .LVU58
+ 238 00a2 43EA0223 		orr	r3, r3, r2, lsl #8
+ 239              	.LVL19:
+  85:Core/Src/app/telemetry.c ****         telemetry.is_full     = (f & BQ34Z100_FLAG_FC)  ? 1u : 0u;
+ 240              		.loc 1 85 9 is_stmt 1 view .LVU59
+ 241              		.loc 1 85 62 is_stmt 0 view .LVU60
+ 242 00a6 C3F34020 		ubfx	r0, r3, #9, #1
+ 243              		.loc 1 85 31 view .LVU61
+ 244 00aa 6049     		ldr	r1, .L32
+ 245 00ac 0872     		strb	r0, [r1, #8]
+  86:Core/Src/app/telemetry.c ****         telemetry.is_charging = (f & BQ34Z100_FLAG_CHG) ? 1u : 0u;
+ 246              		.loc 1 86 9 is_stmt 1 view .LVU62
+ 247              		.loc 1 86 62 is_stmt 0 view .LVU63
+ 248 00ae C3F30022 		ubfx	r2, r3, #8, #1
+ 249              		.loc 1 86 31 view .LVU64
+ 250 00b2 4A72     		strb	r2, [r1, #9]
+  87:Core/Src/app/telemetry.c ****         telemetry.over_temp   = (f & BQ34Z100_FLAG_OT)  ? 1u : 0u;
+ 251              		.loc 1 87 9 is_stmt 1 view .LVU65
+ 252              		.loc 1 87 62 is_stmt 0 view .LVU66
+ 253 00b4 DB0B     		lsrs	r3, r3, #15
+ 254              	.LVL20:
+ARM GAS  /tmp/ccNu9o0t.s 			page 7
+
+
+ 255              		.loc 1 87 31 view .LVU67
+ 256 00b6 8B72     		strb	r3, [r1, #10]
+ 257              	.LVL21:
+ 258              	.L13:
+ 259              		.loc 1 87 31 view .LVU68
+ 260              	.LBE3:
+  88:Core/Src/app/telemetry.c ****     } else ok = 0u;
+  89:Core/Src/app/telemetry.c **** 
+  90:Core/Src/app/telemetry.c ****     /* CHG flag can lag; trust current sign too */
+  91:Core/Src/app/telemetry.c ****     if (telemetry.current_mA > 0)
+ 261              		.loc 1 91 5 is_stmt 1 view .LVU69
+ 262              		.loc 1 91 18 is_stmt 0 view .LVU70
+ 263 00b8 5C4B     		ldr	r3, .L32
+ 264 00ba B3F90410 		ldrsh	r1, [r3, #4]
+ 265              		.loc 1 91 8 view .LVU71
+ 266 00be 0029     		cmp	r1, #0
+ 267 00c0 01DD     		ble	.L14
+  92:Core/Src/app/telemetry.c ****         telemetry.is_charging = 1u;
+ 268              		.loc 1 92 9 is_stmt 1 view .LVU72
+ 269              		.loc 1 92 31 is_stmt 0 view .LVU73
+ 270 00c2 0122     		movs	r2, #1
+ 271 00c4 5A72     		strb	r2, [r3, #9]
+ 272              	.L14:
+  93:Core/Src/app/telemetry.c **** 
+  94:Core/Src/app/telemetry.c ****     /* BQ25713 not reachable, derive from gauge */
+  95:Core/Src/app/telemetry.c ****     telemetry.vbus_present = telemetry.is_charging;
+ 273              		.loc 1 95 5 is_stmt 1 view .LVU74
+ 274              		.loc 1 95 39 is_stmt 0 view .LVU75
+ 275 00c6 594A     		ldr	r2, .L32
+ 276 00c8 537A     		ldrb	r3, [r2, #9]	@ zero_extendqisi2
+ 277              		.loc 1 95 28 view .LVU76
+ 278 00ca D372     		strb	r3, [r2, #11]
+  96:Core/Src/app/telemetry.c ****     telemetry.charge_phase = telemetry.is_charging ? 2u : 0u;   /* 2 = fast */
+ 279              		.loc 1 96 5 is_stmt 1 view .LVU77
+ 280              		.loc 1 96 28 is_stmt 0 view .LVU78
+ 281 00cc 03B1     		cbz	r3, .L15
+ 282              		.loc 1 96 28 discriminator 1 view .LVU79
+ 283 00ce 0223     		movs	r3, #2
+ 284              	.L15:
+ 285              		.loc 1 96 28 discriminator 3 view .LVU80
+ 286 00d0 564A     		ldr	r2, .L32
+ 287 00d2 1373     		strb	r3, [r2, #12]
+  97:Core/Src/app/telemetry.c **** 
+  98:Core/Src/app/telemetry.c ****     /* Power [mW] */
+  99:Core/Src/app/telemetry.c ****     telemetry.power_mW = (int32_t)telemetry.voltage_mV * telemetry.current_mA / 1000;
+ 288              		.loc 1 99 5 is_stmt 1 view .LVU81
+ 289              		.loc 1 99 44 is_stmt 0 view .LVU82
+ 290 00d4 5388     		ldrh	r3, [r2, #2]
+ 291              		.loc 1 99 56 view .LVU83
+ 292 00d6 01FB03F3 		mul	r3, r1, r3
+ 293              		.loc 1 99 79 view .LVU84
+ 294 00da 5649     		ldr	r1, .L32+8
+ 295 00dc 81FB0301 		smull	r0, r1, r1, r3
+ 296 00e0 DB17     		asrs	r3, r3, #31
+ 297 00e2 C3EBA113 		rsb	r3, r3, r1, asr #6
+ 298              		.loc 1 99 24 view .LVU85
+ 299 00e6 1361     		str	r3, [r2, #16]
+ARM GAS  /tmp/ccNu9o0t.s 			page 8
+
+
+ 100:Core/Src/app/telemetry.c **** 
+ 101:Core/Src/app/telemetry.c ****     /* TTE / TTF [min] — BQ34Z100 std commands 0x18/0x1A */
+ 102:Core/Src/app/telemetry.c ****     if (gauge_read(0x18u, buf, 2u) == HAL_OK)
+ 300              		.loc 1 102 5 is_stmt 1 view .LVU86
+ 301              		.loc 1 102 9 is_stmt 0 view .LVU87
+ 302 00e8 0222     		movs	r2, #2
+ 303 00ea 01A9     		add	r1, sp, #4
+ 304 00ec 1820     		movs	r0, #24
+ 305 00ee FFF7FEFF 		bl	gauge_read
+ 306              	.LVL22:
+ 307              		.loc 1 102 8 discriminator 1 view .LVU88
+ 308 00f2 38B9     		cbnz	r0, .L16
+ 103:Core/Src/app/telemetry.c ****         tte_min = (uint16_t)buf[0] | ((uint16_t)buf[1] << 8);
+ 309              		.loc 1 103 9 is_stmt 1 view .LVU89
+ 310              		.loc 1 103 32 is_stmt 0 view .LVU90
+ 311 00f4 9DF80430 		ldrb	r3, [sp, #4]	@ zero_extendqisi2
+ 312              		.loc 1 103 52 view .LVU91
+ 313 00f8 9DF80520 		ldrb	r2, [sp, #5]	@ zero_extendqisi2
+ 314              		.loc 1 103 36 view .LVU92
+ 315 00fc 43EA0223 		orr	r3, r3, r2, lsl #8
+ 316              		.loc 1 103 17 view .LVU93
+ 317 0100 4D4A     		ldr	r2, .L32+12
+ 318 0102 1380     		strh	r3, [r2]	@ movhi
+ 319              	.L16:
+ 104:Core/Src/app/telemetry.c ****     if (gauge_read(0x1Au, buf, 2u) == HAL_OK)
+ 320              		.loc 1 104 5 is_stmt 1 view .LVU94
+ 321              		.loc 1 104 9 is_stmt 0 view .LVU95
+ 322 0104 0222     		movs	r2, #2
+ 323 0106 01A9     		add	r1, sp, #4
+ 324 0108 1A20     		movs	r0, #26
+ 325 010a FFF7FEFF 		bl	gauge_read
+ 326              	.LVL23:
+ 327              		.loc 1 104 8 discriminator 1 view .LVU96
+ 328 010e 38B9     		cbnz	r0, .L17
+ 105:Core/Src/app/telemetry.c ****         ttf_min = (uint16_t)buf[0] | ((uint16_t)buf[1] << 8);
+ 329              		.loc 1 105 9 is_stmt 1 view .LVU97
+ 330              		.loc 1 105 32 is_stmt 0 view .LVU98
+ 331 0110 9DF80430 		ldrb	r3, [sp, #4]	@ zero_extendqisi2
+ 332              		.loc 1 105 52 view .LVU99
+ 333 0114 9DF80520 		ldrb	r2, [sp, #5]	@ zero_extendqisi2
+ 334              		.loc 1 105 36 view .LVU100
+ 335 0118 43EA0223 		orr	r3, r3, r2, lsl #8
+ 336              		.loc 1 105 17 view .LVU101
+ 337 011c 474A     		ldr	r2, .L32+16
+ 338 011e 1380     		strh	r3, [r2]	@ movhi
+ 339              	.L17:
+ 106:Core/Src/app/telemetry.c **** 
+ 107:Core/Src/app/telemetry.c ****     telemetry.current_history[telemetry.history_idx] = telemetry.current_mA;
+ 340              		.loc 1 107 5 is_stmt 1 view .LVU102
+ 341              		.loc 1 107 40 is_stmt 0 view .LVU103
+ 342 0120 4248     		ldr	r0, .L32
+ 343 0122 90F88C10 		ldrb	r1, [r0, #140]	@ zero_extendqisi2
+ 344              		.loc 1 107 65 view .LVU104
+ 345 0126 B0F90420 		ldrsh	r2, [r0, #4]
+ 346              		.loc 1 107 54 view .LVU105
+ 347 012a 01F10803 		add	r3, r1, #8
+ 348 012e 00EB4303 		add	r3, r0, r3, lsl #1
+ARM GAS  /tmp/ccNu9o0t.s 			page 9
+
+
+ 349 0132 9A80     		strh	r2, [r3, #4]	@ movhi
+ 108:Core/Src/app/telemetry.c ****     telemetry.history_idx = (telemetry.history_idx + 1u) % TELEMETRY_HISTORY_SIZE;
+ 350              		.loc 1 108 5 is_stmt 1 view .LVU106
+ 351              		.loc 1 108 52 is_stmt 0 view .LVU107
+ 352 0134 0131     		adds	r1, r1, #1
+ 353              		.loc 1 108 58 view .LVU108
+ 354 0136 424B     		ldr	r3, .L32+20
+ 355 0138 A3FB01C3 		umull	ip, r3, r3, r1
+ 356 013c 5B09     		lsrs	r3, r3, #5
+ 357 013e C3EB0313 		rsb	r3, r3, r3, lsl #4
+ 358 0142 A1EB8303 		sub	r3, r1, r3, lsl #2
+ 359              		.loc 1 108 27 view .LVU109
+ 360 0146 DBB2     		uxtb	r3, r3
+ 361 0148 80F88C30 		strb	r3, [r0, #140]
+ 109:Core/Src/app/telemetry.c ****     if (telemetry.history_idx == 0u)
+ 362              		.loc 1 109 5 is_stmt 1 view .LVU110
+ 363              		.loc 1 109 8 is_stmt 0 view .LVU111
+ 364 014c 13B9     		cbnz	r3, .L18
+ 110:Core/Src/app/telemetry.c ****         telemetry.history_full = 1u;
+ 365              		.loc 1 110 9 is_stmt 1 view .LVU112
+ 366              		.loc 1 110 32 is_stmt 0 view .LVU113
+ 367 014e 0121     		movs	r1, #1
+ 368 0150 80F88D10 		strb	r1, [r0, #141]
+ 369              	.L18:
+ 111:Core/Src/app/telemetry.c **** 
+ 112:Core/Src/app/telemetry.c ****     if (telemetry.is_charging && !_was_charging)
+ 370              		.loc 1 112 5 is_stmt 1 view .LVU114
+ 371              		.loc 1 112 18 is_stmt 0 view .LVU115
+ 372 0154 354B     		ldr	r3, .L32
+ 373 0156 5B7A     		ldrb	r3, [r3, #9]	@ zero_extendqisi2
+ 374              		.loc 1 112 8 view .LVU116
+ 375 0158 33B1     		cbz	r3, .L19
+ 376              		.loc 1 112 34 discriminator 1 view .LVU117
+ 377 015a 3A49     		ldr	r1, .L32+24
+ 378 015c 0978     		ldrb	r1, [r1]	@ zero_extendqisi2
+ 379              		.loc 1 112 31 discriminator 1 view .LVU118
+ 380 015e 19B9     		cbnz	r1, .L19
+ 113:Core/Src/app/telemetry.c ****         sys_stats.charge_sessions++;
+ 381              		.loc 1 113 9 is_stmt 1 view .LVU119
+ 382              		.loc 1 113 18 is_stmt 0 view .LVU120
+ 383 0160 3948     		ldr	r0, .L32+28
+ 384 0162 0189     		ldrh	r1, [r0, #8]
+ 385              		.loc 1 113 34 view .LVU121
+ 386 0164 0131     		adds	r1, r1, #1
+ 387 0166 0181     		strh	r1, [r0, #8]	@ movhi
+ 388              	.L19:
+ 114:Core/Src/app/telemetry.c ****     _was_charging = telemetry.is_charging;
+ 389              		.loc 1 114 5 is_stmt 1 view .LVU122
+ 390              		.loc 1 114 19 is_stmt 0 view .LVU123
+ 391 0168 3649     		ldr	r1, .L32+24
+ 392 016a 0B70     		strb	r3, [r1]
+ 115:Core/Src/app/telemetry.c **** 
+ 116:Core/Src/app/telemetry.c ****     if (telemetry.temp_celsius > sys_stats.max_temp_c)
+ 393              		.loc 1 116 5 is_stmt 1 view .LVU124
+ 394              		.loc 1 116 18 is_stmt 0 view .LVU125
+ 395 016c 2F4B     		ldr	r3, .L32
+ 396 016e B3F90630 		ldrsh	r3, [r3, #6]
+ARM GAS  /tmp/ccNu9o0t.s 			page 10
+
+
+ 397              		.loc 1 116 43 view .LVU126
+ 398 0172 3549     		ldr	r1, .L32+28
+ 399 0174 B1F90A10 		ldrsh	r1, [r1, #10]
+ 400              		.loc 1 116 8 view .LVU127
+ 401 0178 8B42     		cmp	r3, r1
+ 402 017a 01DD     		ble	.L20
+ 117:Core/Src/app/telemetry.c ****         sys_stats.max_temp_c = telemetry.temp_celsius;
+ 403              		.loc 1 117 9 is_stmt 1 view .LVU128
+ 404              		.loc 1 117 30 is_stmt 0 view .LVU129
+ 405 017c 3249     		ldr	r1, .L32+28
+ 406 017e 4B81     		strh	r3, [r1, #10]	@ movhi
+ 407              	.L20:
+ 118:Core/Src/app/telemetry.c ****     if (telemetry.current_mA > sys_stats.max_current_in_mA)
+ 408              		.loc 1 118 5 is_stmt 1 view .LVU130
+ 409              		.loc 1 118 41 is_stmt 0 view .LVU131
+ 410 0180 314B     		ldr	r3, .L32+28
+ 411 0182 B3F90E30 		ldrsh	r3, [r3, #14]
+ 412              		.loc 1 118 8 view .LVU132
+ 413 0186 9A42     		cmp	r2, r3
+ 414 0188 01DD     		ble	.L21
+ 119:Core/Src/app/telemetry.c ****         sys_stats.max_current_in_mA = telemetry.current_mA;
+ 415              		.loc 1 119 9 is_stmt 1 view .LVU133
+ 416              		.loc 1 119 37 is_stmt 0 view .LVU134
+ 417 018a 2F4B     		ldr	r3, .L32+28
+ 418 018c DA81     		strh	r2, [r3, #14]	@ movhi
+ 419              	.L21:
+ 120:Core/Src/app/telemetry.c ****     if (telemetry.current_mA < -sys_stats.max_current_out_mA)
+ 420              		.loc 1 120 5 is_stmt 1 view .LVU135
+ 421              		.loc 1 120 42 is_stmt 0 view .LVU136
+ 422 018e 2E4B     		ldr	r3, .L32+28
+ 423 0190 B3F90C30 		ldrsh	r3, [r3, #12]
+ 424              		.loc 1 120 32 view .LVU137
+ 425 0194 5B42     		rsbs	r3, r3, #0
+ 426              		.loc 1 120 8 view .LVU138
+ 427 0196 9A42     		cmp	r2, r3
+ 428 0198 03DA     		bge	.L22
+ 121:Core/Src/app/telemetry.c ****         sys_stats.max_current_out_mA = (int16_t)(-telemetry.current_mA);
+ 429              		.loc 1 121 9 is_stmt 1 view .LVU139
+ 430              		.loc 1 121 60 is_stmt 0 view .LVU140
+ 431 019a 92B2     		uxth	r2, r2
+ 432              		.loc 1 121 40 view .LVU141
+ 433 019c 5242     		rsbs	r2, r2, #0
+ 434              		.loc 1 121 38 view .LVU142
+ 435 019e 2A4B     		ldr	r3, .L32+28
+ 436 01a0 9A81     		strh	r2, [r3, #12]	@ movhi
+ 437              	.L22:
+ 122:Core/Src/app/telemetry.c **** 
+ 123:Core/Src/app/telemetry.c ****     sys_stats.uptime_s = HAL_GetTick() / 1000u;
+ 438              		.loc 1 123 5 is_stmt 1 view .LVU143
+ 439              		.loc 1 123 26 is_stmt 0 view .LVU144
+ 440 01a2 FFF7FEFF 		bl	HAL_GetTick
+ 441              	.LVL24:
+ 442              		.loc 1 123 40 discriminator 1 view .LVU145
+ 443 01a6 234B     		ldr	r3, .L32+8
+ 444 01a8 A3FB0030 		umull	r3, r0, r3, r0
+ 445 01ac 8009     		lsrs	r0, r0, #6
+ 446              		.loc 1 123 24 discriminator 1 view .LVU146
+ARM GAS  /tmp/ccNu9o0t.s 			page 11
+
+
+ 447 01ae 264B     		ldr	r3, .L32+28
+ 448 01b0 5861     		str	r0, [r3, #20]
+ 124:Core/Src/app/telemetry.c **** 
+ 125:Core/Src/app/telemetry.c ****     /* gauge flash: non-critical, ignore single read failures */
+ 126:Core/Src/app/telemetry.c ****     if (gauge_read(0x2Au, buf, 2u) == HAL_OK)
+ 449              		.loc 1 126 5 is_stmt 1 view .LVU147
+ 450              		.loc 1 126 9 is_stmt 0 view .LVU148
+ 451 01b2 0222     		movs	r2, #2
+ 452 01b4 01A9     		add	r1, sp, #4
+ 453 01b6 2A20     		movs	r0, #42
+ 454 01b8 FFF7FEFF 		bl	gauge_read
+ 455              	.LVL25:
+ 456              		.loc 1 126 8 discriminator 1 view .LVU149
+ 457 01bc 38B9     		cbnz	r0, .L23
+ 127:Core/Src/app/telemetry.c ****         sys_stats.cycle_count = (uint16_t)buf[0] | ((uint16_t)buf[1] << 8);
+ 458              		.loc 1 127 9 is_stmt 1 view .LVU150
+ 459              		.loc 1 127 46 is_stmt 0 view .LVU151
+ 460 01be 9DF80430 		ldrb	r3, [sp, #4]	@ zero_extendqisi2
+ 461              		.loc 1 127 66 view .LVU152
+ 462 01c2 9DF80520 		ldrb	r2, [sp, #5]	@ zero_extendqisi2
+ 463              		.loc 1 127 50 view .LVU153
+ 464 01c6 43EA0223 		orr	r3, r3, r2, lsl #8
+ 465              		.loc 1 127 31 view .LVU154
+ 466 01ca 1F4A     		ldr	r2, .L32+28
+ 467 01cc 1380     		strh	r3, [r2]	@ movhi
+ 468              	.L23:
+ 128:Core/Src/app/telemetry.c ****     if (gauge_read(0x2Eu, buf, 2u) == HAL_OK)
+ 469              		.loc 1 128 5 is_stmt 1 view .LVU155
+ 470              		.loc 1 128 9 is_stmt 0 view .LVU156
+ 471 01ce 0222     		movs	r2, #2
+ 472 01d0 01A9     		add	r1, sp, #4
+ 473 01d2 2E20     		movs	r0, #46
+ 474 01d4 FFF7FEFF 		bl	gauge_read
+ 475              	.LVL26:
+ 476              		.loc 1 128 8 discriminator 1 view .LVU157
+ 477 01d8 18B9     		cbnz	r0, .L24
+ 129:Core/Src/app/telemetry.c ****         sys_stats.state_of_health = buf[0];
+ 478              		.loc 1 129 9 is_stmt 1 view .LVU158
+ 479              		.loc 1 129 40 is_stmt 0 view .LVU159
+ 480 01da 9DF80420 		ldrb	r2, [sp, #4]	@ zero_extendqisi2
+ 481              		.loc 1 129 35 view .LVU160
+ 482 01de 1A4B     		ldr	r3, .L32+28
+ 483 01e0 9A70     		strb	r2, [r3, #2]
+ 484              	.L24:
+ 130:Core/Src/app/telemetry.c ****     if (gauge_read(0x10u, buf, 2u) == HAL_OK)
+ 485              		.loc 1 130 5 is_stmt 1 view .LVU161
+ 486              		.loc 1 130 9 is_stmt 0 view .LVU162
+ 487 01e2 0222     		movs	r2, #2
+ 488 01e4 01A9     		add	r1, sp, #4
+ 489 01e6 1020     		movs	r0, #16
+ 490 01e8 FFF7FEFF 		bl	gauge_read
+ 491              	.LVL27:
+ 492              		.loc 1 130 8 discriminator 1 view .LVU163
+ 493 01ec 38B9     		cbnz	r0, .L25
+ 131:Core/Src/app/telemetry.c ****         sys_stats.full_cap_mAh = (uint16_t)buf[0] | ((uint16_t)buf[1] << 8);
+ 494              		.loc 1 131 9 is_stmt 1 view .LVU164
+ 495              		.loc 1 131 47 is_stmt 0 view .LVU165
+ARM GAS  /tmp/ccNu9o0t.s 			page 12
+
+
+ 496 01ee 9DF80430 		ldrb	r3, [sp, #4]	@ zero_extendqisi2
+ 497              		.loc 1 131 67 view .LVU166
+ 498 01f2 9DF80520 		ldrb	r2, [sp, #5]	@ zero_extendqisi2
+ 499              		.loc 1 131 51 view .LVU167
+ 500 01f6 43EA0223 		orr	r3, r3, r2, lsl #8
+ 501              		.loc 1 131 32 view .LVU168
+ 502 01fa 134A     		ldr	r2, .L32+28
+ 503 01fc 9380     		strh	r3, [r2, #4]	@ movhi
+ 504              	.L25:
+ 132:Core/Src/app/telemetry.c **** 
+ 133:Core/Src/app/telemetry.c ****     sys_stats.design_cap_mAh = 7800u;   /* 3P Murata VTC5, see provisioning.c */
+ 505              		.loc 1 133 5 is_stmt 1 view .LVU169
+ 506              		.loc 1 133 30 is_stmt 0 view .LVU170
+ 507 01fe 124B     		ldr	r3, .L32+28
+ 508 0200 41F67862 		movw	r2, #7800
+ 509 0204 DA80     		strh	r2, [r3, #6]	@ movhi
+ 134:Core/Src/app/telemetry.c **** 
+ 135:Core/Src/app/telemetry.c ****     telemetry.last_poll_tick = HAL_GetTick();
+ 510              		.loc 1 135 5 is_stmt 1 view .LVU171
+ 511              		.loc 1 135 32 is_stmt 0 view .LVU172
+ 512 0206 FFF7FEFF 		bl	HAL_GetTick
+ 513              	.LVL28:
+ 514              		.loc 1 135 30 discriminator 1 view .LVU173
+ 515 020a 084B     		ldr	r3, .L32
+ 516 020c C3F89000 		str	r0, [r3, #144]
+ 136:Core/Src/app/telemetry.c ****     telemetry.sensor_ok = ok;
+ 517              		.loc 1 136 5 is_stmt 1 view .LVU174
+ 518              		.loc 1 136 25 is_stmt 0 view .LVU175
+ 519 0210 83F89440 		strb	r4, [r3, #148]
+ 137:Core/Src/app/telemetry.c **** }
+ 520              		.loc 1 137 1 view .LVU176
+ 521 0214 02B0     		add	sp, sp, #8
+ 522              	.LCFI6:
+ 523              		.cfi_remember_state
+ 524              		.cfi_def_cfa_offset 8
+ 525              		@ sp needed
+ 526 0216 10BD     		pop	{r4, pc}
+ 527              	.LVL29:
+ 528              	.L26:
+ 529              	.LCFI7:
+ 530              		.cfi_restore_state
+  64:Core/Src/app/telemetry.c **** 
+ 531              		.loc 1 64 13 view .LVU177
+ 532 0218 0024     		movs	r4, #0
+ 533 021a 00E7     		b	.L9
+ 534              	.LVL30:
+ 535              	.L27:
+  69:Core/Src/app/telemetry.c **** 
+ 536              		.loc 1 69 13 view .LVU178
+ 537 021c 0024     		movs	r4, #0
+ 538              	.LVL31:
+  69:Core/Src/app/telemetry.c **** 
+ 539              		.loc 1 69 13 view .LVU179
+ 540 021e 0EE7     		b	.L10
+ 541              	.LVL32:
+ 542              	.L28:
+  74:Core/Src/app/telemetry.c **** 
+ARM GAS  /tmp/ccNu9o0t.s 			page 13
+
+
+ 543              		.loc 1 74 13 view .LVU180
+ 544 0220 0024     		movs	r4, #0
+ 545              	.LVL33:
+  74:Core/Src/app/telemetry.c **** 
+ 546              		.loc 1 74 13 view .LVU181
+ 547 0222 1CE7     		b	.L11
+ 548              	.LVL34:
+ 549              	.L29:
+  80:Core/Src/app/telemetry.c **** 
+ 550              		.loc 1 80 15 view .LVU182
+ 551 0224 0024     		movs	r4, #0
+ 552              	.LVL35:
+  80:Core/Src/app/telemetry.c **** 
+ 553              		.loc 1 80 15 view .LVU183
+ 554 0226 30E7     		b	.L12
+ 555              	.LVL36:
+ 556              	.L30:
+  88:Core/Src/app/telemetry.c **** 
+ 557              		.loc 1 88 15 view .LVU184
+ 558 0228 0024     		movs	r4, #0
+ 559              	.LVL37:
+  88:Core/Src/app/telemetry.c **** 
+ 560              		.loc 1 88 15 view .LVU185
+ 561 022a 45E7     		b	.L13
+ 562              	.L33:
+ 563              		.align	2
+ 564              	.L32:
+ 565 022c 00000000 		.word	telemetry
+ 566 0230 CDCCCCCC 		.word	-858993459
+ 567 0234 D34D6210 		.word	274877907
+ 568 0238 00000000 		.word	tte_min
+ 569 023c 00000000 		.word	ttf_min
+ 570 0240 89888888 		.word	-2004318071
+ 571 0244 00000000 		.word	_was_charging
+ 572 0248 00000000 		.word	sys_stats
+ 573              		.cfi_endproc
+ 574              	.LFE221:
+ 576              		.section	.text.Telemetry_Init,"ax",%progbits
+ 577              		.align	1
+ 578              		.global	Telemetry_Init
+ 579              		.syntax unified
+ 580              		.thumb
+ 581              		.thumb_func
+ 583              	Telemetry_Init:
+ 584              	.LVL38:
+ 585              	.LFB222:
+ 138:Core/Src/app/telemetry.c **** 
+ 139:Core/Src/app/telemetry.c **** /* -----------------------------------------------------------------------
+ 140:Core/Src/app/telemetry.c ****  * Public API
+ 141:Core/Src/app/telemetry.c ****  * ----------------------------------------------------------------------- */
+ 142:Core/Src/app/telemetry.c **** 
+ 143:Core/Src/app/telemetry.c **** void Telemetry_Init(I2C_HandleTypeDef *hi2c1_ptr, I2C_HandleTypeDef *hi2c3_ptr)
+ 144:Core/Src/app/telemetry.c **** {
+ 586              		.loc 1 144 1 is_stmt 1 view -0
+ 587              		.cfi_startproc
+ 588              		@ args = 0, pretend = 0, frame = 0
+ 589              		@ frame_needed = 0, uses_anonymous_args = 0
+ARM GAS  /tmp/ccNu9o0t.s 			page 14
+
+
+ 590              		.loc 1 144 1 is_stmt 0 view .LVU187
+ 591 0000 10B5     		push	{r4, lr}
+ 592              	.LCFI8:
+ 593              		.cfi_def_cfa_offset 8
+ 594              		.cfi_offset 4, -8
+ 595              		.cfi_offset 14, -4
+ 145:Core/Src/app/telemetry.c ****     (void)hi2c3_ptr;   /* BQ25713 not on any MCU-accessible bus */
+ 596              		.loc 1 145 5 is_stmt 1 view .LVU188
+ 146:Core/Src/app/telemetry.c ****     _hi2c_gauge   = hi2c1_ptr;
+ 597              		.loc 1 146 5 view .LVU189
+ 598              		.loc 1 146 19 is_stmt 0 view .LVU190
+ 599 0002 0F4B     		ldr	r3, .L36
+ 600 0004 1860     		str	r0, [r3]
+ 147:Core/Src/app/telemetry.c ****     _was_charging = 0u;
+ 601              		.loc 1 147 5 is_stmt 1 view .LVU191
+ 602              		.loc 1 147 19 is_stmt 0 view .LVU192
+ 603 0006 0024     		movs	r4, #0
+ 604 0008 0E4B     		ldr	r3, .L36+4
+ 605 000a 1C70     		strb	r4, [r3]
+ 148:Core/Src/app/telemetry.c ****     memset(&telemetry, 0, sizeof(telemetry));
+ 606              		.loc 1 148 5 is_stmt 1 view .LVU193
+ 607 000c 9822     		movs	r2, #152
+ 608 000e 2146     		mov	r1, r4
+ 609              	.LVL39:
+ 610              		.loc 1 148 5 is_stmt 0 view .LVU194
+ 611 0010 0D48     		ldr	r0, .L36+8
+ 612              	.LVL40:
+ 613              		.loc 1 148 5 view .LVU195
+ 614 0012 FFF7FEFF 		bl	memset
+ 615              	.LVL41:
+ 149:Core/Src/app/telemetry.c ****     memset(port_stats, 0, sizeof(port_stats));
+ 616              		.loc 1 149 5 is_stmt 1 view .LVU196
+ 617 0016 40F27622 		movw	r2, #630
+ 618 001a 2146     		mov	r1, r4
+ 619 001c 0B48     		ldr	r0, .L36+12
+ 620 001e FFF7FEFF 		bl	memset
+ 621              	.LVL42:
+ 150:Core/Src/app/telemetry.c ****     memset(cell_mv,    0, sizeof(cell_mv));
+ 622              		.loc 1 150 5 view .LVU197
+ 623 0022 0B4B     		ldr	r3, .L36+16
+ 624 0024 1C60     		str	r4, [r3]
+ 625 0026 5C60     		str	r4, [r3, #4]
+ 151:Core/Src/app/telemetry.c ****     memset(&sys_stats, 0, sizeof(sys_stats));
+ 626              		.loc 1 151 5 view .LVU198
+ 627 0028 0A4B     		ldr	r3, .L36+20
+ 628 002a 1C60     		str	r4, [r3]
+ 629 002c 5C60     		str	r4, [r3, #4]
+ 630 002e 9C60     		str	r4, [r3, #8]
+ 631 0030 DC60     		str	r4, [r3, #12]
+ 632 0032 1C61     		str	r4, [r3, #16]
+ 633 0034 5C61     		str	r4, [r3, #20]
+ 152:Core/Src/app/telemetry.c ****     tte_min = 0u;
+ 634              		.loc 1 152 5 view .LVU199
+ 635              		.loc 1 152 13 is_stmt 0 view .LVU200
+ 636 0036 084B     		ldr	r3, .L36+24
+ 637 0038 1C80     		strh	r4, [r3]	@ movhi
+ 153:Core/Src/app/telemetry.c ****     ttf_min = 0u;
+ARM GAS  /tmp/ccNu9o0t.s 			page 15
+
+
+ 638              		.loc 1 153 5 is_stmt 1 view .LVU201
+ 639              		.loc 1 153 13 is_stmt 0 view .LVU202
+ 640 003a 084B     		ldr	r3, .L36+28
+ 641 003c 1C80     		strh	r4, [r3]	@ movhi
+ 154:Core/Src/app/telemetry.c **** }
+ 642              		.loc 1 154 1 view .LVU203
+ 643 003e 10BD     		pop	{r4, pc}
+ 644              	.L37:
+ 645              		.align	2
+ 646              	.L36:
+ 647 0040 00000000 		.word	_hi2c_gauge
+ 648 0044 00000000 		.word	_was_charging
+ 649 0048 00000000 		.word	telemetry
+ 650 004c 00000000 		.word	port_stats
+ 651 0050 00000000 		.word	cell_mv
+ 652 0054 00000000 		.word	sys_stats
+ 653 0058 00000000 		.word	tte_min
+ 654 005c 00000000 		.word	ttf_min
+ 655              		.cfi_endproc
+ 656              	.LFE222:
+ 658              		.section	.text.Telemetry_Poll,"ax",%progbits
+ 659              		.align	1
+ 660              		.global	Telemetry_Poll
+ 661              		.syntax unified
+ 662              		.thumb
+ 663              		.thumb_func
+ 665              	Telemetry_Poll:
+ 666              	.LFB223:
+ 155:Core/Src/app/telemetry.c **** 
+ 156:Core/Src/app/telemetry.c **** uint8_t Telemetry_Poll(void)
+ 157:Core/Src/app/telemetry.c **** {
+ 667              		.loc 1 157 1 is_stmt 1 view -0
+ 668              		.cfi_startproc
+ 669              		@ args = 0, pretend = 0, frame = 0
+ 670              		@ frame_needed = 0, uses_anonymous_args = 0
+ 671 0000 08B5     		push	{r3, lr}
+ 672              	.LCFI9:
+ 673              		.cfi_def_cfa_offset 8
+ 674              		.cfi_offset 3, -8
+ 675              		.cfi_offset 14, -4
+ 158:Core/Src/app/telemetry.c ****     if ((HAL_GetTick() - telemetry.last_poll_tick) < TELEMETRY_POLL_INTERVAL_MS)
+ 676              		.loc 1 158 5 view .LVU205
+ 677              		.loc 1 158 10 is_stmt 0 view .LVU206
+ 678 0002 FFF7FEFF 		bl	HAL_GetTick
+ 679              	.LVL43:
+ 680              		.loc 1 158 35 discriminator 1 view .LVU207
+ 681 0006 064B     		ldr	r3, .L43
+ 682 0008 D3F89030 		ldr	r3, [r3, #144]
+ 683              		.loc 1 158 24 discriminator 1 view .LVU208
+ 684 000c C01A     		subs	r0, r0, r3
+ 685              		.loc 1 158 8 discriminator 1 view .LVU209
+ 686 000e B0F5FA7F 		cmp	r0, #500
+ 687 0012 01D2     		bcs	.L42
+ 159:Core/Src/app/telemetry.c ****         return 0u;
+ 688              		.loc 1 159 16 view .LVU210
+ 689 0014 0020     		movs	r0, #0
+ 690              	.L39:
+ARM GAS  /tmp/ccNu9o0t.s 			page 16
+
+
+ 160:Core/Src/app/telemetry.c ****     do_poll();
+ 161:Core/Src/app/telemetry.c ****     return 1u;
+ 162:Core/Src/app/telemetry.c **** }
+ 691              		.loc 1 162 1 view .LVU211
+ 692 0016 08BD     		pop	{r3, pc}
+ 693              	.L42:
+ 160:Core/Src/app/telemetry.c ****     do_poll();
+ 694              		.loc 1 160 5 is_stmt 1 view .LVU212
+ 695 0018 FFF7FEFF 		bl	do_poll
+ 696              	.LVL44:
+ 161:Core/Src/app/telemetry.c **** }
+ 697              		.loc 1 161 5 view .LVU213
+ 161:Core/Src/app/telemetry.c **** }
+ 698              		.loc 1 161 12 is_stmt 0 view .LVU214
+ 699 001c 0120     		movs	r0, #1
+ 700 001e FAE7     		b	.L39
+ 701              	.L44:
+ 702              		.align	2
+ 703              	.L43:
+ 704 0020 00000000 		.word	telemetry
+ 705              		.cfi_endproc
+ 706              	.LFE223:
+ 708              		.section	.text.Telemetry_ForcePoll,"ax",%progbits
+ 709              		.align	1
+ 710              		.global	Telemetry_ForcePoll
+ 711              		.syntax unified
+ 712              		.thumb
+ 713              		.thumb_func
+ 715              	Telemetry_ForcePoll:
+ 716              	.LFB224:
+ 163:Core/Src/app/telemetry.c **** 
+ 164:Core/Src/app/telemetry.c **** void Telemetry_ForcePoll(void)
+ 165:Core/Src/app/telemetry.c **** {
+ 717              		.loc 1 165 1 is_stmt 1 view -0
+ 718              		.cfi_startproc
+ 719              		@ args = 0, pretend = 0, frame = 0
+ 720              		@ frame_needed = 0, uses_anonymous_args = 0
+ 721 0000 08B5     		push	{r3, lr}
+ 722              	.LCFI10:
+ 723              		.cfi_def_cfa_offset 8
+ 724              		.cfi_offset 3, -8
+ 725              		.cfi_offset 14, -4
+ 166:Core/Src/app/telemetry.c ****     do_poll();
+ 726              		.loc 1 166 5 view .LVU216
+ 727 0002 FFF7FEFF 		bl	do_poll
+ 728              	.LVL45:
+ 167:Core/Src/app/telemetry.c **** }
+ 729              		.loc 1 167 1 is_stmt 0 view .LVU217
+ 730 0006 08BD     		pop	{r3, pc}
+ 731              		.cfi_endproc
+ 732              	.LFE224:
+ 734              		.section	.bss._was_charging,"aw",%nobits
+ 737              	_was_charging:
+ 738 0000 00       		.space	1
+ 739              		.section	.bss._hi2c_gauge,"aw",%nobits
+ 740              		.align	2
+ 743              	_hi2c_gauge:
+ARM GAS  /tmp/ccNu9o0t.s 			page 17
+
+
+ 744 0000 00000000 		.space	4
+ 745              		.global	sys_stats
+ 746              		.section	.bss.sys_stats,"aw",%nobits
+ 747              		.align	2
+ 750              	sys_stats:
+ 751 0000 00000000 		.space	24
+ 751      00000000 
+ 751      00000000 
+ 751      00000000 
+ 751      00000000 
+ 752              		.global	ttf_min
+ 753              		.section	.bss.ttf_min,"aw",%nobits
+ 754              		.align	1
+ 757              	ttf_min:
+ 758 0000 0000     		.space	2
+ 759              		.global	tte_min
+ 760              		.section	.bss.tte_min,"aw",%nobits
+ 761              		.align	1
+ 764              	tte_min:
+ 765 0000 0000     		.space	2
+ 766              		.global	cell_mv
+ 767              		.section	.bss.cell_mv,"aw",%nobits
+ 768              		.align	2
+ 771              	cell_mv:
+ 772 0000 00000000 		.space	8
+ 772      00000000 
+ 773              		.global	port_stats
+ 774              		.section	.bss.port_stats,"aw",%nobits
+ 775              		.align	2
+ 778              	port_stats:
+ 779 0000 00000000 		.space	630
+ 779      00000000 
+ 779      00000000 
+ 779      00000000 
+ 779      00000000 
+ 780              		.global	telemetry
+ 781              		.section	.bss.telemetry,"aw",%nobits
+ 782              		.align	2
+ 785              	telemetry:
+ 786 0000 00000000 		.space	152
+ 786      00000000 
+ 786      00000000 
+ 786      00000000 
+ 786      00000000 
+ 787              		.text
+ 788              	.Letext0:
+ 789              		.file 2 "/usr/arm-none-eabi/include/machine/_default_types.h"
+ 790              		.file 3 "/usr/arm-none-eabi/include/sys/_stdint.h"
+ 791              		.file 4 "Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f401xc.h"
+ 792              		.file 5 "Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_def.h"
+ 793              		.file 6 "Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_dma.h"
+ 794              		.file 7 "Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_i2c.h"
+ 795              		.file 8 "Core/Inc/app/telemetry.h"
+ 796              		.file 9 "/usr/arm-none-eabi/include/string.h"
+ 797              		.file 10 "Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h"
+ 798              		.file 11 "<built-in>"
+ARM GAS  /tmp/ccNu9o0t.s 			page 18
+
+
+DEFINED SYMBOLS
+                            *ABS*:00000000 telemetry.c
+     /tmp/ccNu9o0t.s:21     .text.gauge_read:00000000 $t
+     /tmp/ccNu9o0t.s:26     .text.gauge_read:00000000 gauge_read
+     /tmp/ccNu9o0t.s:95     .text.gauge_read:0000003c $d
+     /tmp/ccNu9o0t.s:743    .bss._hi2c_gauge:00000000 _hi2c_gauge
+     /tmp/ccNu9o0t.s:100    .text.do_poll:00000000 $t
+     /tmp/ccNu9o0t.s:105    .text.do_poll:00000000 do_poll
+     /tmp/ccNu9o0t.s:565    .text.do_poll:0000022c $d
+     /tmp/ccNu9o0t.s:785    .bss.telemetry:00000000 telemetry
+     /tmp/ccNu9o0t.s:764    .bss.tte_min:00000000 tte_min
+     /tmp/ccNu9o0t.s:757    .bss.ttf_min:00000000 ttf_min
+     /tmp/ccNu9o0t.s:737    .bss._was_charging:00000000 _was_charging
+     /tmp/ccNu9o0t.s:750    .bss.sys_stats:00000000 sys_stats
+     /tmp/ccNu9o0t.s:577    .text.Telemetry_Init:00000000 $t
+     /tmp/ccNu9o0t.s:583    .text.Telemetry_Init:00000000 Telemetry_Init
+     /tmp/ccNu9o0t.s:647    .text.Telemetry_Init:00000040 $d
+     /tmp/ccNu9o0t.s:778    .bss.port_stats:00000000 port_stats
+     /tmp/ccNu9o0t.s:771    .bss.cell_mv:00000000 cell_mv
+     /tmp/ccNu9o0t.s:659    .text.Telemetry_Poll:00000000 $t
+     /tmp/ccNu9o0t.s:665    .text.Telemetry_Poll:00000000 Telemetry_Poll
+     /tmp/ccNu9o0t.s:704    .text.Telemetry_Poll:00000020 $d
+     /tmp/ccNu9o0t.s:709    .text.Telemetry_ForcePoll:00000000 $t
+     /tmp/ccNu9o0t.s:715    .text.Telemetry_ForcePoll:00000000 Telemetry_ForcePoll
+     /tmp/ccNu9o0t.s:738    .bss._was_charging:00000000 $d
+     /tmp/ccNu9o0t.s:740    .bss._hi2c_gauge:00000000 $d
+     /tmp/ccNu9o0t.s:747    .bss.sys_stats:00000000 $d
+     /tmp/ccNu9o0t.s:754    .bss.ttf_min:00000000 $d
+     /tmp/ccNu9o0t.s:761    .bss.tte_min:00000000 $d
+     /tmp/ccNu9o0t.s:768    .bss.cell_mv:00000000 $d
+     /tmp/ccNu9o0t.s:775    .bss.port_stats:00000000 $d
+     /tmp/ccNu9o0t.s:782    .bss.telemetry:00000000 $d
+
+UNDEFINED SYMBOLS
+HAL_I2C_Master_Transmit
+HAL_I2C_Master_Receive
+HAL_GetTick
+memset
