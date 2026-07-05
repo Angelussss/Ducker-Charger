@@ -1,0 +1,94 @@
+================================================================================
+                              LICENSING NOTICE
+================================================================================
+
+Copyright (c) 2026 Angelo Perotti. All rights reserved.
+
+This project — including the contents of hardware/, firmware/, mechanical/,
+and docs/ — is licensed to the public under the
+
+    Creative Commons Attribution-NonCommercial 4.0 International License
+    (CC BY-NC 4.0)
+
+The full legal text is in the LICENSE file, and a human-readable summary is at:
+
+    https://creativecommons.org/licenses/by-nc/4.0/
+
+
+--------------------------------------------------------------------------------
+WHAT YOU MAY DO (under CC BY-NC 4.0)
+--------------------------------------------------------------------------------
+
+  - Use, study, and share this work.
+  - Modify it and build derivative works on top of it.
+  - Use it for personal, educational, research, and informational purposes.
+
+  ...provided that BOTH of the following are met:
+
+  1. ATTRIBUTION — You give appropriate credit to the original author (see
+     "How to attribute" below), provide a link to this project and to the
+     license, and indicate if you made changes. You may do so in any reasonable
+     manner, but not in any way that suggests the author endorses you or your
+     use.
+
+  2. NON-COMMERCIAL — You do not use this work, in whole or in part, primarily
+     for or directed toward commercial advantage or monetary compensation.
+     This includes (non-exhaustively): selling the work or derivatives, selling
+     manufactured units based on it, paid services built on it, or bundling it
+     into a paid product.
+
+
+--------------------------------------------------------------------------------
+HOW TO ATTRIBUTE
+--------------------------------------------------------------------------------
+
+When using or redistributing this work or a derivative, include a credit such as:
+
+    Based on "<project name>" by Angelo Perotti
+    <link to this repository>
+    Licensed under CC BY-NC 4.0 — https://creativecommons.org/licenses/by-nc/4.0/
+    Changes were made.   (omit this last line if unmodified)
+
+
+--------------------------------------------------------------------------------
+COMMERCIAL USE — SEPARATE LICENSE AVAILABLE
+--------------------------------------------------------------------------------
+
+CC BY-NC 4.0 forbids commercial use by the public. However, the copyright
+holder retains all rights and may grant commercial licenses individually.
+
+If you want to use this work commercially — sell it, manufacture and sell
+units, or include it in a paid product or service — you must obtain a separate
+commercial license from the author.
+
+    Contact: angeloperotti7@gmail.com
+
+This dual-licensing arrangement does not affect the rights of anyone using the
+work under CC BY-NC 4.0.
+
+
+--------------------------------------------------------------------------------
+ATTRIBUTION IS MANDATORY
+--------------------------------------------------------------------------------
+
+Removing, obscuring, or falsifying the original author's attribution is a
+violation of this license — it automatically terminates all rights granted to
+you under CC BY-NC 4.0 (see LICENSE, Section 6) — and constitutes an
+infringement of copyright, which will be pursued to the fullest extent of
+applicable law.
+
+
+--------------------------------------------------------------------------------
+NO LIABILITY FOR MISUSE
+--------------------------------------------------------------------------------
+
+This work is provided "AS IS", for educational and informational purposes only.
+The author accepts no responsibility or liability for any damage, harm, injury,
+or loss arising from the use, misuse, modification, or manufacture of this work
+or any derivative of it — including any use intended to cause harm. You use this
+work entirely at your own risk.
+
+This notice supplements, and does not limit, the Disclaimer of Warranties and
+Limitation of Liability in Section 5 of the LICENSE.
+
+================================================================================

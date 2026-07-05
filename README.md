@@ -1,12 +1,12 @@
-# 🦆 Ducker-Charger
+
 
 ![Project Status](https://img.shields.io/badge/Status-Work_in_Progress-yellow)
 ![License](https://img.shields.io/github/license/Angelussss/Ducker-Charger)
 ![KiCad](https://img.shields.io/badge/Designed_with-KiCad-blue)
 
-**Ducker-Charger** is a completely custom, open-source power bank designed from scratch. This project aims to create a reliable Battery Management System (BMS) and charging solution, packed into a compact design.
+**THIS PROJECT HAS NOT YET BEEN COMPLETED, TAKE ANY INFO AT YOUR OWN RISK**
 
-![Ducker Charger Render](img/render_preview.png)
+**Ducker-Charger** is a completely custom, open-source smart power bank designed from scratch. It pairs an autonomous, hardware-based Battery Management System (BMS) with bidirectional USB-PD charging and a telemetry/HMI core, packed into a compact design.
 
 ## ⚠️ Disclaimer & Safety
 
@@ -19,19 +19,62 @@ This project involves the use of Lithium-Ion (Li-Ion) or Lithium Polymer (LiPo) 
 
 ## 🌟 Key Features
 
-* **Microcontroller:** [STM32F401RBT6]
-* **Battery Support:** [12x 18650 cells in 4s3p configuration]
-* **Input:** USB-C (PD supported)
-* **Output:** [2 PD USB-C, 2 3A USB-A]
-* **Interface:** [ Status LEDs, SPI OLED Display, Pressable encoder]
+* **Microcontroller:** STM32F401RBT6 (ARM Cortex-M4)
+* **Battery Support:** 12x 18650 cells, 4S3P (Sony Murata VTC5) — 14.4V nominal / 16.8V max / ~115Wh
+* **Charger:** TI BQ25713 buck-boost battery charger
+* **Outputs:**
+    * 2x USB-C (USB-PD, one for recharging)
+    * Lab output (exposed pins that behave like a tabletop power supply)
+    * 2x USB-A
+* **Interface:** Status LEDs, SPI display, pressable rotary encoder
 * **Protections:** Overcharge, Overdischarge, Short-circuit, Thermal protection.
+
+## 🧩 Hardware Architecture
+
+Distributed design — safety, power conversion and telemetry are handled by dedicated subsystems.
+
+| Subsystem | Part | Role |
+|-----------|------|------|
+| Safety / Protection | TI **BQ77915** + N-ch MOSFETs | Autonomous, software-independent cell OV/UV/SC/OC cutoff (4S, always-on) |
+| Charger | TI **BQ25713** | Buck-boost battery charger |
+| Main USB-C PD | TI **TPS25750** | Primary PD port controller, drives the charger |
+| Aux USB-C PD | Infineon **CYPD3175** (CCG3PA) | Secondary PD ports negotiation |
+| Fuel gauge | TI **BQ34Z100** | Impedance Track™ State-of-Charge / Time-to-Empty |
+| Telemetry | TI **INA3221** | 3-channel voltage/current monitoring |
+| Step-down | TI **TPS54302 / TPS54202** | Auxiliary rails |
+| ESD / I²C isolation | **USBLC6**, **ISO1540** | Port ESD protection, isolated I²C |
+| Host | **STM32F401RBT6** | I²C master, thermal manager, HMI / supervisor |
+
 
 ## 📂 Repository Structure
 
 ```text
 Ducker-Charger/
-├── hardware/          # KiCad Project (Schematics and PCB Layout)
-├── firmware/          # Source Code 
-├── mechanical/        # 3D Enclosure files 
-├── docs/              # Documentation
-└── img/               # Images for this README
+├── PCB/                    # KiCad projects (schematics + PCB layouts)
+│   ├── Ducker-Charger/     # Main charger board
+│   └── Sensing-Board/      # Cell sensing board
+├── firmware/               # Source code & CubeMX project
+│   ├── cubeMX/
+│   └── TPS25750/           # PD controller config
+└── docs/                   # Documentation & architecture notes
+```
+
+## 🚧 Not Yet Completed
+
+This is an active, in-progress project. 
+
+Take any info here at your own risk until the design is validated.
+
+## Contributing
+
+Issues, suggestions, and pull requests are momentarily suspended, as this is a university course project.
+
+## License
+
+Released under the [Creative Commons Attribution-NonCommercial 4.0 International
+License (CC BY-NC 4.0)](LICENSE). © 2026 Angelo Perotti.
+
+You are free to use, modify, and build upon this work for **non-commercial**
+purposes, as long as you **credit the author**. See [NOTICE](NOTICE) for
+attribution details.
+

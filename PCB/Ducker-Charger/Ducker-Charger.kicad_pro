@@ -3,6 +3,8 @@
     "3dviewports": [],
     "design_settings": {
       "defaults": {
+        "apply_defaults_to_fp_barcodes": false,
+        "apply_defaults_to_fp_dimensions": false,
         "apply_defaults_to_fp_fields": false,
         "apply_defaults_to_fp_shapes": false,
         "apply_defaults_to_fp_text": false,
@@ -37,9 +39,9 @@
         "other_text_thickness": 0.15,
         "other_text_upright": false,
         "pads": {
-          "drill": 0.75,
-          "height": 0.75,
-          "width": 0.75
+          "drill": 0.0,
+          "height": 2.8,
+          "width": 2.8
         },
         "silk_line_width": 0.1,
         "silk_text_italic": false,
@@ -48,7 +50,23 @@
         "silk_text_thickness": 0.1,
         "silk_text_upright": false,
         "zones": {
-          "min_clearance": 0.2
+          "border_display_style": 2,
+          "border_hatch_pitch": 0.5,
+          "corner_radius": 1.0,
+          "corner_smoothing": 2,
+          "fill_mode": 0,
+          "hatch_gap": 1.5,
+          "hatch_orientation": 0.0,
+          "hatch_smoothing_level": 0,
+          "hatch_smoothing_value": 0.1,
+          "hatch_thickness": 1.0,
+          "min_clearance": 0.2,
+          "min_island_area": 10.0,
+          "min_thickness": 0.25,
+          "pad_connection": 2,
+          "remove_islands": 0,
+          "thermal_relief_gap": 0.5,
+          "thermal_relief_spoke_width": 0.5
         }
       },
       "diff_pair_dimensions": [
@@ -58,7 +76,40 @@
           "width": 0.0
         }
       ],
-      "drc_exclusions": [],
+      "drc_exclusions": [
+        [
+          "annular_width|128860000|152960000|f93b83f8-cae0-449f-9695-363196763f55|00000000-0000-0000-0000-000000000000",
+          ""
+        ],
+        [
+          "annular_width|128860000|158760000|ea37f517-dc1e-48ae-86ed-6581a3d2e249|00000000-0000-0000-0000-000000000000",
+          ""
+        ],
+        [
+          "clearance|110715000|153433409|ecc0ce5f-4615-432b-b634-42d4bb2b3215|22dff796-3694-4e2f-88f8-8dacf9ff1f87",
+          ""
+        ],
+        [
+          "clearance|126850000|133260000|ef0f87c7-66c0-43df-aab7-2476fdc4878c|37eb5f20-ba5d-444d-95a5-620c934bec98",
+          ""
+        ],
+        [
+          "clearance|126850000|139060000|4f3c63b4-32cd-42c0-a92f-acfbc3ab94b3|723acc51-9c7f-4d56-a84e-9986f6ef4f6a",
+          ""
+        ],
+        [
+          "courtyards_overlap|110407222|51250000|02e18437-0e77-40df-a02c-0b4a7d97b7e4|55aed2cb-2923-4694-a1d8-182b310a209e",
+          ""
+        ],
+        [
+          "courtyards_overlap|113825000|138205000|1bcd4ad6-4200-4cbe-9ba4-4c61b5481262|a084b5e9-9fd4-43d5-928b-bbce9f84e3f1",
+          ""
+        ],
+        [
+          "courtyards_overlap|116990000|135710000|9bdca28f-37df-4c4c-a8a9-087c3980586c|ae2b6a6b-7dd6-413a-bd6a-106f21ce249d",
+          ""
+        ]
+      ],
       "meta": {
         "version": 2
       },
@@ -77,6 +128,7 @@
         "extra_footprint": "warning",
         "footprint": "error",
         "footprint_filters_mismatch": "ignore",
+        "footprint_symbol_field_mismatch": "warning",
         "footprint_symbol_mismatch": "warning",
         "footprint_type_mismatch": "ignore",
         "hole_clearance": "error",
@@ -94,6 +146,7 @@
         "mirrored_text_on_front_layer": "warning",
         "missing_courtyard": "ignore",
         "missing_footprint": "warning",
+        "missing_tuning_profile": "warning",
         "net_conflict": "warning",
         "nonmirrored_text_on_back_layer": "warning",
         "npth_inside_courtyard": "ignore",
@@ -113,9 +166,12 @@
         "too_many_vias": "error",
         "track_angle": "error",
         "track_dangling": "error",
+        "track_not_centered_on_via": "ignore",
+        "track_on_post_machined_layer": "error",
         "track_segment_length": "error",
         "track_width": "error",
         "tracks_crossing": "error",
+        "tuning_profile_track_geometries": "ignore",
         "unconnected_items": "error",
         "unresolved_variable": "error",
         "via_dangling": "warning",
@@ -196,6 +252,7 @@
         0.3,
         0.4,
         0.5,
+        0.65,
         0.7,
         1.0
       ],
@@ -242,22 +299,82 @@
       "zones_allow_external_fillets": false
     },
     "ipc2581": {
+      "bom_rev": "",
       "dist": "",
       "distpn": "",
       "internal_id": "",
       "mfg": "",
-      "mpn": ""
+      "mpn": "",
+      "sch_revision": ""
     },
     "layer_pairs": [],
     "layer_presets": [],
     "viewports": []
   },
   "boards": [],
+  "component_class_settings": {
+    "assignments": [],
+    "meta": {
+      "version": 0
+    },
+    "sheet_component_classes": {
+      "enabled": false
+    }
+  },
   "cvpcb": {
     "equivalence_files": []
   },
   "erc": {
-    "erc_exclusions": [],
+    "erc_exclusions": [
+      [
+        "pin_not_driven|1955800|431800|e1096525-d123-4942-998f-4efb62e15c4f|00000000-0000-0000-0000-000000000000|/74790d6c-a68e-4e6d-b4a9-43de1843f817/ccd240c6-b24b-451e-a22e-a82e757ea5cc|/74790d6c-a68e-4e6d-b4a9-43de1843f817/ccd240c6-b24b-451e-a22e-a82e757ea5cc|",
+        ""
+      ],
+      [
+        "pin_not_driven|1955800|609600|825bf65c-b40f-4d97-bcd1-a6c66887659b|00000000-0000-0000-0000-000000000000|/74790d6c-a68e-4e6d-b4a9-43de1843f817/ccd240c6-b24b-451e-a22e-a82e757ea5cc|/74790d6c-a68e-4e6d-b4a9-43de1843f817/ccd240c6-b24b-451e-a22e-a82e757ea5cc|",
+        ""
+      ],
+      [
+        "pin_not_driven|2197100|1816100|fbe97e8e-513a-4092-8403-f851d4d8551c|00000000-0000-0000-0000-000000000000|/74790d6c-a68e-4e6d-b4a9-43de1843f817/5d5574d1-c297-4bba-a44d-88ff163858a6|/74790d6c-a68e-4e6d-b4a9-43de1843f817/5d5574d1-c297-4bba-a44d-88ff163858a6|",
+        ""
+      ],
+      [
+        "pin_not_driven|2209800|2133600|0bf41a60-3585-4e52-92b5-68d07e3c4cc7|00000000-0000-0000-0000-000000000000|/74790d6c-a68e-4e6d-b4a9-43de1843f817/5d5574d1-c297-4bba-a44d-88ff163858a6|/74790d6c-a68e-4e6d-b4a9-43de1843f817/5d5574d1-c297-4bba-a44d-88ff163858a6|",
+        ""
+      ],
+      [
+        "pin_not_driven|2260600|520700|9330ca9b-e3e6-4ad0-89bb-01c8317f05c5|00000000-0000-0000-0000-000000000000|/74790d6c-a68e-4e6d-b4a9-43de1843f817/ccd240c6-b24b-451e-a22e-a82e757ea5cc|/74790d6c-a68e-4e6d-b4a9-43de1843f817/ccd240c6-b24b-451e-a22e-a82e757ea5cc|",
+        ""
+      ],
+      [
+        "pin_not_driven|2628900|419100|2374cf6b-dcc1-48e2-b300-910714fa524e|00000000-0000-0000-0000-000000000000|/74790d6c-a68e-4e6d-b4a9-43de1843f817/b1375a06-d47d-478c-835c-6ba88db99bcf|/74790d6c-a68e-4e6d-b4a9-43de1843f817/b1375a06-d47d-478c-835c-6ba88db99bcf|",
+        ""
+      ],
+      [
+        "pin_not_driven|2628900|571500|cb37647f-20a7-40e4-8af6-4402ada872a1|00000000-0000-0000-0000-000000000000|/74790d6c-a68e-4e6d-b4a9-43de1843f817/b1375a06-d47d-478c-835c-6ba88db99bcf|/74790d6c-a68e-4e6d-b4a9-43de1843f817/b1375a06-d47d-478c-835c-6ba88db99bcf|",
+        ""
+      ],
+      [
+        "pin_to_pin|419100|711200|beb3264e-56a0-43de-9dd1-e1b446c6f978|59a19c00-ada1-4355-a3b5-6325decf965c|/74790d6c-a68e-4e6d-b4a9-43de1843f817|/74790d6c-a68e-4e6d-b4a9-43de1843f817|/74790d6c-a68e-4e6d-b4a9-43de1843f817",
+        ""
+      ],
+      [
+        "pin_to_pin|419100|762000|59a19c00-ada1-4355-a3b5-6325decf965c|b37f339e-61ce-47a6-81b1-42219a23a99b|/74790d6c-a68e-4e6d-b4a9-43de1843f817|/74790d6c-a68e-4e6d-b4a9-43de1843f817|/74790d6c-a68e-4e6d-b4a9-43de1843f817",
+        ""
+      ],
+      [
+        "pin_to_pin|622300|711200|4bae1dbe-a76f-4f88-a8eb-44228c480383|ac9121a2-fad2-43cf-8ab5-74f3a64946a0|/74790d6c-a68e-4e6d-b4a9-43de1843f817|/74790d6c-a68e-4e6d-b4a9-43de1843f817|/74790d6c-a68e-4e6d-b4a9-43de1843f817",
+        ""
+      ],
+      [
+        "pin_to_pin|622300|762000|d1527773-87b3-4d46-9130-eec1ba407dbd|4bae1dbe-a76f-4f88-a8eb-44228c480383|/74790d6c-a68e-4e6d-b4a9-43de1843f817|/74790d6c-a68e-4e6d-b4a9-43de1843f817|/74790d6c-a68e-4e6d-b4a9-43de1843f817",
+        ""
+      ],
+      [
+        "power_pin_not_driven|1955800|520700|e3596a60-11b4-48da-9f79-af7e35c8da9e|00000000-0000-0000-0000-000000000000|/74790d6c-a68e-4e6d-b4a9-43de1843f817/ccd240c6-b24b-451e-a22e-a82e757ea5cc|/74790d6c-a68e-4e6d-b4a9-43de1843f817/ccd240c6-b24b-451e-a22e-a82e757ea5cc|",
+        ""
+      ]
+    ],
     "meta": {
       "version": 0
     },
@@ -442,11 +559,14 @@
       "duplicate_sheet_names": "error",
       "endpoint_off_grid": "warning",
       "extra_units": "error",
+      "field_name_whitespace": "warning",
       "footprint_filter": "ignore",
       "footprint_link_issues": "warning",
       "four_way_junction": "ignore",
       "global_label_dangling": "warning",
+      "ground_pin_not_ground": "warning",
       "hier_label_mismatch": "error",
+      "isolated_pin_label": "warning",
       "label_dangling": "error",
       "label_multiple_wires": "warning",
       "lib_symbol_issues": "warning",
@@ -468,7 +588,8 @@
       "similar_labels": "warning",
       "similar_power": "warning",
       "simulation_model_issue": "ignore",
-      "single_global_label": "ignore",
+      "single_global_label": "error",
+      "stacked_pin_name": "warning",
       "unannotated": "error",
       "unconnected_wire_endpoint": "warning",
       "undefined_netclass": "error",
@@ -501,6 +622,7 @@
         "priority": 2147483647,
         "schematic_color": "rgba(0, 0, 0, 0.000)",
         "track_width": 0.2,
+        "tuning_profile": "",
         "via_diameter": 0.6,
         "via_drill": 0.3,
         "wire_width": 6
@@ -511,11 +633,12 @@
         "pcb_color": "rgba(0, 0, 0, 0.000)",
         "priority": 0,
         "schematic_color": "rgba(0, 0, 0, 0.000)",
-        "track_width": 1.0
+        "track_width": 1.0,
+        "tuning_profile": ""
       }
     ],
     "meta": {
-      "version": 4
+      "version": 5
     },
     "net_colors": null,
     "netclass_assignments": null,
@@ -526,7 +649,7 @@
       "gencad": "",
       "idf": "",
       "netlist": "",
-      "plot": "/home/pinecone/Documenti/generic_files/kicad_plots/",
+      "plot": "/home/pinecone/Documenti/shit dump/kicad_pdf/ducker charger/4reddit/",
       "pos_files": "",
       "specctra_dsn": "",
       "step": "",
@@ -537,6 +660,10 @@
   },
   "schematic": {
     "annotate_start_num": 0,
+    "annotation": {
+      "method": 1,
+      "sort_order": 0
+    },
     "bom_export_filename": "${PROJECTNAME}.csv",
     "bom_fmt_presets": [],
     "bom_fmt_settings": {
@@ -608,6 +735,36 @@
       "sort_asc": true,
       "sort_field": "Reference"
     },
+    "bus_aliases": {
+      "CMD": [
+        "PORT_EN",
+        "LAB_EN",
+        "ST_INT",
+        "ST_EN",
+        "CDC",
+        "RDY"
+      ],
+      "CTRL": [
+        "INT",
+        "EN"
+      ],
+      "HighPow": [
+        "PSYS",
+        "IBAT",
+        "IADPT",
+        "EN_OTG",
+        "CHRG_OK",
+        "PD_IRQ"
+      ],
+      "I2C": [
+        "SDA",
+        "SCL"
+      ],
+      "IDACTION": [
+        "1_CTRL",
+        "2_CTRL"
+      ]
+    },
     "connection_grid_size": 50.0,
     "drawing": {
       "dashed_lines_dash_length_ratio": 12.0,
@@ -615,6 +772,7 @@
       "default_line_thickness": 6.0,
       "default_text_size": 50.0,
       "field_names": [],
+      "hop_over_size_choice": 0,
       "intersheets_ref_own_page": false,
       "intersheets_ref_prefix": "",
       "intersheets_ref_short": false,
@@ -638,6 +796,7 @@
     "net_format_name": "",
     "page_layout_descr_file": "",
     "plot_directory": "/home/pinecone/Documenti/generic_files/kicad_plots/",
+    "reuse_designators": true,
     "space_save_all_events": true,
     "spice_current_sheet_as_root": false,
     "spice_external_command": "spice \"%I\"",
@@ -646,12 +805,21 @@
     "spice_save_all_dissipations": false,
     "spice_save_all_voltages": false,
     "subpart_first_id": 65,
-    "subpart_id_separator": 0
+    "subpart_id_separator": 0,
+    "top_level_sheets": [
+      {
+        "filename": "Ducker-Charger.kicad_sch",
+        "name": "Ducker-Charger",
+        "uuid": "74790d6c-a68e-4e6d-b4a9-43de1843f817"
+      }
+    ],
+    "used_designators": "",
+    "variants": []
   },
   "sheets": [
     [
       "74790d6c-a68e-4e6d-b4a9-43de1843f817",
-      "Root"
+      "Ducker-Charger"
     ],
     [
       "ccd240c6-b24b-451e-a22e-a82e757ea5cc",
@@ -670,5 +838,11 @@
       "BMS"
     ]
   ],
-  "text_variables": {}
+  "text_variables": {},
+  "tuning_profiles": {
+    "meta": {
+      "version": 0
+    },
+    "tuning_profiles_impedance_geometric": []
+  }
 }

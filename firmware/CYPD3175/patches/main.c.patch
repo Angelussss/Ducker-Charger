@@ -1,0 +1,20 @@
+--- a/common/main.c
++++ b/common/main.c
+@@ -39,6 +39,7 @@
+ #include <project.h>
+ #include <flash_config.h>
+ #include <system.h>
++#include <ducker_led.h>   /* Ducker: status LED */
+ #include <pd.h>
+ #include <dpm.h>
+ #include <psource.h>
+@@ -572,6 +573,9 @@
+     /* Perform application level initialization. */
+     app_init();
+ 
++    /* Ducker: status LED (GPIO + software timer). */
++    ducker_led_init();
++
+     /* Initialize the Device Policy Manager for each PD port on the device. */
+     for(port = PORT_START_IDX ; port < NO_OF_TYPEC_PORTS; port++)
+     {
