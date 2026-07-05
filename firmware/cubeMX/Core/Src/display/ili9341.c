@@ -77,24 +77,20 @@ void ILI9341_Init(SPI_HandleTypeDef *hspi_ptr)
 {
     _hspi = hspi_ptr;
 
-    /* Hardware reset: pull RST low for 10 ms, then release. */
     DISP_RST_LOW();
     HAL_Delay(10);
     DISP_RST_HIGH();
-    HAL_Delay(120);  /* Wait for the display to come out of reset. */
-
-    send_cmd(0x01);   /* Software reset */
-    HAL_Delay(150);
-
-    send_cmd(0x11);   /* Sleep Out: exit low-power sleep mode. */
     HAL_Delay(120);
 
-    /* Set pixel format to 16 bits per pixel (RGB565). */
-    send_cmd(0x3A);
-    send_data(0x55);  /* 0x55 = 16 bpp */
+    send_cmd(0x01);   /* SW reset */
+    HAL_Delay(150);
+    send_cmd(0x11);   /* Sleep Out */
+    HAL_Delay(120);
 
-    /* Memory access control: portrait, RGB order. */
-    send_cmd(0x36);
+    send_cmd(0x3A);   /* pixel format: 16bpp RGB565 */
+    send_data(0x55);
+
+    send_cmd(0x36);   /* MADCTL: portrait, RGB */
     send_data(0x00);
 
     /* Display inversion ON: the generic 2" ST7789V modules need it,
@@ -104,32 +100,24 @@ void ILI9341_Init(SPI_HandleTypeDef *hspi_ptr)
 
     send_cmd(0x29);   /* Display On */
     HAL_Delay(25);
-
-    ILI9341_SetBrightness(100u);   /* backlight on */
+    ILI9341_SetBrightness(100u);
 }
 
 void ILI9341_SetWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
 {
-    /* Column Address Set (0x2A): defines the horizontal pixel range. */
-    send_cmd(0x2A);
-    send_data(x0 >> 8);  send_data(x0 & 0xFF);  /* start column */
-    send_data(x1 >> 8);  send_data(x1 & 0xFF);  /* end column   */
-
-    /* Row Address Set (0x2B): defines the vertical pixel range. */
-    send_cmd(0x2B);
-    send_data(y0 >> 8);  send_data(y0 & 0xFF);  /* start row */
-    send_data(y1 >> 8);  send_data(y1 & 0xFF);  /* end row   */
-
-    /* Memory Write (0x2C): subsequent bytes are pixel data. */
-    send_cmd(0x2C);
+    send_cmd(0x2A);  /* CASET */
+    send_data(x0 >> 8);  send_data(x0 & 0xFF);
+    send_data(x1 >> 8);  send_data(x1 & 0xFF);
+    send_cmd(0x2B);  /* RASET */
+    send_data(y0 >> 8);  send_data(y0 & 0xFF);
+    send_data(y1 >> 8);  send_data(y1 & 0xFF);
+    send_cmd(0x2C);  /* RAMWR */
 }
 
 void ILI9341_DrawPixel(uint16_t x, uint16_t y, uint16_t color)
 {
     ILI9341_SetWindow(x, y, x, y);
-
-    /* Send the 2-byte RGB565 colour, high byte first (big-endian). */
-    send_data(color >> 8);
+    send_data(color >> 8);   /* RGB565, big-endian */
     send_data(color & 0xFF);
 }
 
@@ -139,17 +127,15 @@ void ILI9341_FillRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t c
 
     ILI9341_SetWindow(x, y, x + w - 1, y + h - 1);
 
-    /* Pre-compute the two bytes of the colour (big-endian). */
     uint8_t hi = color >> 8;
     uint8_t lo = color & 0xFF;
 
     DISP_CS_LOW();
-    DISP_DC_HIGH();  /* All subsequent bytes are pixel data. */
+    DISP_DC_HIGH();
 
     uint32_t total_pixels = (uint32_t)w * h;
     for (uint32_t i = 0; i < total_pixels; i++)
     {
-        /* Each pixel = 2 bytes: high byte then low byte. */
         HAL_SPI_Transmit(_hspi, &hi, 1, HAL_MAX_DELAY);
         HAL_SPI_Transmit(_hspi, &lo, 1, HAL_MAX_DELAY);
     }

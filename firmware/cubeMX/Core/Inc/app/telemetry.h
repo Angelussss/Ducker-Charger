@@ -105,7 +105,7 @@ extern "C" {
  */
 typedef struct {
 
-    /* --- Battery data from BQ34Z100 via I2C3 */
+    /* --- Battery data from BQ34Z100 via I2C1/I2C_LP */
     uint8_t  soc_percent;   /**< State of Charge: 0–100% */
     uint16_t voltage_mV;    /**< Total pack voltage in mV (typical: 10000–16800)*/
     int16_t  current_mA;    /**< Current in mA. Positive = charging, negative = discharging*/
@@ -186,9 +186,8 @@ extern SystemStats_t sys_stats;
 
 /**
  * @brief  Initialise the telemetry module.
- * @note   Call once in main() after MX_I2C1_Init() and MX_I2C3_Init().
- * @param  hi2c1_ptr  Pointer to the I2C1 handle (for BQ25713)
- * @param  hi2c3_ptr  Pointer to the I2C3 handle (for BQ34Z100)
+ * @param  hi2c1_ptr  I2C1 handle (BQ34Z100 via I2C_LP/ISO1540)
+ * @param  hi2c3_ptr  reserved, unused (BQ25713 not reachable from MCU)
  */
 void Telemetry_Init(I2C_HandleTypeDef *hi2c1_ptr, I2C_HandleTypeDef *hi2c3_ptr);
 

@@ -44,31 +44,18 @@
  * PRIVATE HELPER FUNCTIONS
  * ========================================================= */
 
-/**
- * @brief  Draw the common header bar shared by all screens.
- * @param  title  Title string to display 
-*/
 static void draw_header(const char *title)
 {
-    /* Header background  */
     ILI9341_FillRect(0, HEADER_Y, ILI9341_WIDTH, HEADER_H, COLOR_HEADER);
     GFX_DrawHLine(0, HEADER_Y + HEADER_H - 2, ILI9341_WIDTH, COLOR_ACCENT);
     GFX_DrawHLine(0, HEADER_Y + HEADER_H - 1, ILI9341_WIDTH, COLOR_ACCENT);
-
-    /* Title text */
     GFX_DrawString(8, HEADER_Y + 10, title, &GFX_FontMedium, COLOR_WHITE, COLOR_HEADER);
-
     Screen_Header_RefreshIcons();
 }
 
-/**
- * @brief  Redraw the status icons in the header, top-right.
- *         Called on every periodic refresh so the icons track the live
- *         telemetry on ALL screens, not only on the first draw.
- */
+/* called on every periodic tick so icons track live telemetry on all screens */
 void Screen_Header_RefreshIcons(void)
 {
-    /* Clear the icon area first (state may have changed). */
     ILI9341_FillRect(150, HEADER_Y + 4, 88, HEADER_H - 10, COLOR_HEADER);
 
     /* thermometer: red when hot, cyan when cold. no icon = temp good */
@@ -95,14 +82,6 @@ void Screen_Header_RefreshIcons(void)
         Widget_StatusIcon_Draw(185, HEADER_Y + 10, ICON_DISCHARGING, "", 1);
 }
 
-/**
- * @brief  Draw the footer navigation dots.
- *
- * Four dots represent the four navigable screens.
- * The active dot is filled; the others are outlines only.
- *
- * @param  active_dot  Active screen index (0=main…3=settings)
- */
 static void draw_footer(uint8_t active_dot)
 {
     ILI9341_FillRect(0, FOOTER_Y, ILI9341_WIDTH, FOOTER_H, COLOR_HEADER);
@@ -117,19 +96,13 @@ static void draw_footer(uint8_t active_dot)
     }
 }
 
-/**
- * @brief  Return the text colour for a current value.
- *         Green = charging (positive), cyan = discharging (negative).
- */
 static uint16_t current_color(int16_t current_mA)
 {
     return (current_mA >= 0) ? COLOR_GREEN : COLOR_CYAN;
 }
 
 /* =========================================================
- * PUBLIC FUNCTION – battery_color_pub
- *
- * Shared colour logic used by both screens.c and widgets.c.
+ * Colour helpers — shared with widgets.c
  * ========================================================= */
 
 /* alarm thresholds, one place only, easy to poke */
@@ -1386,7 +1359,6 @@ void Screen_Settings_Toggle(uint8_t row)
 {
     if (row >= SETTINGS_NUM_ROWS) return;
 
-    /* XOR with 1 flips the bit: 0 -> 1, 1 -> 0. */
     _settings_rows[row].state ^= 1;
 
     /* user turn port back on by hand -> lock mode over */
