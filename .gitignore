@@ -61,3 +61,13 @@ stm32cubemx/*
 
 # --- Python ---
 .ipynb_checkpoints/
+
+# OS
+.DS_Store
+
+# idea
+.idea
+CMakeLists.txt
+
+# obsidian
+.obsidian/
