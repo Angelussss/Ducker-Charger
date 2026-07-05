@@ -1,0 +1,508 @@
+ARM GAS  /tmp/cc9koxbJ.s 			page 1
+
+
+   1              		.cpu cortex-m4
+   2              		.arch armv7e-m
+   3              		.fpu fpv4-sp-d16
+   4              		.eabi_attribute 27, 1
+   5              		.eabi_attribute 28, 1
+   6              		.eabi_attribute 20, 1
+   7              		.eabi_attribute 21, 1
+   8              		.eabi_attribute 23, 3
+   9              		.eabi_attribute 24, 1
+  10              		.eabi_attribute 25, 1
+  11              		.eabi_attribute 26, 1
+  12              		.eabi_attribute 30, 1
+  13              		.eabi_attribute 34, 1
+  14              		.eabi_attribute 18, 4
+  15              		.file	"encoder.c"
+  16              		.text
+  17              	.Ltext0:
+  18              		.cfi_sections	.debug_frame
+  19              		.file 1 "Core/Src/app/encoder.c"
+  20              		.section	.text.Encoder_Init,"ax",%progbits
+  21              		.align	1
+  22              		.global	Encoder_Init
+  23              		.syntax unified
+  24              		.thumb
+  25              		.thumb_func
+  27              	Encoder_Init:
+  28              	.LVL0:
+  29              	.LFB220:
+   1:Core/Src/app/encoder.c **** /**
+   2:Core/Src/app/encoder.c ****  * @file    encoder.c
+   3:Core/Src/app/encoder.c ****  * @brief   Rotary encoder + push-button via TIM3 encoder mode.
+   4:Core/Src/app/encoder.c ****  *
+   5:Core/Src/app/encoder.c ****  * EC11E15244G1 gives 2 counts/detent in TI12 (x4) mode — divide by 2.
+   6:Core/Src/app/encoder.c ****  * Requires .ioc: TIM3 EncoderMode = TIM_ENCODERMODE_TI12.
+   7:Core/Src/app/encoder.c ****  *
+   8:Core/Src/app/encoder.c ****  * The push-button (PC0) is edge-driven via EXTI0: the .ioc still declares
+   9:Core/Src/app/encoder.c ****  * PC0 as plain GPIO_Input, Encoder_Init() re-configures it as an interrupt
+  10:Core/Src/app/encoder.c ****  * source at runtime so the generated MX_GPIO_Init() never needs touching.
+  11:Core/Src/app/encoder.c ****  * The EXTI0_IRQHandler lives in the USER CODE section of stm32f4xx_it.c.
+  12:Core/Src/app/encoder.c ****  */
+  13:Core/Src/app/encoder.c **** 
+  14:Core/Src/app/encoder.c **** #include "app/encoder.h"
+  15:Core/Src/app/encoder.c **** #include "main.h"   /* ENCOD_BUTT_Pin, ENCOD_BUTT_GPIO_Port */
+  16:Core/Src/app/encoder.c **** 
+  17:Core/Src/app/encoder.c **** static TIM_HandleTypeDef *_htim = NULL;
+  18:Core/Src/app/encoder.c **** static uint16_t  _last_count          = 0;
+  19:Core/Src/app/encoder.c **** static volatile uint8_t   _btn_last_state       = 1;  /* active-low: 1 = idle */
+  20:Core/Src/app/encoder.c **** static volatile uint32_t  _btn_last_change_tick = 0;
+  21:Core/Src/app/encoder.c **** static volatile uint8_t   _btn_pressed_flag     = 0;
+  22:Core/Src/app/encoder.c **** 
+  23:Core/Src/app/encoder.c **** void Encoder_Init(TIM_HandleTypeDef *htim_ptr)
+  24:Core/Src/app/encoder.c **** {
+  30              		.loc 1 24 1 view -0
+  31              		.cfi_startproc
+  32              		@ args = 0, pretend = 0, frame = 24
+  33              		@ frame_needed = 0, uses_anonymous_args = 0
+  34              		.loc 1 24 1 is_stmt 0 view .LVU1
+ARM GAS  /tmp/cc9koxbJ.s 			page 2
+
+
+  35 0000 10B5     		push	{r4, lr}
+  36              	.LCFI0:
+  37              		.cfi_def_cfa_offset 8
+  38              		.cfi_offset 4, -8
+  39              		.cfi_offset 14, -4
+  40 0002 86B0     		sub	sp, sp, #24
+  41              	.LCFI1:
+  42              		.cfi_def_cfa_offset 32
+  25:Core/Src/app/encoder.c ****     _htim = htim_ptr;
+  43              		.loc 1 25 5 is_stmt 1 view .LVU2
+  44              		.loc 1 25 11 is_stmt 0 view .LVU3
+  45 0004 134C     		ldr	r4, .L3
+  46 0006 2060     		str	r0, [r4]
+  26:Core/Src/app/encoder.c ****     HAL_TIM_Encoder_Start(_htim, TIM_CHANNEL_ALL);
+  47              		.loc 1 26 5 is_stmt 1 view .LVU4
+  48 0008 3C21     		movs	r1, #60
+  49 000a FFF7FEFF 		bl	HAL_TIM_Encoder_Start
+  50              	.LVL1:
+  27:Core/Src/app/encoder.c ****     _last_count        = (uint16_t)__HAL_TIM_GET_COUNTER(_htim);
+  51              		.loc 1 27 5 view .LVU5
+  52              		.loc 1 27 36 is_stmt 0 view .LVU6
+  53 000e 2368     		ldr	r3, [r4]
+  54 0010 1B68     		ldr	r3, [r3]
+  55 0012 5A6A     		ldr	r2, [r3, #36]
+  56              		.loc 1 27 24 view .LVU7
+  57 0014 104B     		ldr	r3, .L3+4
+  58 0016 1A80     		strh	r2, [r3]	@ movhi
+  28:Core/Src/app/encoder.c ****     _btn_last_state    = 1;
+  59              		.loc 1 28 5 is_stmt 1 view .LVU8
+  60              		.loc 1 28 24 is_stmt 0 view .LVU9
+  61 0018 0123     		movs	r3, #1
+  62 001a 104A     		ldr	r2, .L3+8
+  63 001c 1370     		strb	r3, [r2]
+  29:Core/Src/app/encoder.c ****     _btn_pressed_flag  = 0;
+  64              		.loc 1 29 5 is_stmt 1 view .LVU10
+  65              		.loc 1 29 24 is_stmt 0 view .LVU11
+  66 001e 0024     		movs	r4, #0
+  67 0020 0F4A     		ldr	r2, .L3+12
+  68 0022 1470     		strb	r4, [r2]
+  30:Core/Src/app/encoder.c **** 
+  31:Core/Src/app/encoder.c ****     /* Override MX_GPIO_Init(): PC0 becomes an EXTI line on both edges.
+  32:Core/Src/app/encoder.c ****      * Both edges are needed so the debounce timestamp also tracks the
+  33:Core/Src/app/encoder.c ****      * release — otherwise release bounce would register as a new press. */
+  34:Core/Src/app/encoder.c ****     GPIO_InitTypeDef gpio = {0};
+  69              		.loc 1 34 5 is_stmt 1 view .LVU12
+  70              		.loc 1 34 22 is_stmt 0 view .LVU13
+  71 0024 01A9     		add	r1, sp, #4
+  72 0026 0194     		str	r4, [sp, #4]
+  73 0028 4C60     		str	r4, [r1, #4]
+  74 002a 8C60     		str	r4, [r1, #8]
+  75 002c CC60     		str	r4, [r1, #12]
+  76 002e 0C61     		str	r4, [r1, #16]
+  35:Core/Src/app/encoder.c ****     gpio.Pin  = ENCOD_BUTT_Pin;
+  77              		.loc 1 35 5 is_stmt 1 view .LVU14
+  78              		.loc 1 35 15 is_stmt 0 view .LVU15
+  79 0030 0193     		str	r3, [sp, #4]
+  36:Core/Src/app/encoder.c ****     gpio.Mode = GPIO_MODE_IT_RISING_FALLING;
+ARM GAS  /tmp/cc9koxbJ.s 			page 3
+
+
+  80              		.loc 1 36 5 is_stmt 1 view .LVU16
+  81              		.loc 1 36 15 is_stmt 0 view .LVU17
+  82 0032 4FF44413 		mov	r3, #3211264
+  83 0036 0293     		str	r3, [sp, #8]
+  37:Core/Src/app/encoder.c ****     gpio.Pull = GPIO_NOPULL;   /* external pull-up on board */
+  84              		.loc 1 37 5 is_stmt 1 view .LVU18
+  38:Core/Src/app/encoder.c ****     HAL_GPIO_Init(ENCOD_BUTT_GPIO_Port, &gpio);
+  85              		.loc 1 38 5 view .LVU19
+  86 0038 0A48     		ldr	r0, .L3+16
+  87 003a FFF7FEFF 		bl	HAL_GPIO_Init
+  88              	.LVL2:
+  39:Core/Src/app/encoder.c **** 
+  40:Core/Src/app/encoder.c ****     /* Numerically higher than SysTick (0) so HAL_GetTick() stays valid
+  41:Core/Src/app/encoder.c ****      * inside the callback. */
+  42:Core/Src/app/encoder.c ****     HAL_NVIC_SetPriority(EXTI0_IRQn, 5, 0);
+  89              		.loc 1 42 5 view .LVU20
+  90 003e 2246     		mov	r2, r4
+  91 0040 0521     		movs	r1, #5
+  92 0042 0620     		movs	r0, #6
+  93 0044 FFF7FEFF 		bl	HAL_NVIC_SetPriority
+  94              	.LVL3:
+  43:Core/Src/app/encoder.c ****     HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+  95              		.loc 1 43 5 view .LVU21
+  96 0048 0620     		movs	r0, #6
+  97 004a FFF7FEFF 		bl	HAL_NVIC_EnableIRQ
+  98              	.LVL4:
+  44:Core/Src/app/encoder.c **** }
+  99              		.loc 1 44 1 is_stmt 0 view .LVU22
+ 100 004e 06B0     		add	sp, sp, #24
+ 101              	.LCFI2:
+ 102              		.cfi_def_cfa_offset 8
+ 103              		@ sp needed
+ 104 0050 10BD     		pop	{r4, pc}
+ 105              	.L4:
+ 106 0052 00BF     		.align	2
+ 107              	.L3:
+ 108 0054 00000000 		.word	_htim
+ 109 0058 00000000 		.word	_last_count
+ 110 005c 00000000 		.word	_btn_last_state
+ 111 0060 00000000 		.word	_btn_pressed_flag
+ 112 0064 00080240 		.word	1073874944
+ 113              		.cfi_endproc
+ 114              	.LFE220:
+ 116              		.section	.text.Encoder_GetDelta,"ax",%progbits
+ 117              		.align	1
+ 118              		.global	Encoder_GetDelta
+ 119              		.syntax unified
+ 120              		.thumb
+ 121              		.thumb_func
+ 123              	Encoder_GetDelta:
+ 124              	.LFB221:
+  45:Core/Src/app/encoder.c **** 
+  46:Core/Src/app/encoder.c **** int8_t Encoder_GetDelta(void)
+  47:Core/Src/app/encoder.c **** {
+ 125              		.loc 1 47 1 is_stmt 1 view -0
+ 126              		.cfi_startproc
+ 127              		@ args = 0, pretend = 0, frame = 0
+ARM GAS  /tmp/cc9koxbJ.s 			page 4
+
+
+ 128              		@ frame_needed = 0, uses_anonymous_args = 0
+ 129              		@ link register save eliminated.
+  48:Core/Src/app/encoder.c ****     uint16_t current_count = (uint16_t)__HAL_TIM_GET_COUNTER(_htim);
+ 130              		.loc 1 48 5 view .LVU24
+ 131              		.loc 1 48 40 is_stmt 0 view .LVU25
+ 132 0000 074B     		ldr	r3, .L6
+ 133 0002 1B68     		ldr	r3, [r3]
+ 134 0004 1B68     		ldr	r3, [r3]
+ 135 0006 5B6A     		ldr	r3, [r3, #36]
+ 136              		.loc 1 48 14 view .LVU26
+ 137 0008 9BB2     		uxth	r3, r3
+ 138              	.LVL5:
+  49:Core/Src/app/encoder.c ****     int16_t  delta         = (int16_t)(current_count - _last_count);
+ 139              		.loc 1 49 5 is_stmt 1 view .LVU27
+ 140              		.loc 1 49 54 is_stmt 0 view .LVU28
+ 141 000a 064A     		ldr	r2, .L6+4
+ 142 000c 1088     		ldrh	r0, [r2]
+ 143 000e 181A     		subs	r0, r3, r0
+ 144              	.LVL6:
+  50:Core/Src/app/encoder.c ****     _last_count = current_count;
+ 145              		.loc 1 50 5 is_stmt 1 view .LVU29
+ 146              		.loc 1 50 17 is_stmt 0 view .LVU30
+ 147 0010 1380     		strh	r3, [r2]	@ movhi
+  51:Core/Src/app/encoder.c ****     return (int8_t)(delta / 2);
+ 148              		.loc 1 51 5 is_stmt 1 view .LVU31
+ 149              		.loc 1 51 12 is_stmt 0 view .LVU32
+ 150 0012 C0F3C033 		ubfx	r3, r0, #15, #1
+ 151              	.LVL7:
+ 152              		.loc 1 51 12 view .LVU33
+ 153 0016 03FA80F0 		sxtah	r0, r3, r0
+ 154              	.LVL8:
+  52:Core/Src/app/encoder.c **** }
+ 155              		.loc 1 52 1 view .LVU34
+ 156 001a 40F34700 		sbfx	r0, r0, #1, #8
+ 157 001e 7047     		bx	lr
+ 158              	.L7:
+ 159              		.align	2
+ 160              	.L6:
+ 161 0020 00000000 		.word	_htim
+ 162 0024 00000000 		.word	_last_count
+ 163              		.cfi_endproc
+ 164              	.LFE221:
+ 166              		.section	.text.HAL_GPIO_EXTI_Callback,"ax",%progbits
+ 167              		.align	1
+ 168              		.global	HAL_GPIO_EXTI_Callback
+ 169              		.syntax unified
+ 170              		.thumb
+ 171              		.thumb_func
+ 173              	HAL_GPIO_EXTI_Callback:
+ 174              	.LVL9:
+ 175              	.LFB222:
+  53:Core/Src/app/encoder.c **** 
+  54:Core/Src/app/encoder.c **** /**
+  55:Core/Src/app/encoder.c ****  * EXTI callback, invoked in interrupt context on every PC0 edge.
+  56:Core/Src/app/encoder.c ****  * Same debounce state machine as the old polled version, just event-driven:
+  57:Core/Src/app/encoder.c ****  * edges arriving within ENCODER_DEBOUNCE_MS of the last accepted transition
+  58:Core/Src/app/encoder.c ****  * are ignored, a debounced falling edge latches the pressed flag.
+ARM GAS  /tmp/cc9koxbJ.s 			page 5
+
+
+  59:Core/Src/app/encoder.c ****  *
+  60:Core/Src/app/encoder.c ****  * HAL defines this callback as weak; if another EXTI line needs a handler
+  61:Core/Src/app/encoder.c ****  * later, add its branch here.
+  62:Core/Src/app/encoder.c ****  */
+  63:Core/Src/app/encoder.c **** void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+  64:Core/Src/app/encoder.c **** {
+ 176              		.loc 1 64 1 is_stmt 1 view -0
+ 177              		.cfi_startproc
+ 178              		@ args = 0, pretend = 0, frame = 0
+ 179              		@ frame_needed = 0, uses_anonymous_args = 0
+  65:Core/Src/app/encoder.c ****     if (GPIO_Pin != ENCOD_BUTT_Pin)
+ 180              		.loc 1 65 5 view .LVU36
+ 181              		.loc 1 65 8 is_stmt 0 view .LVU37
+ 182 0000 0128     		cmp	r0, #1
+ 183 0002 00D0     		beq	.L14
+ 184 0004 7047     		bx	lr
+ 185              	.L14:
+  64:Core/Src/app/encoder.c ****     if (GPIO_Pin != ENCOD_BUTT_Pin)
+ 186              		.loc 1 64 1 view .LVU38
+ 187 0006 10B5     		push	{r4, lr}
+ 188              	.LCFI3:
+ 189              		.cfi_def_cfa_offset 8
+ 190              		.cfi_offset 4, -8
+ 191              		.cfi_offset 14, -4
+  66:Core/Src/app/encoder.c ****         return;
+  67:Core/Src/app/encoder.c **** 
+  68:Core/Src/app/encoder.c ****     uint32_t now           = HAL_GetTick();
+ 192              		.loc 1 68 5 is_stmt 1 view .LVU39
+ 193              		.loc 1 68 30 is_stmt 0 view .LVU40
+ 194 0008 FFF7FEFF 		bl	HAL_GetTick
+ 195              	.LVL10:
+ 196              		.loc 1 68 30 view .LVU41
+ 197 000c 0446     		mov	r4, r0
+ 198              	.LVL11:
+  69:Core/Src/app/encoder.c ****     uint8_t  current_state = HAL_GPIO_ReadPin(ENCOD_BUTT_GPIO_Port, ENCOD_BUTT_Pin);
+ 199              		.loc 1 69 5 is_stmt 1 view .LVU42
+ 200              		.loc 1 69 30 is_stmt 0 view .LVU43
+ 201 000e 0121     		movs	r1, #1
+ 202 0010 0A48     		ldr	r0, .L15
+ 203              	.LVL12:
+ 204              		.loc 1 69 30 view .LVU44
+ 205 0012 FFF7FEFF 		bl	HAL_GPIO_ReadPin
+ 206              	.LVL13:
+  70:Core/Src/app/encoder.c **** 
+  71:Core/Src/app/encoder.c ****     if (current_state != _btn_last_state)
+ 207              		.loc 1 71 5 is_stmt 1 view .LVU45
+ 208              		.loc 1 71 23 is_stmt 0 view .LVU46
+ 209 0016 0A4B     		ldr	r3, .L15+4
+ 210 0018 1B78     		ldrb	r3, [r3]	@ zero_extendqisi2
+ 211              		.loc 1 71 8 view .LVU47
+ 212 001a 8342     		cmp	r3, r0
+ 213 001c 0CD0     		beq	.L8
+  72:Core/Src/app/encoder.c ****     {
+  73:Core/Src/app/encoder.c ****         if ((now - _btn_last_change_tick) > ENCODER_DEBOUNCE_MS)
+ 214              		.loc 1 73 9 is_stmt 1 view .LVU48
+ 215              		.loc 1 73 18 is_stmt 0 view .LVU49
+ 216 001e 094B     		ldr	r3, .L15+8
+ARM GAS  /tmp/cc9koxbJ.s 			page 6
+
+
+ 217 0020 1B68     		ldr	r3, [r3]
+ 218 0022 E31A     		subs	r3, r4, r3
+ 219              		.loc 1 73 12 view .LVU50
+ 220 0024 322B     		cmp	r3, #50
+ 221 0026 07D9     		bls	.L8
+  74:Core/Src/app/encoder.c ****         {
+  75:Core/Src/app/encoder.c ****             _btn_last_change_tick = now;
+ 222              		.loc 1 75 13 is_stmt 1 view .LVU51
+ 223              		.loc 1 75 35 is_stmt 0 view .LVU52
+ 224 0028 064B     		ldr	r3, .L15+8
+ 225 002a 1C60     		str	r4, [r3]
+  76:Core/Src/app/encoder.c ****             _btn_last_state       = current_state;
+ 226              		.loc 1 76 13 is_stmt 1 view .LVU53
+ 227              		.loc 1 76 35 is_stmt 0 view .LVU54
+ 228 002c 044B     		ldr	r3, .L15+4
+ 229 002e 1870     		strb	r0, [r3]
+  77:Core/Src/app/encoder.c ****             if (current_state == 0)  /* falling edge = pressed */
+ 230              		.loc 1 77 13 is_stmt 1 view .LVU55
+ 231              		.loc 1 77 16 is_stmt 0 view .LVU56
+ 232 0030 10B9     		cbnz	r0, .L8
+  78:Core/Src/app/encoder.c ****                 _btn_pressed_flag = 1;
+ 233              		.loc 1 78 17 is_stmt 1 view .LVU57
+ 234              		.loc 1 78 35 is_stmt 0 view .LVU58
+ 235 0032 054B     		ldr	r3, .L15+12
+ 236 0034 0122     		movs	r2, #1
+ 237 0036 1A70     		strb	r2, [r3]
+ 238              	.L8:
+  79:Core/Src/app/encoder.c ****         }
+  80:Core/Src/app/encoder.c ****     }
+  81:Core/Src/app/encoder.c **** }
+ 239              		.loc 1 81 1 view .LVU59
+ 240 0038 10BD     		pop	{r4, pc}
+ 241              	.LVL14:
+ 242              	.L16:
+ 243              		.loc 1 81 1 view .LVU60
+ 244 003a 00BF     		.align	2
+ 245              	.L15:
+ 246 003c 00080240 		.word	1073874944
+ 247 0040 00000000 		.word	_btn_last_state
+ 248 0044 00000000 		.word	_btn_last_change_tick
+ 249 0048 00000000 		.word	_btn_pressed_flag
+ 250              		.cfi_endproc
+ 251              	.LFE222:
+ 253              		.section	.text.Encoder_IsPressed,"ax",%progbits
+ 254              		.align	1
+ 255              		.global	Encoder_IsPressed
+ 256              		.syntax unified
+ 257              		.thumb
+ 258              		.thumb_func
+ 260              	Encoder_IsPressed:
+ 261              	.LFB223:
+  82:Core/Src/app/encoder.c **** 
+  83:Core/Src/app/encoder.c **** uint8_t Encoder_IsPressed(void)
+  84:Core/Src/app/encoder.c **** {
+ 262              		.loc 1 84 1 is_stmt 1 view -0
+ 263              		.cfi_startproc
+ 264              		@ args = 0, pretend = 0, frame = 0
+ARM GAS  /tmp/cc9koxbJ.s 			page 7
+
+
+ 265              		@ frame_needed = 0, uses_anonymous_args = 0
+ 266              		@ link register save eliminated.
+  85:Core/Src/app/encoder.c ****     if (_btn_pressed_flag)
+ 267              		.loc 1 85 5 view .LVU62
+ 268              		.loc 1 85 9 is_stmt 0 view .LVU63
+ 269 0000 034B     		ldr	r3, .L20
+ 270 0002 1878     		ldrb	r0, [r3]	@ zero_extendqisi2
+ 271              		.loc 1 85 8 view .LVU64
+ 272 0004 00B9     		cbnz	r0, .L19
+ 273              	.L18:
+  86:Core/Src/app/encoder.c ****     {
+  87:Core/Src/app/encoder.c ****         _btn_pressed_flag = 0;
+  88:Core/Src/app/encoder.c ****         return 1;
+  89:Core/Src/app/encoder.c ****     }
+  90:Core/Src/app/encoder.c ****     return 0;
+  91:Core/Src/app/encoder.c **** }
+ 274              		.loc 1 91 1 view .LVU65
+ 275 0006 7047     		bx	lr
+ 276              	.L19:
+  87:Core/Src/app/encoder.c ****         return 1;
+ 277              		.loc 1 87 9 is_stmt 1 view .LVU66
+  87:Core/Src/app/encoder.c ****         return 1;
+ 278              		.loc 1 87 27 is_stmt 0 view .LVU67
+ 279 0008 0022     		movs	r2, #0
+ 280 000a 1A70     		strb	r2, [r3]
+  88:Core/Src/app/encoder.c ****     }
+ 281              		.loc 1 88 9 is_stmt 1 view .LVU68
+  88:Core/Src/app/encoder.c ****     }
+ 282              		.loc 1 88 16 is_stmt 0 view .LVU69
+ 283 000c 0120     		movs	r0, #1
+ 284 000e FAE7     		b	.L18
+ 285              	.L21:
+ 286              		.align	2
+ 287              	.L20:
+ 288 0010 00000000 		.word	_btn_pressed_flag
+ 289              		.cfi_endproc
+ 290              	.LFE223:
+ 292              		.section	.text.Encoder_IsHeld,"ax",%progbits
+ 293              		.align	1
+ 294              		.global	Encoder_IsHeld
+ 295              		.syntax unified
+ 296              		.thumb
+ 297              		.thumb_func
+ 299              	Encoder_IsHeld:
+ 300              	.LFB224:
+  92:Core/Src/app/encoder.c **** 
+  93:Core/Src/app/encoder.c **** uint8_t Encoder_IsHeld(void)
+  94:Core/Src/app/encoder.c **** {
+ 301              		.loc 1 94 1 is_stmt 1 view -0
+ 302              		.cfi_startproc
+ 303              		@ args = 0, pretend = 0, frame = 0
+ 304              		@ frame_needed = 0, uses_anonymous_args = 0
+ 305 0000 08B5     		push	{r3, lr}
+ 306              	.LCFI4:
+ 307              		.cfi_def_cfa_offset 8
+ 308              		.cfi_offset 3, -8
+ 309              		.cfi_offset 14, -4
+ARM GAS  /tmp/cc9koxbJ.s 			page 8
+
+
+  95:Core/Src/app/encoder.c ****     return (HAL_GPIO_ReadPin(ENCOD_BUTT_GPIO_Port, ENCOD_BUTT_Pin)
+ 310              		.loc 1 95 5 view .LVU71
+ 311              		.loc 1 95 13 is_stmt 0 view .LVU72
+ 312 0002 0121     		movs	r1, #1
+ 313 0004 0348     		ldr	r0, .L24
+ 314 0006 FFF7FEFF 		bl	HAL_GPIO_ReadPin
+ 315              	.LVL15:
+  96:Core/Src/app/encoder.c ****             == GPIO_PIN_RESET) ? 1 : 0;
+  97:Core/Src/app/encoder.c **** }
+ 316              		.loc 1 97 1 view .LVU73
+ 317 000a B0FA80F0 		clz	r0, r0
+ 318 000e 4009     		lsrs	r0, r0, #5
+ 319 0010 08BD     		pop	{r3, pc}
+ 320              	.L25:
+ 321 0012 00BF     		.align	2
+ 322              	.L24:
+ 323 0014 00080240 		.word	1073874944
+ 324              		.cfi_endproc
+ 325              	.LFE224:
+ 327              		.section	.bss._btn_pressed_flag,"aw",%nobits
+ 330              	_btn_pressed_flag:
+ 331 0000 00       		.space	1
+ 332              		.section	.bss._btn_last_change_tick,"aw",%nobits
+ 333              		.align	2
+ 336              	_btn_last_change_tick:
+ 337 0000 00000000 		.space	4
+ 338              		.section	.data._btn_last_state,"aw"
+ 341              	_btn_last_state:
+ 342 0000 01       		.byte	1
+ 343              		.section	.bss._last_count,"aw",%nobits
+ 344              		.align	1
+ 347              	_last_count:
+ 348 0000 0000     		.space	2
+ 349              		.section	.bss._htim,"aw",%nobits
+ 350              		.align	2
+ 353              	_htim:
+ 354 0000 00000000 		.space	4
+ 355              		.text
+ 356              	.Letext0:
+ 357              		.file 2 "Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f401xc.h"
+ 358              		.file 3 "/usr/arm-none-eabi/include/machine/_default_types.h"
+ 359              		.file 4 "/usr/arm-none-eabi/include/sys/_stdint.h"
+ 360              		.file 5 "Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_def.h"
+ 361              		.file 6 "Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_gpio.h"
+ 362              		.file 7 "Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_dma.h"
+ 363              		.file 8 "Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h"
+ 364              		.file 9 "Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_cortex.h"
+ 365              		.file 10 "Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h"
+ARM GAS  /tmp/cc9koxbJ.s 			page 9
+
+
+DEFINED SYMBOLS
+                            *ABS*:00000000 encoder.c
+     /tmp/cc9koxbJ.s:21     .text.Encoder_Init:00000000 $t
+     /tmp/cc9koxbJ.s:27     .text.Encoder_Init:00000000 Encoder_Init
+     /tmp/cc9koxbJ.s:108    .text.Encoder_Init:00000054 $d
+     /tmp/cc9koxbJ.s:353    .bss._htim:00000000 _htim
+     /tmp/cc9koxbJ.s:347    .bss._last_count:00000000 _last_count
+     /tmp/cc9koxbJ.s:341    .data._btn_last_state:00000000 _btn_last_state
+     /tmp/cc9koxbJ.s:330    .bss._btn_pressed_flag:00000000 _btn_pressed_flag
+     /tmp/cc9koxbJ.s:117    .text.Encoder_GetDelta:00000000 $t
+     /tmp/cc9koxbJ.s:123    .text.Encoder_GetDelta:00000000 Encoder_GetDelta
+     /tmp/cc9koxbJ.s:161    .text.Encoder_GetDelta:00000020 $d
+     /tmp/cc9koxbJ.s:167    .text.HAL_GPIO_EXTI_Callback:00000000 $t
+     /tmp/cc9koxbJ.s:173    .text.HAL_GPIO_EXTI_Callback:00000000 HAL_GPIO_EXTI_Callback
+     /tmp/cc9koxbJ.s:246    .text.HAL_GPIO_EXTI_Callback:0000003c $d
+     /tmp/cc9koxbJ.s:336    .bss._btn_last_change_tick:00000000 _btn_last_change_tick
+     /tmp/cc9koxbJ.s:254    .text.Encoder_IsPressed:00000000 $t
+     /tmp/cc9koxbJ.s:260    .text.Encoder_IsPressed:00000000 Encoder_IsPressed
+     /tmp/cc9koxbJ.s:288    .text.Encoder_IsPressed:00000010 $d
+     /tmp/cc9koxbJ.s:293    .text.Encoder_IsHeld:00000000 $t
+     /tmp/cc9koxbJ.s:299    .text.Encoder_IsHeld:00000000 Encoder_IsHeld
+     /tmp/cc9koxbJ.s:323    .text.Encoder_IsHeld:00000014 $d
+     /tmp/cc9koxbJ.s:331    .bss._btn_pressed_flag:00000000 $d
+     /tmp/cc9koxbJ.s:333    .bss._btn_last_change_tick:00000000 $d
+     /tmp/cc9koxbJ.s:344    .bss._last_count:00000000 $d
+     /tmp/cc9koxbJ.s:350    .bss._htim:00000000 $d
+
+UNDEFINED SYMBOLS
+HAL_TIM_Encoder_Start
+HAL_GPIO_Init
+HAL_NVIC_SetPriority
+HAL_NVIC_EnableIRQ
+HAL_GetTick
+HAL_GPIO_ReadPin

@@ -1,0 +1,2704 @@
+ARM GAS  /tmp/ccjqjIde.s 			page 1
+
+
+   1              		.cpu cortex-m4
+   2              		.arch armv7e-m
+   3              		.fpu fpv4-sp-d16
+   4              		.eabi_attribute 27, 1
+   5              		.eabi_attribute 28, 1
+   6              		.eabi_attribute 20, 1
+   7              		.eabi_attribute 21, 1
+   8              		.eabi_attribute 23, 3
+   9              		.eabi_attribute 24, 1
+  10              		.eabi_attribute 25, 1
+  11              		.eabi_attribute 26, 1
+  12              		.eabi_attribute 30, 1
+  13              		.eabi_attribute 34, 1
+  14              		.eabi_attribute 18, 4
+  15              		.file	"ui_state.c"
+  16              		.text
+  17              	.Ltext0:
+  18              		.cfi_sections	.debug_frame
+  19              		.file 1 "Core/Src/ui/ui_state.c"
+  20              		.section	.text.UI_Init,"ax",%progbits
+  21              		.align	1
+  22              		.global	UI_Init
+  23              		.syntax unified
+  24              		.thumb
+  25              		.thumb_func
+  27              	UI_Init:
+  28              	.LFB220:
+   1:Core/Src/ui/ui_state.c **** /**
+   2:Core/Src/ui/ui_state.c ****  * @file    ui_state.c
+   3:Core/Src/ui/ui_state.c ****  * @brief   UI state machine. knob turn, screen change. simple.
+   4:Core/Src/ui/ui_state.c ****  */
+   5:Core/Src/ui/ui_state.c **** 
+   6:Core/Src/ui/ui_state.c **** #include "ui/ui_state.h"
+   7:Core/Src/ui/ui_state.c **** #include "ui/screens.h"
+   8:Core/Src/ui/ui_state.c **** #include "app/encoder.h"
+   9:Core/Src/ui/ui_state.c **** #include "app/telemetry.h"
+  10:Core/Src/ui/ui_state.c **** 
+  11:Core/Src/ui/ui_state.c **** uint8_t temp_out_of_range_pub(int16_t temp_c);
+  12:Core/Src/ui/ui_state.c **** uint8_t volt_alarm_pub(uint16_t mv);
+  13:Core/Src/ui/ui_state.c **** 
+  14:Core/Src/ui/ui_state.c **** /* =========================================================
+  15:Core/Src/ui/ui_state.c ****  * GLOBAL VARIABLES
+  16:Core/Src/ui/ui_state.c ****  * ========================================================= */
+  17:Core/Src/ui/ui_state.c **** 
+  18:Core/Src/ui/ui_state.c **** UIState_t ui_state;
+  19:Core/Src/ui/ui_state.c **** 
+  20:Core/Src/ui/ui_state.c **** /* =========================================================
+  21:Core/Src/ui/ui_state.c ****  * STATIC (FILE-PRIVATE) VARIABLES
+  22:Core/Src/ui/ui_state.c ****  * ========================================================= */
+  23:Core/Src/ui/ui_state.c **** 
+  24:Core/Src/ui/ui_state.c **** /** screen to return to when SETTINGS overlay close */
+  25:Core/Src/ui/ui_state.c **** static UIScreen_t _settings_return = UI_SCREEN_MAIN;
+  26:Core/Src/ui/ui_state.c **** 
+  27:Core/Src/ui/ui_state.c **** /** warnings (temp / low V / critical V): each one spoken once per boot, no nag */
+  28:Core/Src/ui/ui_state.c **** static uint8_t    _warn_acked[WARN_COUNT] = {0};
+  29:Core/Src/ui/ui_state.c **** static WarnType_t _warn_active = WARN_TEMP;
+  30:Core/Src/ui/ui_state.c **** static UIScreen_t _warn_return = UI_SCREEN_MAIN;
+ARM GAS  /tmp/ccjqjIde.s 			page 2
+
+
+  31:Core/Src/ui/ui_state.c **** 
+  32:Core/Src/ui/ui_state.c **** #define BOOT_SCREEN_DURATION_MS  1500
+  33:Core/Src/ui/ui_state.c **** 
+  34:Core/Src/ui/ui_state.c **** /** auto-sleep: tick of last time user touched knob */
+  35:Core/Src/ui/ui_state.c **** static uint32_t _last_activity = 0;
+  36:Core/Src/ui/ui_state.c **** 
+  37:Core/Src/ui/ui_state.c **** /** tick when warning opened, for 30 s auto-ack */
+  38:Core/Src/ui/ui_state.c **** static uint32_t _warn_open_tick = 0;
+  39:Core/Src/ui/ui_state.c **** 
+  40:Core/Src/ui/ui_state.c **** /** screen that opened confirm modal, go back there after */
+  41:Core/Src/ui/ui_state.c **** static UIScreen_t _confirm_return = UI_SCREEN_SETTINGS;
+  42:Core/Src/ui/ui_state.c **** 
+  43:Core/Src/ui/ui_state.c **** /** screen to bring back when sleep end */
+  44:Core/Src/ui/ui_state.c **** static UIScreen_t _sleep_return = UI_SCREEN_MAIN;
+  45:Core/Src/ui/ui_state.c **** static uint8_t    _sleep_light  = 0;    /* 1 = light sleep: wake show splash */
+  46:Core/Src/ui/ui_state.c **** 
+  47:Core/Src/ui/ui_state.c **** /** where boot screen go and how long (reused as wake splash) */
+  48:Core/Src/ui/ui_state.c **** static UIScreen_t _boot_dest     = UI_SCREEN_MAIN;
+  49:Core/Src/ui/ui_state.c **** static uint32_t   _boot_duration = BOOT_SCREEN_DURATION_MS;
+  50:Core/Src/ui/ui_state.c **** 
+  51:Core/Src/ui/ui_state.c **** static uint32_t _boot_start_tick = 0;
+  52:Core/Src/ui/ui_state.c **** 
+  53:Core/Src/ui/ui_state.c **** /* =========================================================
+  54:Core/Src/ui/ui_state.c ****  * PUBLIC FUNCTIONS
+  55:Core/Src/ui/ui_state.c ****  * ========================================================= */
+  56:Core/Src/ui/ui_state.c **** 
+  57:Core/Src/ui/ui_state.c **** void UI_Init(void)
+  58:Core/Src/ui/ui_state.c **** {
+  29              		.loc 1 58 1 view -0
+  30              		.cfi_startproc
+  31              		@ args = 0, pretend = 0, frame = 0
+  32              		@ frame_needed = 0, uses_anonymous_args = 0
+  33 0000 08B5     		push	{r3, lr}
+  34              	.LCFI0:
+  35              		.cfi_def_cfa_offset 8
+  36              		.cfi_offset 3, -8
+  37              		.cfi_offset 14, -4
+  59:Core/Src/ui/ui_state.c ****     ui_state.current_screen    = UI_SCREEN_BOOT;
+  38              		.loc 1 59 5 view .LVU1
+  39              		.loc 1 59 32 is_stmt 0 view .LVU2
+  40 0002 084B     		ldr	r3, .L3
+  41 0004 0022     		movs	r2, #0
+  42 0006 1A70     		strb	r2, [r3]
+  60:Core/Src/ui/ui_state.c ****     ui_state.prev_screen       = UI_SCREEN_BOOT;
+  43              		.loc 1 60 5 is_stmt 1 view .LVU3
+  44              		.loc 1 60 32 is_stmt 0 view .LVU4
+  45 0008 5A70     		strb	r2, [r3, #1]
+  61:Core/Src/ui/ui_state.c ****     ui_state.needs_full_redraw = 1;
+  46              		.loc 1 61 5 is_stmt 1 view .LVU5
+  47              		.loc 1 61 32 is_stmt 0 view .LVU6
+  48 000a 0121     		movs	r1, #1
+  49 000c 9970     		strb	r1, [r3, #2]
+  62:Core/Src/ui/ui_state.c ****     ui_state.last_refresh_tick = 0;
+  50              		.loc 1 62 5 is_stmt 1 view .LVU7
+  51              		.loc 1 62 32 is_stmt 0 view .LVU8
+  52 000e 5A60     		str	r2, [r3, #4]
+  63:Core/Src/ui/ui_state.c ****     ui_state.btn_press_tick    = 0;
+ARM GAS  /tmp/ccjqjIde.s 			page 3
+
+
+  53              		.loc 1 63 5 is_stmt 1 view .LVU9
+  54              		.loc 1 63 32 is_stmt 0 view .LVU10
+  55 0010 9A60     		str	r2, [r3, #8]
+  64:Core/Src/ui/ui_state.c ****     ui_state.btn_was_held      = 0;
+  56              		.loc 1 64 5 is_stmt 1 view .LVU11
+  57              		.loc 1 64 32 is_stmt 0 view .LVU12
+  58 0012 1A73     		strb	r2, [r3, #12]
+  65:Core/Src/ui/ui_state.c **** 
+  66:Core/Src/ui/ui_state.c ****     Screen_Boot_Draw();
+  59              		.loc 1 66 5 is_stmt 1 view .LVU13
+  60 0014 FFF7FEFF 		bl	Screen_Boot_Draw
+  61              	.LVL0:
+  67:Core/Src/ui/ui_state.c ****     _boot_start_tick = HAL_GetTick();
+  62              		.loc 1 67 5 view .LVU14
+  63              		.loc 1 67 24 is_stmt 0 view .LVU15
+  64 0018 FFF7FEFF 		bl	HAL_GetTick
+  65              	.LVL1:
+  66              		.loc 1 67 22 discriminator 1 view .LVU16
+  67 001c 024B     		ldr	r3, .L3+4
+  68 001e 1860     		str	r0, [r3]
+  68:Core/Src/ui/ui_state.c **** }
+  69              		.loc 1 68 1 view .LVU17
+  70 0020 08BD     		pop	{r3, pc}
+  71              	.L4:
+  72 0022 00BF     		.align	2
+  73              	.L3:
+  74 0024 00000000 		.word	ui_state
+  75 0028 00000000 		.word	_boot_start_tick
+  76              		.cfi_endproc
+  77              	.LFE220:
+  79              		.section	.text.UI_NavigateTo,"ax",%progbits
+  80              		.align	1
+  81              		.global	UI_NavigateTo
+  82              		.syntax unified
+  83              		.thumb
+  84              		.thumb_func
+  86              	UI_NavigateTo:
+  87              	.LVL2:
+  88              	.LFB222:
+  69:Core/Src/ui/ui_state.c **** 
+  70:Core/Src/ui/ui_state.c **** void UI_Tick(void)
+  71:Core/Src/ui/ui_state.c **** {
+  72:Core/Src/ui/ui_state.c ****     uint32_t now = HAL_GetTick();
+  73:Core/Src/ui/ui_state.c **** 
+  74:Core/Src/ui/ui_state.c ****     /* -------- Boot screen auto-transition -------- */
+  75:Core/Src/ui/ui_state.c ****     if (ui_state.current_screen == UI_SCREEN_BOOT)
+  76:Core/Src/ui/ui_state.c ****     {
+  77:Core/Src/ui/ui_state.c ****         if ((now - _boot_start_tick) >= _boot_duration)
+  78:Core/Src/ui/ui_state.c ****         {
+  79:Core/Src/ui/ui_state.c ****             /* time over: go where boot say
+  80:Core/Src/ui/ui_state.c ****              * (MAIN at power-on, old screen after light-sleep wake) */
+  81:Core/Src/ui/ui_state.c ****             UI_NavigateTo(_boot_dest);
+  82:Core/Src/ui/ui_state.c ****             _boot_dest     = UI_SCREEN_MAIN;
+  83:Core/Src/ui/ui_state.c ****             _boot_duration = BOOT_SCREEN_DURATION_MS;
+  84:Core/Src/ui/ui_state.c ****         }
+  85:Core/Src/ui/ui_state.c **** 
+  86:Core/Src/ui/ui_state.c ****         return;
+ARM GAS  /tmp/ccjqjIde.s 			page 4
+
+
+  87:Core/Src/ui/ui_state.c ****     }
+  88:Core/Src/ui/ui_state.c **** 
+  89:Core/Src/ui/ui_state.c ****     /* -------- Read encoder input -------- */
+  90:Core/Src/ui/ui_state.c **** 
+  91:Core/Src/ui/ui_state.c ****     int8_t  enc_delta   = Encoder_GetDelta();
+  92:Core/Src/ui/ui_state.c ****     uint8_t btn_pressed = Encoder_IsPressed();
+  93:Core/Src/ui/ui_state.c **** 
+  94:Core/Src/ui/ui_state.c ****     /* -------- sleep: any press wake up, everything else ignored -------- */
+  95:Core/Src/ui/ui_state.c ****     if (ui_state.current_screen == UI_SCREEN_SLEEP)
+  96:Core/Src/ui/ui_state.c ****     {
+  97:Core/Src/ui/ui_state.c ****         if (btn_pressed)
+  98:Core/Src/ui/ui_state.c ****         {
+  99:Core/Src/ui/ui_state.c ****             if (_sleep_light)
+ 100:Core/Src/ui/ui_state.c ****             {
+ 101:Core/Src/ui/ui_state.c ****                 /* light sleep wake = little power-on: short logo splash */
+ 102:Core/Src/ui/ui_state.c ****                 _sleep_light   = 0;
+ 103:Core/Src/ui/ui_state.c ****                 _boot_dest     = _sleep_return;
+ 104:Core/Src/ui/ui_state.c ****                 _boot_duration = 1200;
+ 105:Core/Src/ui/ui_state.c ****                 _boot_start_tick = now;
+ 106:Core/Src/ui/ui_state.c ****                 UI_NavigateTo(UI_SCREEN_BOOT);
+ 107:Core/Src/ui/ui_state.c ****             }
+ 108:Core/Src/ui/ui_state.c ****             else
+ 109:Core/Src/ui/ui_state.c ****                 UI_NavigateTo(_sleep_return);
+ 110:Core/Src/ui/ui_state.c ****         }
+ 111:Core/Src/ui/ui_state.c ****         return;                     /* skip arbiter: wake press make no click */
+ 112:Core/Src/ui/ui_state.c ****     }
+ 113:Core/Src/ui/ui_state.c **** 
+ 114:Core/Src/ui/ui_state.c ****     /* -------- auto-sleep when user idle too long -------- */
+ 115:Core/Src/ui/ui_state.c ****     if (enc_delta != 0 || btn_pressed || Encoder_IsHeld())
+ 116:Core/Src/ui/ui_state.c ****         _last_activity = now;
+ 117:Core/Src/ui/ui_state.c ****     {
+ 118:Core/Src/ui/ui_state.c ****         uint32_t as = Screen_Display_GetAutoSleepMs();
+ 119:Core/Src/ui/ui_state.c ****         if (as > 0 && (now - _last_activity) >= as &&
+ 120:Core/Src/ui/ui_state.c ****             ui_state.current_screen != UI_SCREEN_BOOT &&
+ 121:Core/Src/ui/ui_state.c ****             ui_state.current_screen != UI_SCREEN_WARNING &&
+ 122:Core/Src/ui/ui_state.c ****             ui_state.current_screen != UI_SCREEN_CONFIRM)
+ 123:Core/Src/ui/ui_state.c ****         {
+ 124:Core/Src/ui/ui_state.c ****             _last_activity = now;
+ 125:Core/Src/ui/ui_state.c ****             UI_EnterSleep();
+ 126:Core/Src/ui/ui_state.c ****             return;
+ 127:Core/Src/ui/ui_state.c ****         }
+ 128:Core/Src/ui/ui_state.c ****     }
+ 129:Core/Src/ui/ui_state.c **** 
+ 130:Core/Src/ui/ui_state.c ****     /* -------- warnings (order: V critical > V low > temperature) -------- */
+ 131:Core/Src/ui/ui_state.c ****     if (ui_state.current_screen != UI_SCREEN_BOOT &&
+ 132:Core/Src/ui/ui_state.c ****         ui_state.current_screen != UI_SCREEN_WARNING)
+ 133:Core/Src/ui/ui_state.c ****     {
+ 134:Core/Src/ui/ui_state.c ****         uint8_t va = volt_alarm_pub(telemetry.voltage_mV);
+ 135:Core/Src/ui/ui_state.c ****         WarnType_t t = WARN_COUNT;
+ 136:Core/Src/ui/ui_state.c **** 
+ 137:Core/Src/ui/ui_state.c ****         if      (va == 2 && !_warn_acked[WARN_VCRIT]) t = WARN_VCRIT;
+ 138:Core/Src/ui/ui_state.c ****         else if (va == 1 && !_warn_acked[WARN_VLOW])  t = WARN_VLOW;
+ 139:Core/Src/ui/ui_state.c ****         else if (!_warn_acked[WARN_TEMP] &&
+ 140:Core/Src/ui/ui_state.c ****                  temp_out_of_range_pub(telemetry.temp_celsius)) t = WARN_TEMP;
+ 141:Core/Src/ui/ui_state.c **** 
+ 142:Core/Src/ui/ui_state.c ****         if (t != WARN_COUNT)
+ 143:Core/Src/ui/ui_state.c ****         {
+ARM GAS  /tmp/ccjqjIde.s 			page 5
+
+
+ 144:Core/Src/ui/ui_state.c ****             _warn_active = t;
+ 145:Core/Src/ui/ui_state.c ****             Screen_Warning_Open(t);
+ 146:Core/Src/ui/ui_state.c ****             _warn_return = ui_state.current_screen;
+ 147:Core/Src/ui/ui_state.c ****             _warn_open_tick = now;
+ 148:Core/Src/ui/ui_state.c ****             UI_NavigateTo(UI_SCREEN_WARNING);
+ 149:Core/Src/ui/ui_state.c ****         }
+ 150:Core/Src/ui/ui_state.c ****     }
+ 151:Core/Src/ui/ui_state.c **** 
+ 152:Core/Src/ui/ui_state.c ****     /* Long-press detection: if the button is held for more than UI_LONG_PRESS_MS,
+ 153:Core/Src/ui/ui_state.c ****      * return to the main screen from anywhere. */
+ 154:Core/Src/ui/ui_state.c ****     if (Encoder_IsHeld())
+ 155:Core/Src/ui/ui_state.c ****     {
+ 156:Core/Src/ui/ui_state.c ****         if (ui_state.btn_press_tick == 0)
+ 157:Core/Src/ui/ui_state.c ****         {
+ 158:Core/Src/ui/ui_state.c ****             /* finger just landed: remember when */
+ 159:Core/Src/ui/ui_state.c ****             ui_state.btn_press_tick = now;
+ 160:Core/Src/ui/ui_state.c ****             ui_state.btn_was_held   = 0;
+ 161:Core/Src/ui/ui_state.c ****         }
+ 162:Core/Src/ui/ui_state.c ****         else if (!ui_state.btn_was_held &&
+ 163:Core/Src/ui/ui_state.c ****                  (now - ui_state.btn_press_tick) >= UI_LONG_PRESS_MS)
+ 164:Core/Src/ui/ui_state.c ****         {   /* finger stay long enough */
+ 165:Core/Src/ui/ui_state.c ****             /* held long enough: open SETTINGS overlay.
+ 166:Core/Src/ui/ui_state.c ****              * remember where we came from, Exit bring us back. */
+ 167:Core/Src/ui/ui_state.c ****             ui_state.btn_was_held = 1;
+ 168:Core/Src/ui/ui_state.c **** 
+ 169:Core/Src/ui/ui_state.c ****             if (ui_state.current_screen != UI_SCREEN_SETTINGS &&
+ 170:Core/Src/ui/ui_state.c ****                 ui_state.current_screen != UI_SCREEN_OUTPUT)
+ 171:Core/Src/ui/ui_state.c ****             {
+ 172:Core/Src/ui/ui_state.c ****                 _settings_return = ui_state.current_screen;
+ 173:Core/Src/ui/ui_state.c ****                 UI_NavigateTo(UI_SCREEN_SETTINGS);
+ 174:Core/Src/ui/ui_state.c ****             }
+ 175:Core/Src/ui/ui_state.c ****             /* inside SETTINGS you leave with "Exit" row (or double click
+ 176:Core/Src/ui/ui_state.c ****              * from OUTPUT page): long press do nothing here */
+ 177:Core/Src/ui/ui_state.c ****         }
+ 178:Core/Src/ui/ui_state.c ****     }
+ 179:Core/Src/ui/ui_state.c ****     else
+ 180:Core/Src/ui/ui_state.c ****     {
+ 181:Core/Src/ui/ui_state.c ****         /* finger gone: forget long-press state */
+ 182:Core/Src/ui/ui_state.c ****         ui_state.btn_press_tick = 0;
+ 183:Core/Src/ui/ui_state.c ****         ui_state.btn_was_held   = 0;
+ 184:Core/Src/ui/ui_state.c ****     }
+ 185:Core/Src/ui/ui_state.c **** 
+ 186:Core/Src/ui/ui_state.c ****     /* -------- click arbiter (one click vs two) --------
+ 187:Core/Src/ui/ui_state.c ****      * raw press not acted on right away: held pending UI_DOUBLE_CLICK_MS.
+ 188:Core/Src/ui/ui_state.c ****      * second press inside window -> DOUBLE click (jump to SETTINGS),
+ 189:Core/Src/ui/ui_state.c ****      * single action never fire. window pass -> clean SINGLE click out.
+ 190:Core/Src/ui/ui_state.c ****      * long press kill pending click. */
+ 191:Core/Src/ui/ui_state.c ****     uint8_t click = 0;   /* clean single click, screens below use this */
+ 192:Core/Src/ui/ui_state.c ****     {
+ 193:Core/Src/ui/ui_state.c ****         static uint32_t _pend_tick = 0;
+ 194:Core/Src/ui/ui_state.c ****         static uint8_t  _pend = 0;
+ 195:Core/Src/ui/ui_state.c **** 
+ 196:Core/Src/ui/ui_state.c ****         if (btn_pressed && !ui_state.btn_was_held)
+ 197:Core/Src/ui/ui_state.c ****         {
+ 198:Core/Src/ui/ui_state.c ****             if (_pend && (now - _pend_tick) <= UI_DOUBLE_CLICK_MS)
+ 199:Core/Src/ui/ui_state.c ****             {
+ 200:Core/Src/ui/ui_state.c ****                 _pend = 0;                       /* two presses = double click */
+ARM GAS  /tmp/ccjqjIde.s 			page 6
+
+
+ 201:Core/Src/ui/ui_state.c ****                 if (ui_state.current_screen != UI_SCREEN_SETTINGS)
+ 202:Core/Src/ui/ui_state.c ****                 {
+ 203:Core/Src/ui/ui_state.c ****                     if (ui_state.current_screen != UI_SCREEN_OUTPUT)
+ 204:Core/Src/ui/ui_state.c ****                         _settings_return = ui_state.current_screen;
+ 205:Core/Src/ui/ui_state.c ****                     UI_NavigateTo(UI_SCREEN_SETTINGS);
+ 206:Core/Src/ui/ui_state.c ****                 }
+ 207:Core/Src/ui/ui_state.c ****             }
+ 208:Core/Src/ui/ui_state.c ****             else { _pend = 1; _pend_tick = now; }
+ 209:Core/Src/ui/ui_state.c ****         }
+ 210:Core/Src/ui/ui_state.c **** 
+ 211:Core/Src/ui/ui_state.c ****         /* single click come out only when button UP
+ 212:Core/Src/ui/ui_state.c ****          * (btn_press_tick != 0 = finger still on button: long press
+ 213:Core/Src/ui/ui_state.c ****          * in progress must never spit click at +400 ms) */
+ 214:Core/Src/ui/ui_state.c ****         if (_pend && ui_state.btn_press_tick == 0 &&
+ 215:Core/Src/ui/ui_state.c ****             (now - _pend_tick) > UI_DOUBLE_CLICK_MS)
+ 216:Core/Src/ui/ui_state.c ****         { click = 1; _pend = 0; }                /* single click come out */
+ 217:Core/Src/ui/ui_state.c **** 
+ 218:Core/Src/ui/ui_state.c ****         if (ui_state.btn_was_held) _pend = 0;    /* long press eat pending click */
+ 219:Core/Src/ui/ui_state.c ****     }
+ 220:Core/Src/ui/ui_state.c **** 
+ 221:Core/Src/ui/ui_state.c ****     /* -------- per-screen navigation -------- */
+ 222:Core/Src/ui/ui_state.c **** 
+ 223:Core/Src/ui/ui_state.c ****     switch (ui_state.current_screen)
+ 224:Core/Src/ui/ui_state.c ****     {
+ 225:Core/Src/ui/ui_state.c ****         case UI_SCREEN_MAIN:
+ 226:Core/Src/ui/ui_state.c **** 
+ 227:Core/Src/ui/ui_state.c ****             /* from MAIN spin knob to move between screens.
+ 228:Core/Src/ui/ui_state.c ****              * press do nothing here (nothing to select) */
+ 229:Core/Src/ui/ui_state.c ****             if (enc_delta > 0) UI_NavigateTo(UI_SCREEN_DETAIL);
+ 230:Core/Src/ui/ui_state.c ****             if (enc_delta < 0) UI_NavigateTo(UI_SCREEN_STATS);   /* wrap around */
+ 231:Core/Src/ui/ui_state.c ****             break;
+ 232:Core/Src/ui/ui_state.c **** 
+ 233:Core/Src/ui/ui_state.c ****         case UI_SCREEN_DETAIL:
+ 234:Core/Src/ui/ui_state.c ****             if (enc_delta > 0) UI_NavigateTo(UI_SCREEN_GRAPH);
+ 235:Core/Src/ui/ui_state.c ****             if (enc_delta < 0) UI_NavigateTo(UI_SCREEN_MAIN);
+ 236:Core/Src/ui/ui_state.c ****             break;
+ 237:Core/Src/ui/ui_state.c **** 
+ 238:Core/Src/ui/ui_state.c ****         case UI_SCREEN_GRAPH:
+ 239:Core/Src/ui/ui_state.c ****             if (enc_delta > 0) UI_NavigateTo(UI_SCREEN_PORTS);
+ 240:Core/Src/ui/ui_state.c ****             if (enc_delta < 0) UI_NavigateTo(UI_SCREEN_DETAIL);
+ 241:Core/Src/ui/ui_state.c ****             if (click) Screen_Graph_CycleScale();
+ 242:Core/Src/ui/ui_state.c ****             break;
+ 243:Core/Src/ui/ui_state.c **** 
+ 244:Core/Src/ui/ui_state.c ****         case UI_SCREEN_PORTS:
+ 245:Core/Src/ui/ui_state.c ****             if (enc_delta > 0) UI_NavigateTo(UI_SCREEN_STATS);
+ 246:Core/Src/ui/ui_state.c ****             if (enc_delta < 0) UI_NavigateTo(UI_SCREEN_GRAPH);
+ 247:Core/Src/ui/ui_state.c ****             break;
+ 248:Core/Src/ui/ui_state.c **** 
+ 249:Core/Src/ui/ui_state.c ****         case UI_SCREEN_STATS:
+ 250:Core/Src/ui/ui_state.c ****             if (enc_delta > 0) UI_NavigateTo(UI_SCREEN_MAIN);    /* wrap around */
+ 251:Core/Src/ui/ui_state.c ****             if (enc_delta < 0) UI_NavigateTo(UI_SCREEN_PORTS);
+ 252:Core/Src/ui/ui_state.c ****             break;
+ 253:Core/Src/ui/ui_state.c **** 
+ 254:Core/Src/ui/ui_state.c ****         case UI_SCREEN_SETTINGS:
+ 255:Core/Src/ui/ui_state.c ****         {
+ 256:Core/Src/ui/ui_state.c ****             /* in settings knob scroll rows, button act on row.
+ 257:Core/Src/ui/ui_state.c ****              * static var remember row between calls. */
+ARM GAS  /tmp/ccjqjIde.s 			page 7
+
+
+ 258:Core/Src/ui/ui_state.c ****             static uint8_t settings_row = 0;
+ 259:Core/Src/ui/ui_state.c ****             static const uint8_t SETTINGS_ROWS = 8; /* A1, A2, Lab, C2, Lock all,
+ 260:Core/Src/ui/ui_state.c ****                                                        Screen off, Light sleep, Exit */
+ 261:Core/Src/ui/ui_state.c **** 
+ 262:Core/Src/ui/ui_state.c ****             if (enc_delta > 0)
+ 263:Core/Src/ui/ui_state.c ****             {
+ 264:Core/Src/ui/ui_state.c ****                 /* scroll down, wrap at end */
+ 265:Core/Src/ui/ui_state.c ****                 settings_row = (settings_row + 1) % SETTINGS_ROWS;
+ 266:Core/Src/ui/ui_state.c ****                 Screen_Settings_Update(settings_row);
+ 267:Core/Src/ui/ui_state.c ****             }
+ 268:Core/Src/ui/ui_state.c ****             else if (enc_delta < 0)
+ 269:Core/Src/ui/ui_state.c ****             {
+ 270:Core/Src/ui/ui_state.c ****                 /* scroll up, wrap at start */
+ 271:Core/Src/ui/ui_state.c ****                 settings_row = (settings_row + SETTINGS_ROWS - 1) % SETTINGS_ROWS;
+ 272:Core/Src/ui/ui_state.c ****                 Screen_Settings_Update(settings_row);
+ 273:Core/Src/ui/ui_state.c ****             }
+ 274:Core/Src/ui/ui_state.c **** 
+ 275:Core/Src/ui/ui_state.c ****             /* short press: toggle plain outputs, open channel page
+ 276:Core/Src/ui/ui_state.c ****              * for Lab / USB-C2, or do row action */
+ 277:Core/Src/ui/ui_state.c ****             if (click)
+ 278:Core/Src/ui/ui_state.c ****             {
+ 279:Core/Src/ui/ui_state.c ****                 switch (settings_row)
+ 280:Core/Src/ui/ui_state.c ****                 {
+ 281:Core/Src/ui/ui_state.c ****                     case 0: case 1:             /* toggle USB-A */
+ 282:Core/Src/ui/ui_state.c ****                         Screen_Settings_Toggle(settings_row);
+ 283:Core/Src/ui/ui_state.c ****                         Screen_Settings_Update(settings_row);
+ 284:Core/Src/ui/ui_state.c ****                         break;
+ 285:Core/Src/ui/ui_state.c ****                     case 2: case 3:             /* channel pages */
+ 286:Core/Src/ui/ui_state.c ****                         Screen_Output_Open(settings_row - 2);
+ 287:Core/Src/ui/ui_state.c ****                         UI_NavigateTo(UI_SCREEN_OUTPUT);
+ 288:Core/Src/ui/ui_state.c ****                         break;
+ 289:Core/Src/ui/ui_state.c ****                     case 4:                     /* Lock all */
+ 290:Core/Src/ui/ui_state.c ****                         if (!Screen_Settings_GetLockAll())
+ 291:Core/Src/ui/ui_state.c ****                         {
+ 292:Core/Src/ui/ui_state.c ****                             /* turning ON: ask first, big action */
+ 293:Core/Src/ui/ui_state.c ****                             Screen_Confirm_Open(CONFIRM_LOCKALL);
+ 294:Core/Src/ui/ui_state.c ****                             UI_OpenConfirm();
+ 295:Core/Src/ui/ui_state.c ****                         }
+ 296:Core/Src/ui/ui_state.c ****                         else
+ 297:Core/Src/ui/ui_state.c ****                         {
+ 298:Core/Src/ui/ui_state.c ****                             Screen_Settings_LockAll(0);
+ 299:Core/Src/ui/ui_state.c ****                             Screen_Settings_Update(settings_row);
+ 300:Core/Src/ui/ui_state.c ****                         }
+ 301:Core/Src/ui/ui_state.c ****                         break;
+ 302:Core/Src/ui/ui_state.c ****                     case 5:                     /* display page */
+ 303:Core/Src/ui/ui_state.c ****                         Screen_Display_Open();
+ 304:Core/Src/ui/ui_state.c ****                         UI_NavigateTo(UI_SCREEN_DISPLAYPG);
+ 305:Core/Src/ui/ui_state.c ****                         break;
+ 306:Core/Src/ui/ui_state.c ****                     case 6:                     /* test page */
+ 307:Core/Src/ui/ui_state.c ****                         Screen_Test_Open();
+ 308:Core/Src/ui/ui_state.c ****                         UI_NavigateTo(UI_SCREEN_TESTPG);
+ 309:Core/Src/ui/ui_state.c ****                         break;
+ 310:Core/Src/ui/ui_state.c ****                     case 7:                     /* Exit */
+ 311:Core/Src/ui/ui_state.c ****                         UI_CloseSettings();
+ 312:Core/Src/ui/ui_state.c ****                         break;
+ 313:Core/Src/ui/ui_state.c ****                 }
+ 314:Core/Src/ui/ui_state.c ****             }
+ARM GAS  /tmp/ccjqjIde.s 			page 8
+
+
+ 315:Core/Src/ui/ui_state.c **** 
+ 316:Core/Src/ui/ui_state.c ****             break;
+ 317:Core/Src/ui/ui_state.c ****         }
+ 318:Core/Src/ui/ui_state.c **** 
+ 319:Core/Src/ui/ui_state.c ****         case UI_SCREEN_OUTPUT:
+ 320:Core/Src/ui/ui_state.c ****             if (enc_delta != 0) Screen_Output_OnRotate(enc_delta);
+ 321:Core/Src/ui/ui_state.c ****             if (click) Screen_Output_OnPress();
+ 322:Core/Src/ui/ui_state.c ****             break;
+ 323:Core/Src/ui/ui_state.c **** 
+ 324:Core/Src/ui/ui_state.c ****         case UI_SCREEN_DISPLAYPG:
+ 325:Core/Src/ui/ui_state.c ****             if (enc_delta != 0) Screen_Display_OnRotate(enc_delta);
+ 326:Core/Src/ui/ui_state.c ****             if (click) Screen_Display_OnPress();
+ 327:Core/Src/ui/ui_state.c ****             break;
+ 328:Core/Src/ui/ui_state.c **** 
+ 329:Core/Src/ui/ui_state.c ****         case UI_SCREEN_TESTPG:
+ 330:Core/Src/ui/ui_state.c ****             if (enc_delta != 0) Screen_Test_OnRotate(enc_delta);
+ 331:Core/Src/ui/ui_state.c ****             if (click) Screen_Test_OnPress();
+ 332:Core/Src/ui/ui_state.c ****             break;
+ 333:Core/Src/ui/ui_state.c **** 
+ 334:Core/Src/ui/ui_state.c ****         case UI_SCREEN_CONFIRM:
+ 335:Core/Src/ui/ui_state.c ****             if (enc_delta != 0) Screen_Confirm_OnRotate(enc_delta);
+ 336:Core/Src/ui/ui_state.c ****             if (click)
+ 337:Core/Src/ui/ui_state.c ****             {
+ 338:Core/Src/ui/ui_state.c ****                 uint8_t r = Screen_Confirm_OnPress();
+ 339:Core/Src/ui/ui_state.c ****                 if (r == 1)   /* user said yes */
+ 340:Core/Src/ui/ui_state.c ****                 {
+ 341:Core/Src/ui/ui_state.c ****                     if (Screen_Confirm_GetAction() == CONFIRM_LOCKALL)
+ 342:Core/Src/ui/ui_state.c ****                     {
+ 343:Core/Src/ui/ui_state.c ****                         Screen_Settings_LockAll(1);
+ 344:Core/Src/ui/ui_state.c ****                         UI_NavigateTo(_confirm_return);
+ 345:Core/Src/ui/ui_state.c ****                     }
+ 346:Core/Src/ui/ui_state.c ****                     else      /* CONFIRM_LIGHTSLEEP */
+ 347:Core/Src/ui/ui_state.c ****                     {
+ 348:Core/Src/ui/ui_state.c ****                         UI_NavigateTo(_confirm_return);
+ 349:Core/Src/ui/ui_state.c ****                         Screen_Settings_LockAll(1);
+ 350:Core/Src/ui/ui_state.c ****                         UI_EnterSleepLight();
+ 351:Core/Src/ui/ui_state.c ****                     }
+ 352:Core/Src/ui/ui_state.c ****                 }
+ 353:Core/Src/ui/ui_state.c ****                 else          /* user said no */
+ 354:Core/Src/ui/ui_state.c ****                     UI_NavigateTo(_confirm_return);
+ 355:Core/Src/ui/ui_state.c ****             }
+ 356:Core/Src/ui/ui_state.c ****             break;
+ 357:Core/Src/ui/ui_state.c **** 
+ 358:Core/Src/ui/ui_state.c ****         case UI_SCREEN_WARNING:
+ 359:Core/Src/ui/ui_state.c ****             /* auto-ack: 30 s with no touch -> warning confirm itself
+ 360:Core/Src/ui/ui_state.c ****              * (header icon keep telling the condition) */
+ 361:Core/Src/ui/ui_state.c ****             if (!click && (now - _warn_open_tick) >= 30000)
+ 362:Core/Src/ui/ui_state.c ****                 click = 1;
+ 363:Core/Src/ui/ui_state.c ****             if (click)                          /* OK: acked for this boot */
+ 364:Core/Src/ui/ui_state.c ****             {
+ 365:Core/Src/ui/ui_state.c ****                 _warn_acked[_warn_active] = 1;
+ 366:Core/Src/ui/ui_state.c ****                 if (_warn_active == WARN_VCRIT)
+ 367:Core/Src/ui/ui_state.c ****                 {
+ 368:Core/Src/ui/ui_state.c ****                     /* critical: close all outputs, protect cells.
+ 369:Core/Src/ui/ui_state.c ****                      * real cut is BQ77915 job in hardware; we just lower
+ 370:Core/Src/ui/ui_state.c ****                      * hunger (light sleep) before he wake up angry.
+ 371:Core/Src/ui/ui_state.c ****                      * go back to old screen FIRST so sleep return point
+ARM GAS  /tmp/ccjqjIde.s 			page 9
+
+
+ 372:Core/Src/ui/ui_state.c ****                      * is not the warning itself. */
+ 373:Core/Src/ui/ui_state.c ****                     UI_NavigateTo(_warn_return);
+ 374:Core/Src/ui/ui_state.c ****                     Screen_Settings_LockAll(1);
+ 375:Core/Src/ui/ui_state.c ****                     UI_EnterSleepLight();
+ 376:Core/Src/ui/ui_state.c ****                 }
+ 377:Core/Src/ui/ui_state.c ****                 else
+ 378:Core/Src/ui/ui_state.c ****                     UI_NavigateTo(_warn_return);
+ 379:Core/Src/ui/ui_state.c ****             }
+ 380:Core/Src/ui/ui_state.c ****             break;
+ 381:Core/Src/ui/ui_state.c **** 
+ 382:Core/Src/ui/ui_state.c ****         default:
+ 383:Core/Src/ui/ui_state.c ****             break;
+ 384:Core/Src/ui/ui_state.c ****     }
+ 385:Core/Src/ui/ui_state.c **** 
+ 386:Core/Src/ui/ui_state.c ****     /* -------- telemetry polling -------- */
+ 387:Core/Src/ui/ui_state.c **** 
+ 388:Core/Src/ui/ui_state.c ****     /* Telemetry_Poll() check interval itself, return fast if too early */
+ 389:Core/Src/ui/ui_state.c ****     Telemetry_Poll();
+ 390:Core/Src/ui/ui_state.c **** 
+ 391:Core/Src/ui/ui_state.c ****     /* -------- periodic UI refresh -------- */
+ 392:Core/Src/ui/ui_state.c **** 
+ 393:Core/Src/ui/ui_state.c ****     if ((now - ui_state.last_refresh_tick) >= UI_REFRESH_INTERVAL_MS)
+ 394:Core/Src/ui/ui_state.c ****     {
+ 395:Core/Src/ui/ui_state.c ****         ui_state.last_refresh_tick = now;
+ 396:Core/Src/ui/ui_state.c **** 
+ 397:Core/Src/ui/ui_state.c ****         if (ui_state.needs_full_redraw)
+ 398:Core/Src/ui/ui_state.c ****         {
+ 399:Core/Src/ui/ui_state.c ****             /* first render of screen: draw all of it */
+ 400:Core/Src/ui/ui_state.c ****             ui_state.needs_full_redraw = 0;
+ 401:Core/Src/ui/ui_state.c **** 
+ 402:Core/Src/ui/ui_state.c ****             switch (ui_state.current_screen)
+ 403:Core/Src/ui/ui_state.c ****             {
+ 404:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_BOOT:     Screen_Boot_Draw();      break;
+ 405:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_MAIN:     Screen_Main_Draw();      break;
+ 406:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_DETAIL:   Screen_Detail_Draw();    break;
+ 407:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_GRAPH:    Screen_Graph_Draw();     break;
+ 408:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_PORTS:    Screen_Ports_Draw();     break;
+ 409:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_STATS:    Screen_Stats_Draw();     break;
+ 410:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_SETTINGS: Screen_Settings_Draw(0); break;
+ 411:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_OUTPUT:   Screen_Output_Draw();     break;
+ 412:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_DISPLAYPG: Screen_Display_Draw();   break;
+ 413:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_TESTPG:    Screen_Test_Draw();      break;
+ 414:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_CONFIRM:  Screen_Confirm_Draw();    break;
+ 415:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_WARNING:  Screen_Warning_Draw();    break;
+ 416:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_SLEEP:    Screen_Sleep_Draw();      break;
+ 417:Core/Src/ui/ui_state.c ****                 default: break;
+ 418:Core/Src/ui/ui_state.c ****             }
+ 419:Core/Src/ui/ui_state.c ****         }
+ 420:Core/Src/ui/ui_state.c ****         else
+ 421:Core/Src/ui/ui_state.c ****         {
+ 422:Core/Src/ui/ui_state.c ****             /* header icons follow live telemetry on every screen
+ 423:Core/Src/ui/ui_state.c ****              * (except boot, sleep, modals) */
+ 424:Core/Src/ui/ui_state.c ****             if (ui_state.current_screen != UI_SCREEN_BOOT &&
+ 425:Core/Src/ui/ui_state.c ****                 ui_state.current_screen != UI_SCREEN_SLEEP &&
+ 426:Core/Src/ui/ui_state.c ****                 ui_state.current_screen != UI_SCREEN_WARNING &&
+ 427:Core/Src/ui/ui_state.c ****                 ui_state.current_screen != UI_SCREEN_CONFIRM)
+ 428:Core/Src/ui/ui_state.c ****                 Screen_Header_RefreshIcons();
+ARM GAS  /tmp/ccjqjIde.s 			page 10
+
+
+ 429:Core/Src/ui/ui_state.c **** 
+ 430:Core/Src/ui/ui_state.c ****             /* later renders: only redraw moving parts */
+ 431:Core/Src/ui/ui_state.c ****             switch (ui_state.current_screen)
+ 432:Core/Src/ui/ui_state.c ****             {
+ 433:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_MAIN:   Screen_Main_Update();   break;
+ 434:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_DETAIL: Screen_Detail_Update(); break;
+ 435:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_GRAPH:  Screen_Graph_Update();  break;
+ 436:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_PORTS:  Screen_Ports_Update();  break;
+ 437:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_OUTPUT: Screen_Output_Update(); break;
+ 438:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_STATS:  Screen_Stats_Update();  break;
+ 439:Core/Src/ui/ui_state.c **** 
+ 440:Core/Src/ui/ui_state.c ****                 /* settings redraw on navigation, not on timer */
+ 441:Core/Src/ui/ui_state.c ****                 default:
+ 442:Core/Src/ui/ui_state.c ****                     break;
+ 443:Core/Src/ui/ui_state.c ****             }
+ 444:Core/Src/ui/ui_state.c ****         }
+ 445:Core/Src/ui/ui_state.c ****     }
+ 446:Core/Src/ui/ui_state.c **** }
+ 447:Core/Src/ui/ui_state.c **** 
+ 448:Core/Src/ui/ui_state.c **** void UI_NavigateTo(UIScreen_t screen)
+ 449:Core/Src/ui/ui_state.c **** {
+  89              		.loc 1 449 1 is_stmt 1 view -0
+  90              		.cfi_startproc
+  91              		@ args = 0, pretend = 0, frame = 0
+  92              		@ frame_needed = 0, uses_anonymous_args = 0
+  93              		@ link register save eliminated.
+ 450:Core/Src/ui/ui_state.c ****     if (screen >= UI_SCREEN_COUNT) return;  /* bad screen, refuse */
+  94              		.loc 1 450 5 view .LVU19
+  95              		.loc 1 450 8 is_stmt 0 view .LVU20
+  96 0000 0C28     		cmp	r0, #12
+  97 0002 05D8     		bhi	.L5
+ 451:Core/Src/ui/ui_state.c **** 
+ 452:Core/Src/ui/ui_state.c ****     ui_state.prev_screen       = ui_state.current_screen;
+  98              		.loc 1 452 5 is_stmt 1 view .LVU21
+  99              		.loc 1 452 42 is_stmt 0 view .LVU22
+ 100 0004 034B     		ldr	r3, .L7
+ 101 0006 1A78     		ldrb	r2, [r3]	@ zero_extendqisi2
+ 102              		.loc 1 452 32 view .LVU23
+ 103 0008 5A70     		strb	r2, [r3, #1]
+ 453:Core/Src/ui/ui_state.c ****     ui_state.current_screen    = screen;
+ 104              		.loc 1 453 5 is_stmt 1 view .LVU24
+ 105              		.loc 1 453 32 is_stmt 0 view .LVU25
+ 106 000a 1870     		strb	r0, [r3]
+ 454:Core/Src/ui/ui_state.c ****     ui_state.needs_full_redraw = 1;  /* next tick redraw everything */
+ 107              		.loc 1 454 5 is_stmt 1 view .LVU26
+ 108              		.loc 1 454 32 is_stmt 0 view .LVU27
+ 109 000c 0122     		movs	r2, #1
+ 110 000e 9A70     		strb	r2, [r3, #2]
+ 111              	.L5:
+ 455:Core/Src/ui/ui_state.c **** }
+ 112              		.loc 1 455 1 view .LVU28
+ 113 0010 7047     		bx	lr
+ 114              	.L8:
+ 115 0012 00BF     		.align	2
+ 116              	.L7:
+ 117 0014 00000000 		.word	ui_state
+ 118              		.cfi_endproc
+ARM GAS  /tmp/ccjqjIde.s 			page 11
+
+
+ 119              	.LFE222:
+ 121              		.section	.text.UI_EnterSleep,"ax",%progbits
+ 122              		.align	1
+ 123              		.global	UI_EnterSleep
+ 124              		.syntax unified
+ 125              		.thumb
+ 126              		.thumb_func
+ 128              	UI_EnterSleep:
+ 129              	.LFB223:
+ 456:Core/Src/ui/ui_state.c **** 
+ 457:Core/Src/ui/ui_state.c **** void UI_EnterSleepLight(void);   /* sleep flavour with wake splash */
+ 458:Core/Src/ui/ui_state.c **** 
+ 459:Core/Src/ui/ui_state.c **** void UI_EnterSleep(void)
+ 460:Core/Src/ui/ui_state.c **** {
+ 130              		.loc 1 460 1 is_stmt 1 view -0
+ 131              		.cfi_startproc
+ 132              		@ args = 0, pretend = 0, frame = 0
+ 133              		@ frame_needed = 0, uses_anonymous_args = 0
+ 134 0000 08B5     		push	{r3, lr}
+ 135              	.LCFI1:
+ 136              		.cfi_def_cfa_offset 8
+ 137              		.cfi_offset 3, -8
+ 138              		.cfi_offset 14, -4
+ 461:Core/Src/ui/ui_state.c ****     _sleep_light = 0;
+ 139              		.loc 1 461 5 view .LVU30
+ 140              		.loc 1 461 18 is_stmt 0 view .LVU31
+ 141 0002 084B     		ldr	r3, .L12
+ 142 0004 0022     		movs	r2, #0
+ 143 0006 1A70     		strb	r2, [r3]
+ 462:Core/Src/ui/ui_state.c ****     _sleep_return = (ui_state.current_screen == UI_SCREEN_SETTINGS ||
+ 144              		.loc 1 462 5 is_stmt 1 view .LVU32
+ 145              		.loc 1 462 30 is_stmt 0 view .LVU33
+ 146 0008 074B     		ldr	r3, .L12+4
+ 147 000a 1A78     		ldrb	r2, [r3]	@ zero_extendqisi2
+ 463:Core/Src/ui/ui_state.c ****                      ui_state.current_screen == UI_SCREEN_OUTPUT ||
+ 464:Core/Src/ui/ui_state.c ****                      ui_state.current_screen == UI_SCREEN_DISPLAYPG ||
+ 465:Core/Src/ui/ui_state.c ****                      ui_state.current_screen == UI_SCREEN_TESTPG ||
+ 148              		.loc 1 465 66 view .LVU34
+ 149 000c 931F     		subs	r3, r2, #6
+ 150 000e DBB2     		uxtb	r3, r3
+ 466:Core/Src/ui/ui_state.c ****                      ui_state.current_screen == UI_SCREEN_CONFIRM)
+ 467:Core/Src/ui/ui_state.c ****                     ? _settings_return : ui_state.current_screen;
+ 151              		.loc 1 467 40 view .LVU35
+ 152 0010 042B     		cmp	r3, #4
+ 153 0012 01D8     		bhi	.L10
+ 154              		.loc 1 467 40 discriminator 2 view .LVU36
+ 155 0014 054B     		ldr	r3, .L12+8
+ 156 0016 1A78     		ldrb	r2, [r3]	@ zero_extendqisi2
+ 157              	.L10:
+ 462:Core/Src/ui/ui_state.c ****                      ui_state.current_screen == UI_SCREEN_OUTPUT ||
+ 158              		.loc 1 462 19 discriminator 1 view .LVU37
+ 159 0018 054B     		ldr	r3, .L12+12
+ 160 001a 1A70     		strb	r2, [r3]
+ 468:Core/Src/ui/ui_state.c ****     UI_NavigateTo(UI_SCREEN_SLEEP);
+ 161              		.loc 1 468 5 is_stmt 1 view .LVU38
+ 162 001c 0C20     		movs	r0, #12
+ 163 001e FFF7FEFF 		bl	UI_NavigateTo
+ARM GAS  /tmp/ccjqjIde.s 			page 12
+
+
+ 164              	.LVL3:
+ 469:Core/Src/ui/ui_state.c **** }
+ 165              		.loc 1 469 1 is_stmt 0 view .LVU39
+ 166 0022 08BD     		pop	{r3, pc}
+ 167              	.L13:
+ 168              		.align	2
+ 169              	.L12:
+ 170 0024 00000000 		.word	_sleep_light
+ 171 0028 00000000 		.word	ui_state
+ 172 002c 00000000 		.word	_settings_return
+ 173 0030 00000000 		.word	_sleep_return
+ 174              		.cfi_endproc
+ 175              	.LFE223:
+ 177              		.section	.text.UI_EnterSleepLight,"ax",%progbits
+ 178              		.align	1
+ 179              		.global	UI_EnterSleepLight
+ 180              		.syntax unified
+ 181              		.thumb
+ 182              		.thumb_func
+ 184              	UI_EnterSleepLight:
+ 185              	.LFB224:
+ 470:Core/Src/ui/ui_state.c **** 
+ 471:Core/Src/ui/ui_state.c **** void UI_EnterSleepLight(void)
+ 472:Core/Src/ui/ui_state.c **** {
+ 186              		.loc 1 472 1 is_stmt 1 view -0
+ 187              		.cfi_startproc
+ 188              		@ args = 0, pretend = 0, frame = 0
+ 189              		@ frame_needed = 0, uses_anonymous_args = 0
+ 190 0000 08B5     		push	{r3, lr}
+ 191              	.LCFI2:
+ 192              		.cfi_def_cfa_offset 8
+ 193              		.cfi_offset 3, -8
+ 194              		.cfi_offset 14, -4
+ 473:Core/Src/ui/ui_state.c ****     UI_EnterSleep();
+ 195              		.loc 1 473 5 view .LVU41
+ 196 0002 FFF7FEFF 		bl	UI_EnterSleep
+ 197              	.LVL4:
+ 474:Core/Src/ui/ui_state.c ****     _sleep_light = 1;
+ 198              		.loc 1 474 5 view .LVU42
+ 199              		.loc 1 474 18 is_stmt 0 view .LVU43
+ 200 0006 024B     		ldr	r3, .L16
+ 201 0008 0122     		movs	r2, #1
+ 202 000a 1A70     		strb	r2, [r3]
+ 475:Core/Src/ui/ui_state.c **** }
+ 203              		.loc 1 475 1 view .LVU44
+ 204 000c 08BD     		pop	{r3, pc}
+ 205              	.L17:
+ 206 000e 00BF     		.align	2
+ 207              	.L16:
+ 208 0010 00000000 		.word	_sleep_light
+ 209              		.cfi_endproc
+ 210              	.LFE224:
+ 212              		.section	.text.UI_OpenConfirm,"ax",%progbits
+ 213              		.align	1
+ 214              		.global	UI_OpenConfirm
+ 215              		.syntax unified
+ 216              		.thumb
+ARM GAS  /tmp/ccjqjIde.s 			page 13
+
+
+ 217              		.thumb_func
+ 219              	UI_OpenConfirm:
+ 220              	.LFB225:
+ 476:Core/Src/ui/ui_state.c **** 
+ 477:Core/Src/ui/ui_state.c **** void UI_OpenConfirm(void)   /* pages call this: remember way home */
+ 478:Core/Src/ui/ui_state.c **** {
+ 221              		.loc 1 478 1 is_stmt 1 view -0
+ 222              		.cfi_startproc
+ 223              		@ args = 0, pretend = 0, frame = 0
+ 224              		@ frame_needed = 0, uses_anonymous_args = 0
+ 225 0000 08B5     		push	{r3, lr}
+ 226              	.LCFI3:
+ 227              		.cfi_def_cfa_offset 8
+ 228              		.cfi_offset 3, -8
+ 229              		.cfi_offset 14, -4
+ 479:Core/Src/ui/ui_state.c ****     _confirm_return = ui_state.current_screen;
+ 230              		.loc 1 479 5 view .LVU46
+ 231              		.loc 1 479 31 is_stmt 0 view .LVU47
+ 232 0002 044B     		ldr	r3, .L20
+ 233 0004 1A78     		ldrb	r2, [r3]	@ zero_extendqisi2
+ 234              		.loc 1 479 21 view .LVU48
+ 235 0006 044B     		ldr	r3, .L20+4
+ 236 0008 1A70     		strb	r2, [r3]
+ 480:Core/Src/ui/ui_state.c ****     UI_NavigateTo(UI_SCREEN_CONFIRM);
+ 237              		.loc 1 480 5 is_stmt 1 view .LVU49
+ 238 000a 0A20     		movs	r0, #10
+ 239 000c FFF7FEFF 		bl	UI_NavigateTo
+ 240              	.LVL5:
+ 481:Core/Src/ui/ui_state.c **** }
+ 241              		.loc 1 481 1 is_stmt 0 view .LVU50
+ 242 0010 08BD     		pop	{r3, pc}
+ 243              	.L21:
+ 244 0012 00BF     		.align	2
+ 245              	.L20:
+ 246 0014 00000000 		.word	ui_state
+ 247 0018 00000000 		.word	_confirm_return
+ 248              		.cfi_endproc
+ 249              	.LFE225:
+ 251              		.section	.text.UI_CloseSettings,"ax",%progbits
+ 252              		.align	1
+ 253              		.global	UI_CloseSettings
+ 254              		.syntax unified
+ 255              		.thumb
+ 256              		.thumb_func
+ 258              	UI_CloseSettings:
+ 259              	.LFB226:
+ 482:Core/Src/ui/ui_state.c **** 
+ 483:Core/Src/ui/ui_state.c **** void UI_CloseSettings(void)
+ 484:Core/Src/ui/ui_state.c **** {
+ 260              		.loc 1 484 1 is_stmt 1 view -0
+ 261              		.cfi_startproc
+ 262              		@ args = 0, pretend = 0, frame = 0
+ 263              		@ frame_needed = 0, uses_anonymous_args = 0
+ 264 0000 08B5     		push	{r3, lr}
+ 265              	.LCFI4:
+ 266              		.cfi_def_cfa_offset 8
+ 267              		.cfi_offset 3, -8
+ARM GAS  /tmp/ccjqjIde.s 			page 14
+
+
+ 268              		.cfi_offset 14, -4
+ 485:Core/Src/ui/ui_state.c ****     UI_NavigateTo(_settings_return);
+ 269              		.loc 1 485 5 view .LVU52
+ 270 0002 024B     		ldr	r3, .L24
+ 271 0004 1878     		ldrb	r0, [r3]	@ zero_extendqisi2
+ 272 0006 FFF7FEFF 		bl	UI_NavigateTo
+ 273              	.LVL6:
+ 486:Core/Src/ui/ui_state.c **** }
+ 274              		.loc 1 486 1 is_stmt 0 view .LVU53
+ 275 000a 08BD     		pop	{r3, pc}
+ 276              	.L25:
+ 277              		.align	2
+ 278              	.L24:
+ 279 000c 00000000 		.word	_settings_return
+ 280              		.cfi_endproc
+ 281              	.LFE226:
+ 283              		.section	.text.UI_Tick,"ax",%progbits
+ 284              		.align	1
+ 285              		.global	UI_Tick
+ 286              		.syntax unified
+ 287              		.thumb
+ 288              		.thumb_func
+ 290              	UI_Tick:
+ 291              	.LFB221:
+  71:Core/Src/ui/ui_state.c ****     uint32_t now = HAL_GetTick();
+ 292              		.loc 1 71 1 is_stmt 1 view -0
+ 293              		.cfi_startproc
+ 294              		@ args = 0, pretend = 0, frame = 0
+ 295              		@ frame_needed = 0, uses_anonymous_args = 0
+ 296 0000 F8B5     		push	{r3, r4, r5, r6, r7, lr}
+ 297              	.LCFI5:
+ 298              		.cfi_def_cfa_offset 24
+ 299              		.cfi_offset 3, -24
+ 300              		.cfi_offset 4, -20
+ 301              		.cfi_offset 5, -16
+ 302              		.cfi_offset 6, -12
+ 303              		.cfi_offset 7, -8
+ 304              		.cfi_offset 14, -4
+  72:Core/Src/ui/ui_state.c **** 
+ 305              		.loc 1 72 5 view .LVU55
+  72:Core/Src/ui/ui_state.c **** 
+ 306              		.loc 1 72 20 is_stmt 0 view .LVU56
+ 307 0002 FFF7FEFF 		bl	HAL_GetTick
+ 308              	.LVL7:
+ 309 0006 0446     		mov	r4, r0
+ 310              	.LVL8:
+  75:Core/Src/ui/ui_state.c ****     {
+ 311              		.loc 1 75 5 is_stmt 1 view .LVU57
+  75:Core/Src/ui/ui_state.c ****     {
+ 312              		.loc 1 75 17 is_stmt 0 view .LVU58
+ 313 0008 7E4B     		ldr	r3, .L137
+ 314 000a 1B78     		ldrb	r3, [r3]	@ zero_extendqisi2
+  75:Core/Src/ui/ui_state.c ****     {
+ 315              		.loc 1 75 8 view .LVU59
+ 316 000c 93B9     		cbnz	r3, .L27
+  77:Core/Src/ui/ui_state.c ****         {
+ 317              		.loc 1 77 9 is_stmt 1 view .LVU60
+ARM GAS  /tmp/ccjqjIde.s 			page 15
+
+
+  77:Core/Src/ui/ui_state.c ****         {
+ 318              		.loc 1 77 18 is_stmt 0 view .LVU61
+ 319 000e 7E4B     		ldr	r3, .L137+4
+ 320 0010 1B68     		ldr	r3, [r3]
+ 321 0012 C31A     		subs	r3, r0, r3
+  77:Core/Src/ui/ui_state.c ****         {
+ 322              		.loc 1 77 38 view .LVU62
+ 323 0014 7D4A     		ldr	r2, .L137+8
+ 324 0016 1268     		ldr	r2, [r2]
+  77:Core/Src/ui/ui_state.c ****         {
+ 325              		.loc 1 77 12 view .LVU63
+ 326 0018 9342     		cmp	r3, r2
+ 327 001a 00D2     		bcs	.L114
+ 328              	.LVL9:
+ 329              	.L26:
+ 446:Core/Src/ui/ui_state.c **** 
+ 330              		.loc 1 446 1 view .LVU64
+ 331 001c F8BD     		pop	{r3, r4, r5, r6, r7, pc}
+ 332              	.LVL10:
+ 333              	.L114:
+  81:Core/Src/ui/ui_state.c ****             _boot_dest     = UI_SCREEN_MAIN;
+ 334              		.loc 1 81 13 is_stmt 1 view .LVU65
+ 335 001e 7C4C     		ldr	r4, .L137+12
+ 336 0020 2078     		ldrb	r0, [r4]	@ zero_extendqisi2
+ 337              	.LVL11:
+  81:Core/Src/ui/ui_state.c ****             _boot_dest     = UI_SCREEN_MAIN;
+ 338              		.loc 1 81 13 is_stmt 0 view .LVU66
+ 339 0022 FFF7FEFF 		bl	UI_NavigateTo
+ 340              	.LVL12:
+  82:Core/Src/ui/ui_state.c ****             _boot_duration = BOOT_SCREEN_DURATION_MS;
+ 341              		.loc 1 82 13 is_stmt 1 view .LVU67
+  82:Core/Src/ui/ui_state.c ****             _boot_duration = BOOT_SCREEN_DURATION_MS;
+ 342              		.loc 1 82 28 is_stmt 0 view .LVU68
+ 343 0026 0123     		movs	r3, #1
+ 344 0028 2370     		strb	r3, [r4]
+  83:Core/Src/ui/ui_state.c ****         }
+ 345              		.loc 1 83 13 is_stmt 1 view .LVU69
+  83:Core/Src/ui/ui_state.c ****         }
+ 346              		.loc 1 83 28 is_stmt 0 view .LVU70
+ 347 002a 784B     		ldr	r3, .L137+8
+ 348 002c 40F2DC52 		movw	r2, #1500
+ 349 0030 1A60     		str	r2, [r3]
+ 350 0032 F3E7     		b	.L26
+ 351              	.LVL13:
+ 352              	.L27:
+  91:Core/Src/ui/ui_state.c ****     uint8_t btn_pressed = Encoder_IsPressed();
+ 353              		.loc 1 91 5 is_stmt 1 view .LVU71
+  91:Core/Src/ui/ui_state.c ****     uint8_t btn_pressed = Encoder_IsPressed();
+ 354              		.loc 1 91 27 is_stmt 0 view .LVU72
+ 355 0034 FFF7FEFF 		bl	Encoder_GetDelta
+ 356              	.LVL14:
+  91:Core/Src/ui/ui_state.c ****     uint8_t btn_pressed = Encoder_IsPressed();
+ 357              		.loc 1 91 27 view .LVU73
+ 358 0038 0546     		mov	r5, r0
+ 359              	.LVL15:
+  92:Core/Src/ui/ui_state.c **** 
+ 360              		.loc 1 92 5 is_stmt 1 view .LVU74
+ARM GAS  /tmp/ccjqjIde.s 			page 16
+
+
+  92:Core/Src/ui/ui_state.c **** 
+ 361              		.loc 1 92 27 is_stmt 0 view .LVU75
+ 362 003a FFF7FEFF 		bl	Encoder_IsPressed
+ 363              	.LVL16:
+ 364 003e 0646     		mov	r6, r0
+ 365              	.LVL17:
+  95:Core/Src/ui/ui_state.c ****     {
+ 366              		.loc 1 95 5 is_stmt 1 view .LVU76
+  95:Core/Src/ui/ui_state.c ****     {
+ 367              		.loc 1 95 17 is_stmt 0 view .LVU77
+ 368 0040 704B     		ldr	r3, .L137
+ 369 0042 1B78     		ldrb	r3, [r3]	@ zero_extendqisi2
+  95:Core/Src/ui/ui_state.c ****     {
+ 370              		.loc 1 95 8 view .LVU78
+ 371 0044 0C2B     		cmp	r3, #12
+ 372 0046 25D0     		beq	.L115
+ 115:Core/Src/ui/ui_state.c ****         _last_activity = now;
+ 373              		.loc 1 115 5 is_stmt 1 view .LVU79
+ 115:Core/Src/ui/ui_state.c ****         _last_activity = now;
+ 374              		.loc 1 115 8 is_stmt 0 view .LVU80
+ 375 0048 0DB9     		cbnz	r5, .L31
+ 115:Core/Src/ui/ui_state.c ****         _last_activity = now;
+ 376              		.loc 1 115 24 discriminator 1 view .LVU81
+ 377 004a 0028     		cmp	r0, #0
+ 378 004c 3CD0     		beq	.L116
+ 379              	.LVL18:
+ 380              	.L31:
+ 116:Core/Src/ui/ui_state.c ****     {
+ 381              		.loc 1 116 9 is_stmt 1 view .LVU82
+ 116:Core/Src/ui/ui_state.c ****     {
+ 382              		.loc 1 116 24 is_stmt 0 view .LVU83
+ 383 004e 714B     		ldr	r3, .L137+16
+ 384 0050 1C60     		str	r4, [r3]
+ 385              	.L32:
+ 386              	.LBB2:
+ 118:Core/Src/ui/ui_state.c ****         if (as > 0 && (now - _last_activity) >= as &&
+ 387              		.loc 1 118 9 is_stmt 1 view .LVU84
+ 118:Core/Src/ui/ui_state.c ****         if (as > 0 && (now - _last_activity) >= as &&
+ 388              		.loc 1 118 23 is_stmt 0 view .LVU85
+ 389 0052 FFF7FEFF 		bl	Screen_Display_GetAutoSleepMs
+ 390              	.LVL19:
+ 119:Core/Src/ui/ui_state.c ****             ui_state.current_screen != UI_SCREEN_BOOT &&
+ 391              		.loc 1 119 9 is_stmt 1 view .LVU86
+ 119:Core/Src/ui/ui_state.c ****             ui_state.current_screen != UI_SCREEN_BOOT &&
+ 392              		.loc 1 119 12 is_stmt 0 view .LVU87
+ 393 0056 58B1     		cbz	r0, .L33
+ 119:Core/Src/ui/ui_state.c ****             ui_state.current_screen != UI_SCREEN_BOOT &&
+ 394              		.loc 1 119 28 discriminator 1 view .LVU88
+ 395 0058 6E4B     		ldr	r3, .L137+16
+ 396 005a 1B68     		ldr	r3, [r3]
+ 397 005c E31A     		subs	r3, r4, r3
+ 119:Core/Src/ui/ui_state.c ****             ui_state.current_screen != UI_SCREEN_BOOT &&
+ 398              		.loc 1 119 20 discriminator 1 view .LVU89
+ 399 005e 8342     		cmp	r3, r0
+ 400 0060 06D3     		bcc	.L33
+ 120:Core/Src/ui/ui_state.c ****             ui_state.current_screen != UI_SCREEN_WARNING &&
+ 401              		.loc 1 120 21 view .LVU90
+ARM GAS  /tmp/ccjqjIde.s 			page 17
+
+
+ 402 0062 684B     		ldr	r3, .L137
+ 403 0064 1B78     		ldrb	r3, [r3]	@ zero_extendqisi2
+ 119:Core/Src/ui/ui_state.c ****             ui_state.current_screen != UI_SCREEN_BOOT &&
+ 404              		.loc 1 119 52 discriminator 2 view .LVU91
+ 405 0066 1BB1     		cbz	r3, .L33
+ 120:Core/Src/ui/ui_state.c ****             ui_state.current_screen != UI_SCREEN_WARNING &&
+ 406              		.loc 1 120 55 discriminator 1 view .LVU92
+ 407 0068 0B2B     		cmp	r3, #11
+ 408 006a 01D0     		beq	.L33
+ 121:Core/Src/ui/ui_state.c ****             ui_state.current_screen != UI_SCREEN_CONFIRM)
+ 409              		.loc 1 121 58 discriminator 1 view .LVU93
+ 410 006c 0A2B     		cmp	r3, #10
+ 411 006e 30D1     		bne	.L117
+ 412              	.L33:
+ 121:Core/Src/ui/ui_state.c ****             ui_state.current_screen != UI_SCREEN_CONFIRM)
+ 413              		.loc 1 121 58 discriminator 1 view .LVU94
+ 414              	.LBE2:
+ 131:Core/Src/ui/ui_state.c ****         ui_state.current_screen != UI_SCREEN_WARNING)
+ 415              		.loc 1 131 5 is_stmt 1 view .LVU95
+ 131:Core/Src/ui/ui_state.c ****         ui_state.current_screen != UI_SCREEN_WARNING)
+ 416              		.loc 1 131 17 is_stmt 0 view .LVU96
+ 417 0070 644B     		ldr	r3, .L137
+ 418 0072 1B78     		ldrb	r3, [r3]	@ zero_extendqisi2
+ 131:Core/Src/ui/ui_state.c ****         ui_state.current_screen != UI_SCREEN_WARNING)
+ 419              		.loc 1 131 8 view .LVU97
+ 420 0074 0BB1     		cbz	r3, .L34
+ 131:Core/Src/ui/ui_state.c ****         ui_state.current_screen != UI_SCREEN_WARNING)
+ 421              		.loc 1 131 51 discriminator 1 view .LVU98
+ 422 0076 0B2B     		cmp	r3, #11
+ 423 0078 30D1     		bne	.L118
+ 424              	.LVL20:
+ 425              	.L34:
+ 154:Core/Src/ui/ui_state.c ****     {
+ 426              		.loc 1 154 5 is_stmt 1 view .LVU99
+ 154:Core/Src/ui/ui_state.c ****     {
+ 427              		.loc 1 154 9 is_stmt 0 view .LVU100
+ 428 007a FFF7FEFF 		bl	Encoder_IsHeld
+ 429              	.LVL21:
+ 154:Core/Src/ui/ui_state.c ****     {
+ 430              		.loc 1 154 8 discriminator 1 view .LVU101
+ 431 007e 0028     		cmp	r0, #0
+ 432 0080 6FD0     		beq	.L39
+ 156:Core/Src/ui/ui_state.c ****         {
+ 433              		.loc 1 156 9 is_stmt 1 view .LVU102
+ 156:Core/Src/ui/ui_state.c ****         {
+ 434              		.loc 1 156 21 is_stmt 0 view .LVU103
+ 435 0082 604B     		ldr	r3, .L137
+ 436 0084 9B68     		ldr	r3, [r3, #8]
+ 156:Core/Src/ui/ui_state.c ****         {
+ 437              		.loc 1 156 12 view .LVU104
+ 438 0086 002B     		cmp	r3, #0
+ 439 0088 56D1     		bne	.L40
+ 159:Core/Src/ui/ui_state.c ****             ui_state.btn_was_held   = 0;
+ 440              		.loc 1 159 13 is_stmt 1 view .LVU105
+ 159:Core/Src/ui/ui_state.c ****             ui_state.btn_was_held   = 0;
+ 441              		.loc 1 159 37 is_stmt 0 view .LVU106
+ 442 008a 5E4B     		ldr	r3, .L137
+ARM GAS  /tmp/ccjqjIde.s 			page 18
+
+
+ 443 008c 9C60     		str	r4, [r3, #8]
+ 160:Core/Src/ui/ui_state.c ****         }
+ 444              		.loc 1 160 13 is_stmt 1 view .LVU107
+ 160:Core/Src/ui/ui_state.c ****         }
+ 445              		.loc 1 160 37 is_stmt 0 view .LVU108
+ 446 008e 0022     		movs	r2, #0
+ 447 0090 1A73     		strb	r2, [r3, #12]
+ 448 0092 69E0     		b	.L41
+ 449              	.LVL22:
+ 450              	.L115:
+  97:Core/Src/ui/ui_state.c ****         {
+ 451              		.loc 1 97 9 is_stmt 1 view .LVU109
+  97:Core/Src/ui/ui_state.c ****         {
+ 452              		.loc 1 97 12 is_stmt 0 view .LVU110
+ 453 0094 0028     		cmp	r0, #0
+ 454 0096 C1D0     		beq	.L26
+  99:Core/Src/ui/ui_state.c ****             {
+ 455              		.loc 1 99 13 is_stmt 1 view .LVU111
+  99:Core/Src/ui/ui_state.c ****             {
+ 456              		.loc 1 99 17 is_stmt 0 view .LVU112
+ 457 0098 5F4B     		ldr	r3, .L137+20
+ 458 009a 1B78     		ldrb	r3, [r3]	@ zero_extendqisi2
+  99:Core/Src/ui/ui_state.c ****             {
+ 459              		.loc 1 99 16 view .LVU113
+ 460 009c 7BB1     		cbz	r3, .L30
+ 102:Core/Src/ui/ui_state.c ****                 _boot_dest     = _sleep_return;
+ 461              		.loc 1 102 17 is_stmt 1 view .LVU114
+ 102:Core/Src/ui/ui_state.c ****                 _boot_dest     = _sleep_return;
+ 462              		.loc 1 102 32 is_stmt 0 view .LVU115
+ 463 009e 0020     		movs	r0, #0
+ 464              	.LVL23:
+ 102:Core/Src/ui/ui_state.c ****                 _boot_dest     = _sleep_return;
+ 465              		.loc 1 102 32 view .LVU116
+ 466 00a0 5D4B     		ldr	r3, .L137+20
+ 467 00a2 1870     		strb	r0, [r3]
+ 103:Core/Src/ui/ui_state.c ****                 _boot_duration = 1200;
+ 468              		.loc 1 103 17 is_stmt 1 view .LVU117
+ 103:Core/Src/ui/ui_state.c ****                 _boot_duration = 1200;
+ 469              		.loc 1 103 32 is_stmt 0 view .LVU118
+ 470 00a4 5D4B     		ldr	r3, .L137+24
+ 471 00a6 1A78     		ldrb	r2, [r3]	@ zero_extendqisi2
+ 472 00a8 594B     		ldr	r3, .L137+12
+ 473 00aa 1A70     		strb	r2, [r3]
+ 104:Core/Src/ui/ui_state.c ****                 _boot_start_tick = now;
+ 474              		.loc 1 104 17 is_stmt 1 view .LVU119
+ 104:Core/Src/ui/ui_state.c ****                 _boot_start_tick = now;
+ 475              		.loc 1 104 32 is_stmt 0 view .LVU120
+ 476 00ac 574B     		ldr	r3, .L137+8
+ 477 00ae 4FF49662 		mov	r2, #1200
+ 478 00b2 1A60     		str	r2, [r3]
+ 105:Core/Src/ui/ui_state.c ****                 UI_NavigateTo(UI_SCREEN_BOOT);
+ 479              		.loc 1 105 17 is_stmt 1 view .LVU121
+ 105:Core/Src/ui/ui_state.c ****                 UI_NavigateTo(UI_SCREEN_BOOT);
+ 480              		.loc 1 105 34 is_stmt 0 view .LVU122
+ 481 00b4 544B     		ldr	r3, .L137+4
+ 482 00b6 1C60     		str	r4, [r3]
+ 106:Core/Src/ui/ui_state.c ****             }
+ARM GAS  /tmp/ccjqjIde.s 			page 19
+
+
+ 483              		.loc 1 106 17 is_stmt 1 view .LVU123
+ 484 00b8 FFF7FEFF 		bl	UI_NavigateTo
+ 485              	.LVL24:
+ 486 00bc AEE7     		b	.L26
+ 487              	.LVL25:
+ 488              	.L30:
+ 109:Core/Src/ui/ui_state.c ****         }
+ 489              		.loc 1 109 17 view .LVU124
+ 490 00be 574B     		ldr	r3, .L137+24
+ 491 00c0 1878     		ldrb	r0, [r3]	@ zero_extendqisi2
+ 492              	.LVL26:
+ 109:Core/Src/ui/ui_state.c ****         }
+ 493              		.loc 1 109 17 is_stmt 0 view .LVU125
+ 494 00c2 FFF7FEFF 		bl	UI_NavigateTo
+ 495              	.LVL27:
+ 496 00c6 A9E7     		b	.L26
+ 497              	.LVL28:
+ 498              	.L116:
+ 115:Core/Src/ui/ui_state.c ****         _last_activity = now;
+ 499              		.loc 1 115 42 discriminator 2 view .LVU126
+ 500 00c8 FFF7FEFF 		bl	Encoder_IsHeld
+ 501              	.LVL29:
+ 115:Core/Src/ui/ui_state.c ****         _last_activity = now;
+ 502              		.loc 1 115 39 discriminator 3 view .LVU127
+ 503 00cc 0028     		cmp	r0, #0
+ 504 00ce C0D0     		beq	.L32
+ 505 00d0 BDE7     		b	.L31
+ 506              	.LVL30:
+ 507              	.L117:
+ 508              	.LBB3:
+ 124:Core/Src/ui/ui_state.c ****             UI_EnterSleep();
+ 509              		.loc 1 124 13 is_stmt 1 view .LVU128
+ 124:Core/Src/ui/ui_state.c ****             UI_EnterSleep();
+ 510              		.loc 1 124 28 is_stmt 0 view .LVU129
+ 511 00d2 504B     		ldr	r3, .L137+16
+ 512 00d4 1C60     		str	r4, [r3]
+ 125:Core/Src/ui/ui_state.c ****             return;
+ 513              		.loc 1 125 13 is_stmt 1 view .LVU130
+ 514 00d6 FFF7FEFF 		bl	UI_EnterSleep
+ 515              	.LVL31:
+ 126:Core/Src/ui/ui_state.c ****         }
+ 516              		.loc 1 126 13 view .LVU131
+ 517 00da 9FE7     		b	.L26
+ 518              	.LVL32:
+ 519              	.L118:
+ 126:Core/Src/ui/ui_state.c ****         }
+ 520              		.loc 1 126 13 is_stmt 0 view .LVU132
+ 521              	.LBE3:
+ 522              	.LBB4:
+ 134:Core/Src/ui/ui_state.c ****         WarnType_t t = WARN_COUNT;
+ 523              		.loc 1 134 9 is_stmt 1 view .LVU133
+ 134:Core/Src/ui/ui_state.c ****         WarnType_t t = WARN_COUNT;
+ 524              		.loc 1 134 22 is_stmt 0 view .LVU134
+ 525 00dc 504B     		ldr	r3, .L137+28
+ 526 00de 5888     		ldrh	r0, [r3, #2]
+ 527              	.LVL33:
+ 134:Core/Src/ui/ui_state.c ****         WarnType_t t = WARN_COUNT;
+ARM GAS  /tmp/ccjqjIde.s 			page 20
+
+
+ 528              		.loc 1 134 22 view .LVU135
+ 529 00e0 FFF7FEFF 		bl	volt_alarm_pub
+ 530              	.LVL34:
+ 531 00e4 0746     		mov	r7, r0
+ 532              	.LVL35:
+ 135:Core/Src/ui/ui_state.c **** 
+ 533              		.loc 1 135 9 is_stmt 1 view .LVU136
+ 137:Core/Src/ui/ui_state.c ****         else if (va == 1 && !_warn_acked[WARN_VLOW])  t = WARN_VLOW;
+ 534              		.loc 1 137 9 view .LVU137
+ 137:Core/Src/ui/ui_state.c ****         else if (va == 1 && !_warn_acked[WARN_VLOW])  t = WARN_VLOW;
+ 535              		.loc 1 137 17 is_stmt 0 view .LVU138
+ 536 00e6 0228     		cmp	r0, #2
+ 537 00e8 0ED0     		beq	.L119
+ 538              	.L35:
+ 138:Core/Src/ui/ui_state.c ****         else if (!_warn_acked[WARN_TEMP] &&
+ 539              		.loc 1 138 14 is_stmt 1 view .LVU139
+ 138:Core/Src/ui/ui_state.c ****         else if (!_warn_acked[WARN_TEMP] &&
+ 540              		.loc 1 138 17 is_stmt 0 view .LVU140
+ 541 00ea 012F     		cmp	r7, #1
+ 542 00ec 1FD0     		beq	.L120
+ 543              	.L37:
+ 139:Core/Src/ui/ui_state.c ****                  temp_out_of_range_pub(telemetry.temp_celsius)) t = WARN_TEMP;
+ 544              		.loc 1 139 14 is_stmt 1 view .LVU141
+ 139:Core/Src/ui/ui_state.c ****                  temp_out_of_range_pub(telemetry.temp_celsius)) t = WARN_TEMP;
+ 545              		.loc 1 139 30 is_stmt 0 view .LVU142
+ 546 00ee 4D4B     		ldr	r3, .L137+32
+ 547 00f0 1B78     		ldrb	r3, [r3]	@ zero_extendqisi2
+ 548 00f2 1F46     		mov	r7, r3
+ 139:Core/Src/ui/ui_state.c ****                  temp_out_of_range_pub(telemetry.temp_celsius)) t = WARN_TEMP;
+ 549              		.loc 1 139 17 view .LVU143
+ 550 00f4 002B     		cmp	r3, #0
+ 551 00f6 C0D1     		bne	.L34
+ 140:Core/Src/ui/ui_state.c **** 
+ 552              		.loc 1 140 18 view .LVU144
+ 553 00f8 494B     		ldr	r3, .L137+28
+ 554 00fa B3F90600 		ldrsh	r0, [r3, #6]
+ 555              	.LVL36:
+ 140:Core/Src/ui/ui_state.c **** 
+ 556              		.loc 1 140 18 view .LVU145
+ 557 00fe FFF7FEFF 		bl	temp_out_of_range_pub
+ 558              	.LVL37:
+ 139:Core/Src/ui/ui_state.c ****                  temp_out_of_range_pub(telemetry.temp_celsius)) t = WARN_TEMP;
+ 559              		.loc 1 139 42 discriminator 1 view .LVU146
+ 560 0102 0028     		cmp	r0, #0
+ 561 0104 B9D0     		beq	.L34
+ 562 0106 03E0     		b	.L38
+ 563              	.LVL38:
+ 564              	.L119:
+ 137:Core/Src/ui/ui_state.c ****         else if (va == 1 && !_warn_acked[WARN_VLOW])  t = WARN_VLOW;
+ 565              		.loc 1 137 41 discriminator 1 view .LVU147
+ 566 0108 464B     		ldr	r3, .L137+32
+ 567 010a 9B78     		ldrb	r3, [r3, #2]	@ zero_extendqisi2
+ 137:Core/Src/ui/ui_state.c ****         else if (va == 1 && !_warn_acked[WARN_VLOW])  t = WARN_VLOW;
+ 568              		.loc 1 137 26 discriminator 1 view .LVU148
+ 569 010c 002B     		cmp	r3, #0
+ 570 010e ECD1     		bne	.L35
+ 571              	.LVL39:
+ARM GAS  /tmp/ccjqjIde.s 			page 21
+
+
+ 572              	.L38:
+ 144:Core/Src/ui/ui_state.c ****             Screen_Warning_Open(t);
+ 573              		.loc 1 144 13 is_stmt 1 view .LVU149
+ 144:Core/Src/ui/ui_state.c ****             Screen_Warning_Open(t);
+ 574              		.loc 1 144 26 is_stmt 0 view .LVU150
+ 575 0110 454B     		ldr	r3, .L137+36
+ 576 0112 1F70     		strb	r7, [r3]
+ 145:Core/Src/ui/ui_state.c ****             _warn_return = ui_state.current_screen;
+ 577              		.loc 1 145 13 is_stmt 1 view .LVU151
+ 578 0114 3846     		mov	r0, r7
+ 579 0116 FFF7FEFF 		bl	Screen_Warning_Open
+ 580              	.LVL40:
+ 146:Core/Src/ui/ui_state.c ****             _warn_open_tick = now;
+ 581              		.loc 1 146 13 view .LVU152
+ 146:Core/Src/ui/ui_state.c ****             _warn_open_tick = now;
+ 582              		.loc 1 146 36 is_stmt 0 view .LVU153
+ 583 011a 3A4B     		ldr	r3, .L137
+ 584 011c 1A78     		ldrb	r2, [r3]	@ zero_extendqisi2
+ 146:Core/Src/ui/ui_state.c ****             _warn_open_tick = now;
+ 585              		.loc 1 146 26 view .LVU154
+ 586 011e 434B     		ldr	r3, .L137+40
+ 587 0120 1A70     		strb	r2, [r3]
+ 147:Core/Src/ui/ui_state.c ****             UI_NavigateTo(UI_SCREEN_WARNING);
+ 588              		.loc 1 147 13 is_stmt 1 view .LVU155
+ 147:Core/Src/ui/ui_state.c ****             UI_NavigateTo(UI_SCREEN_WARNING);
+ 589              		.loc 1 147 29 is_stmt 0 view .LVU156
+ 590 0122 434B     		ldr	r3, .L137+44
+ 591 0124 1C60     		str	r4, [r3]
+ 148:Core/Src/ui/ui_state.c ****         }
+ 592              		.loc 1 148 13 is_stmt 1 view .LVU157
+ 593 0126 0B20     		movs	r0, #11
+ 594 0128 FFF7FEFF 		bl	UI_NavigateTo
+ 595              	.LVL41:
+ 596 012c A5E7     		b	.L34
+ 597              	.LVL42:
+ 598              	.L120:
+ 138:Core/Src/ui/ui_state.c ****         else if (!_warn_acked[WARN_TEMP] &&
+ 599              		.loc 1 138 41 is_stmt 0 discriminator 1 view .LVU158
+ 600 012e 3D4B     		ldr	r3, .L137+32
+ 601 0130 5B78     		ldrb	r3, [r3, #1]	@ zero_extendqisi2
+ 138:Core/Src/ui/ui_state.c ****         else if (!_warn_acked[WARN_TEMP] &&
+ 602              		.loc 1 138 26 discriminator 1 view .LVU159
+ 603 0132 002B     		cmp	r3, #0
+ 604 0134 ECD0     		beq	.L38
+ 605 0136 DAE7     		b	.L37
+ 606              	.LVL43:
+ 607              	.L40:
+ 138:Core/Src/ui/ui_state.c ****         else if (!_warn_acked[WARN_TEMP] &&
+ 608              		.loc 1 138 26 discriminator 1 view .LVU160
+ 609              	.LBE4:
+ 162:Core/Src/ui/ui_state.c ****                  (now - ui_state.btn_press_tick) >= UI_LONG_PRESS_MS)
+ 610              		.loc 1 162 14 is_stmt 1 view .LVU161
+ 162:Core/Src/ui/ui_state.c ****                  (now - ui_state.btn_press_tick) >= UI_LONG_PRESS_MS)
+ 611              		.loc 1 162 27 is_stmt 0 view .LVU162
+ 612 0138 324A     		ldr	r2, .L137
+ 613 013a 127B     		ldrb	r2, [r2, #12]	@ zero_extendqisi2
+ 162:Core/Src/ui/ui_state.c ****                  (now - ui_state.btn_press_tick) >= UI_LONG_PRESS_MS)
+ARM GAS  /tmp/ccjqjIde.s 			page 22
+
+
+ 614              		.loc 1 162 17 view .LVU163
+ 615 013c A2B9     		cbnz	r2, .L41
+ 163:Core/Src/ui/ui_state.c ****         {   /* finger stay long enough */
+ 616              		.loc 1 163 23 view .LVU164
+ 617 013e E31A     		subs	r3, r4, r3
+ 162:Core/Src/ui/ui_state.c ****                  (now - ui_state.btn_press_tick) >= UI_LONG_PRESS_MS)
+ 618              		.loc 1 162 41 discriminator 1 view .LVU165
+ 619 0140 B3F57A7F 		cmp	r3, #1000
+ 620 0144 10D3     		bcc	.L41
+ 167:Core/Src/ui/ui_state.c **** 
+ 621              		.loc 1 167 13 is_stmt 1 view .LVU166
+ 167:Core/Src/ui/ui_state.c **** 
+ 622              		.loc 1 167 35 is_stmt 0 view .LVU167
+ 623 0146 2F4B     		ldr	r3, .L137
+ 624 0148 0122     		movs	r2, #1
+ 625 014a 1A73     		strb	r2, [r3, #12]
+ 169:Core/Src/ui/ui_state.c ****                 ui_state.current_screen != UI_SCREEN_OUTPUT)
+ 626              		.loc 1 169 13 is_stmt 1 view .LVU168
+ 169:Core/Src/ui/ui_state.c ****                 ui_state.current_screen != UI_SCREEN_OUTPUT)
+ 627              		.loc 1 169 25 is_stmt 0 view .LVU169
+ 628 014c 1A78     		ldrb	r2, [r3]	@ zero_extendqisi2
+ 169:Core/Src/ui/ui_state.c ****                 ui_state.current_screen != UI_SCREEN_OUTPUT)
+ 629              		.loc 1 169 63 view .LVU170
+ 630 014e 931F     		subs	r3, r2, #6
+ 631 0150 DBB2     		uxtb	r3, r3
+ 169:Core/Src/ui/ui_state.c ****                 ui_state.current_screen != UI_SCREEN_OUTPUT)
+ 632              		.loc 1 169 16 view .LVU171
+ 633 0152 012B     		cmp	r3, #1
+ 634 0154 08D9     		bls	.L41
+ 172:Core/Src/ui/ui_state.c ****                 UI_NavigateTo(UI_SCREEN_SETTINGS);
+ 635              		.loc 1 172 17 is_stmt 1 view .LVU172
+ 172:Core/Src/ui/ui_state.c ****                 UI_NavigateTo(UI_SCREEN_SETTINGS);
+ 636              		.loc 1 172 34 is_stmt 0 view .LVU173
+ 637 0156 374B     		ldr	r3, .L137+48
+ 638 0158 1A70     		strb	r2, [r3]
+ 173:Core/Src/ui/ui_state.c ****             }
+ 639              		.loc 1 173 17 is_stmt 1 view .LVU174
+ 640 015a 0620     		movs	r0, #6
+ 641 015c FFF7FEFF 		bl	UI_NavigateTo
+ 642              	.LVL44:
+ 643 0160 02E0     		b	.L41
+ 644              	.L39:
+ 182:Core/Src/ui/ui_state.c ****         ui_state.btn_was_held   = 0;
+ 645              		.loc 1 182 9 view .LVU175
+ 182:Core/Src/ui/ui_state.c ****         ui_state.btn_was_held   = 0;
+ 646              		.loc 1 182 33 is_stmt 0 view .LVU176
+ 647 0162 284B     		ldr	r3, .L137
+ 648 0164 9860     		str	r0, [r3, #8]
+ 183:Core/Src/ui/ui_state.c ****     }
+ 649              		.loc 1 183 9 is_stmt 1 view .LVU177
+ 183:Core/Src/ui/ui_state.c ****     }
+ 650              		.loc 1 183 33 is_stmt 0 view .LVU178
+ 651 0166 1873     		strb	r0, [r3, #12]
+ 652              	.L41:
+ 191:Core/Src/ui/ui_state.c ****     {
+ 653              		.loc 1 191 5 is_stmt 1 view .LVU179
+ 654              	.LVL45:
+ARM GAS  /tmp/ccjqjIde.s 			page 23
+
+
+ 655              	.LBB5:
+ 193:Core/Src/ui/ui_state.c ****         static uint8_t  _pend = 0;
+ 656              		.loc 1 193 9 view .LVU180
+ 194:Core/Src/ui/ui_state.c **** 
+ 657              		.loc 1 194 9 view .LVU181
+ 196:Core/Src/ui/ui_state.c ****         {
+ 658              		.loc 1 196 9 view .LVU182
+ 196:Core/Src/ui/ui_state.c ****         {
+ 659              		.loc 1 196 12 is_stmt 0 view .LVU183
+ 660 0168 FEB1     		cbz	r6, .L42
+ 196:Core/Src/ui/ui_state.c ****         {
+ 661              		.loc 1 196 37 discriminator 1 view .LVU184
+ 662 016a 264B     		ldr	r3, .L137
+ 663 016c 1B7B     		ldrb	r3, [r3, #12]	@ zero_extendqisi2
+ 196:Core/Src/ui/ui_state.c ****         {
+ 664              		.loc 1 196 25 discriminator 1 view .LVU185
+ 665 016e E3B9     		cbnz	r3, .L42
+ 198:Core/Src/ui/ui_state.c ****             {
+ 666              		.loc 1 198 13 is_stmt 1 view .LVU186
+ 198:Core/Src/ui/ui_state.c ****             {
+ 667              		.loc 1 198 17 is_stmt 0 view .LVU187
+ 668 0170 314B     		ldr	r3, .L137+52
+ 669 0172 1B78     		ldrb	r3, [r3]	@ zero_extendqisi2
+ 198:Core/Src/ui/ui_state.c ****             {
+ 670              		.loc 1 198 16 view .LVU188
+ 671 0174 A3B1     		cbz	r3, .L43
+ 198:Core/Src/ui/ui_state.c ****             {
+ 672              		.loc 1 198 31 discriminator 1 view .LVU189
+ 673 0176 314B     		ldr	r3, .L137+56
+ 674 0178 1B68     		ldr	r3, [r3]
+ 675 017a E31A     		subs	r3, r4, r3
+ 198:Core/Src/ui/ui_state.c ****             {
+ 676              		.loc 1 198 23 discriminator 1 view .LVU190
+ 677 017c B3F5C87F 		cmp	r3, #400
+ 678 0180 0ED8     		bhi	.L43
+ 200:Core/Src/ui/ui_state.c ****                 if (ui_state.current_screen != UI_SCREEN_SETTINGS)
+ 679              		.loc 1 200 17 is_stmt 1 view .LVU191
+ 200:Core/Src/ui/ui_state.c ****                 if (ui_state.current_screen != UI_SCREEN_SETTINGS)
+ 680              		.loc 1 200 23 is_stmt 0 view .LVU192
+ 681 0182 2D4B     		ldr	r3, .L137+52
+ 682 0184 0022     		movs	r2, #0
+ 683 0186 1A70     		strb	r2, [r3]
+ 201:Core/Src/ui/ui_state.c ****                 {
+ 684              		.loc 1 201 17 is_stmt 1 view .LVU193
+ 201:Core/Src/ui/ui_state.c ****                 {
+ 685              		.loc 1 201 29 is_stmt 0 view .LVU194
+ 686 0188 1E4B     		ldr	r3, .L137
+ 687 018a 1B78     		ldrb	r3, [r3]	@ zero_extendqisi2
+ 201:Core/Src/ui/ui_state.c ****                 {
+ 688              		.loc 1 201 20 view .LVU195
+ 689 018c 062B     		cmp	r3, #6
+ 690 018e 0CD0     		beq	.L42
+ 203:Core/Src/ui/ui_state.c ****                         _settings_return = ui_state.current_screen;
+ 691              		.loc 1 203 21 is_stmt 1 view .LVU196
+ 203:Core/Src/ui/ui_state.c ****                         _settings_return = ui_state.current_screen;
+ 692              		.loc 1 203 24 is_stmt 0 view .LVU197
+ 693 0190 072B     		cmp	r3, #7
+ARM GAS  /tmp/ccjqjIde.s 			page 24
+
+
+ 694 0192 01D0     		beq	.L44
+ 204:Core/Src/ui/ui_state.c ****                     UI_NavigateTo(UI_SCREEN_SETTINGS);
+ 695              		.loc 1 204 25 is_stmt 1 view .LVU198
+ 204:Core/Src/ui/ui_state.c ****                     UI_NavigateTo(UI_SCREEN_SETTINGS);
+ 696              		.loc 1 204 42 is_stmt 0 view .LVU199
+ 697 0194 274A     		ldr	r2, .L137+48
+ 698 0196 1370     		strb	r3, [r2]
+ 699              	.L44:
+ 205:Core/Src/ui/ui_state.c ****                 }
+ 700              		.loc 1 205 21 is_stmt 1 view .LVU200
+ 701 0198 0620     		movs	r0, #6
+ 702 019a FFF7FEFF 		bl	UI_NavigateTo
+ 703              	.LVL46:
+ 704 019e 04E0     		b	.L42
+ 705              	.L43:
+ 208:Core/Src/ui/ui_state.c ****         }
+ 706              		.loc 1 208 20 view .LVU201
+ 208:Core/Src/ui/ui_state.c ****         }
+ 707              		.loc 1 208 26 is_stmt 0 view .LVU202
+ 708 01a0 254B     		ldr	r3, .L137+52
+ 709 01a2 0122     		movs	r2, #1
+ 710 01a4 1A70     		strb	r2, [r3]
+ 208:Core/Src/ui/ui_state.c ****         }
+ 711              		.loc 1 208 31 is_stmt 1 view .LVU203
+ 208:Core/Src/ui/ui_state.c ****         }
+ 712              		.loc 1 208 42 is_stmt 0 view .LVU204
+ 713 01a6 254B     		ldr	r3, .L137+56
+ 714 01a8 1C60     		str	r4, [r3]
+ 715              	.L42:
+ 214:Core/Src/ui/ui_state.c ****             (now - _pend_tick) > UI_DOUBLE_CLICK_MS)
+ 716              		.loc 1 214 9 is_stmt 1 view .LVU205
+ 214:Core/Src/ui/ui_state.c ****             (now - _pend_tick) > UI_DOUBLE_CLICK_MS)
+ 717              		.loc 1 214 13 is_stmt 0 view .LVU206
+ 718 01aa 234B     		ldr	r3, .L137+52
+ 719 01ac 1B78     		ldrb	r3, [r3]	@ zero_extendqisi2
+ 720 01ae 1E46     		mov	r6, r3
+ 214:Core/Src/ui/ui_state.c ****             (now - _pend_tick) > UI_DOUBLE_CLICK_MS)
+ 721              		.loc 1 214 12 view .LVU207
+ 722 01b0 23B1     		cbz	r3, .L45
+ 214:Core/Src/ui/ui_state.c ****             (now - _pend_tick) > UI_DOUBLE_CLICK_MS)
+ 723              		.loc 1 214 30 discriminator 1 view .LVU208
+ 724 01b2 144B     		ldr	r3, .L137
+ 725 01b4 9B68     		ldr	r3, [r3, #8]
+ 214:Core/Src/ui/ui_state.c ****             (now - _pend_tick) > UI_DOUBLE_CLICK_MS)
+ 726              		.loc 1 214 19 discriminator 1 view .LVU209
+ 727 01b6 CBB1     		cbz	r3, .L46
+ 728              	.L47:
+ 729              	.LBE5:
+ 191:Core/Src/ui/ui_state.c ****     {
+ 730              		.loc 1 191 13 view .LVU210
+ 731 01b8 0023     		movs	r3, #0
+ 732 01ba 1E46     		mov	r6, r3
+ 733              	.LVL47:
+ 734              	.L45:
+ 735              	.LBB6:
+ 218:Core/Src/ui/ui_state.c ****     }
+ 736              		.loc 1 218 9 is_stmt 1 view .LVU211
+ARM GAS  /tmp/ccjqjIde.s 			page 25
+
+
+ 218:Core/Src/ui/ui_state.c ****     }
+ 737              		.loc 1 218 21 is_stmt 0 view .LVU212
+ 738 01bc 114B     		ldr	r3, .L137
+ 739 01be 1B7B     		ldrb	r3, [r3, #12]	@ zero_extendqisi2
+ 218:Core/Src/ui/ui_state.c ****     }
+ 740              		.loc 1 218 12 view .LVU213
+ 741 01c0 13B1     		cbz	r3, .L48
+ 218:Core/Src/ui/ui_state.c ****     }
+ 742              		.loc 1 218 36 is_stmt 1 discriminator 1 view .LVU214
+ 218:Core/Src/ui/ui_state.c ****     }
+ 743              		.loc 1 218 42 is_stmt 0 discriminator 1 view .LVU215
+ 744 01c2 1D4B     		ldr	r3, .L137+52
+ 745 01c4 0022     		movs	r2, #0
+ 746 01c6 1A70     		strb	r2, [r3]
+ 747              	.L48:
+ 748              	.LBE6:
+ 223:Core/Src/ui/ui_state.c ****     {
+ 749              		.loc 1 223 5 is_stmt 1 view .LVU216
+ 223:Core/Src/ui/ui_state.c ****     {
+ 750              		.loc 1 223 21 is_stmt 0 view .LVU217
+ 751 01c8 0E4B     		ldr	r3, .L137
+ 752 01ca 1B78     		ldrb	r3, [r3]	@ zero_extendqisi2
+ 223:Core/Src/ui/ui_state.c ****     {
+ 753              		.loc 1 223 5 view .LVU218
+ 754 01cc 013B     		subs	r3, r3, #1
+ 755 01ce 0A2B     		cmp	r3, #10
+ 756 01d0 3AD8     		bhi	.L49
+ 757 01d2 DFE813F0 		tbh	[pc, r3, lsl #1]
+ 758              	.L51:
+ 759 01d6 3500     		.2byte	(.L61-.L51)/2
+ 760 01d8 6500     		.2byte	(.L60-.L51)/2
+ 761 01da 7100     		.2byte	(.L59-.L51)/2
+ 762 01dc 8200     		.2byte	(.L58-.L51)/2
+ 763 01de 8E00     		.2byte	(.L57-.L51)/2
+ 764 01e0 9A00     		.2byte	(.L56-.L51)/2
+ 765 01e2 F600     		.2byte	(.L55-.L51)/2
+ 766 01e4 0101     		.2byte	(.L54-.L51)/2
+ 767 01e6 0C01     		.2byte	(.L53-.L51)/2
+ 768 01e8 1701     		.2byte	(.L52-.L51)/2
+ 769 01ea 3D01     		.2byte	(.L50-.L51)/2
+ 770              	.LVL48:
+ 771              		.p2align 1
+ 772              	.L46:
+ 773              	.LBB7:
+ 215:Core/Src/ui/ui_state.c ****         { click = 1; _pend = 0; }                /* single click come out */
+ 774              		.loc 1 215 18 view .LVU219
+ 775 01ec 134B     		ldr	r3, .L137+56
+ 776 01ee 1B68     		ldr	r3, [r3]
+ 777 01f0 E31A     		subs	r3, r4, r3
+ 214:Core/Src/ui/ui_state.c ****             (now - _pend_tick) > UI_DOUBLE_CLICK_MS)
+ 778              		.loc 1 214 51 discriminator 2 view .LVU220
+ 779 01f2 B3F5C87F 		cmp	r3, #400
+ 780 01f6 DFD9     		bls	.L47
+ 216:Core/Src/ui/ui_state.c **** 
+ 781              		.loc 1 216 11 is_stmt 1 view .LVU221
+ 782              	.LVL49:
+ 216:Core/Src/ui/ui_state.c **** 
+ARM GAS  /tmp/ccjqjIde.s 			page 26
+
+
+ 783              		.loc 1 216 22 view .LVU222
+ 216:Core/Src/ui/ui_state.c **** 
+ 784              		.loc 1 216 28 is_stmt 0 view .LVU223
+ 785 01f8 0F4B     		ldr	r3, .L137+52
+ 786 01fa 0022     		movs	r2, #0
+ 787 01fc 1A70     		strb	r2, [r3]
+ 216:Core/Src/ui/ui_state.c **** 
+ 788              		.loc 1 216 17 view .LVU224
+ 789 01fe 0123     		movs	r3, #1
+ 790 0200 1E46     		mov	r6, r3
+ 791 0202 DBE7     		b	.L45
+ 792              	.L138:
+ 793              		.align	2
+ 794              	.L137:
+ 795 0204 00000000 		.word	ui_state
+ 796 0208 00000000 		.word	_boot_start_tick
+ 797 020c 00000000 		.word	_boot_duration
+ 798 0210 00000000 		.word	_boot_dest
+ 799 0214 00000000 		.word	_last_activity
+ 800 0218 00000000 		.word	_sleep_light
+ 801 021c 00000000 		.word	_sleep_return
+ 802 0220 00000000 		.word	telemetry
+ 803 0224 00000000 		.word	_warn_acked
+ 804 0228 00000000 		.word	_warn_active
+ 805 022c 00000000 		.word	_warn_return
+ 806 0230 00000000 		.word	_warn_open_tick
+ 807 0234 00000000 		.word	_settings_return
+ 808 0238 00000000 		.word	_pend.2
+ 809 023c 00000000 		.word	_pend_tick.1
+ 810              	.LVL50:
+ 811              	.L61:
+ 216:Core/Src/ui/ui_state.c **** 
+ 812              		.loc 1 216 17 view .LVU225
+ 813              	.LBE7:
+ 229:Core/Src/ui/ui_state.c ****             if (enc_delta < 0) UI_NavigateTo(UI_SCREEN_STATS);   /* wrap around */
+ 814              		.loc 1 229 13 is_stmt 1 view .LVU226
+ 229:Core/Src/ui/ui_state.c ****             if (enc_delta < 0) UI_NavigateTo(UI_SCREEN_STATS);   /* wrap around */
+ 815              		.loc 1 229 16 is_stmt 0 view .LVU227
+ 816 0240 002D     		cmp	r5, #0
+ 817 0242 25DC     		bgt	.L121
+ 818              	.L62:
+ 230:Core/Src/ui/ui_state.c ****             break;
+ 819              		.loc 1 230 13 is_stmt 1 view .LVU228
+ 230:Core/Src/ui/ui_state.c ****             break;
+ 820              		.loc 1 230 16 is_stmt 0 view .LVU229
+ 821 0244 002D     		cmp	r5, #0
+ 822 0246 27DB     		blt	.L122
+ 823              	.LVL51:
+ 824              	.L49:
+ 389:Core/Src/ui/ui_state.c **** 
+ 825              		.loc 1 389 5 is_stmt 1 view .LVU230
+ 826 0248 FFF7FEFF 		bl	Telemetry_Poll
+ 827              	.LVL52:
+ 393:Core/Src/ui/ui_state.c ****     {
+ 828              		.loc 1 393 5 view .LVU231
+ 393:Core/Src/ui/ui_state.c ****     {
+ 829              		.loc 1 393 24 is_stmt 0 view .LVU232
+ARM GAS  /tmp/ccjqjIde.s 			page 27
+
+
+ 830 024c 9F4B     		ldr	r3, .L139
+ 831 024e 5B68     		ldr	r3, [r3, #4]
+ 393:Core/Src/ui/ui_state.c ****     {
+ 832              		.loc 1 393 14 view .LVU233
+ 833 0250 E31A     		subs	r3, r4, r3
+ 393:Core/Src/ui/ui_state.c ****     {
+ 834              		.loc 1 393 8 view .LVU234
+ 835 0252 F92B     		cmp	r3, #249
+ 836 0254 7FF6E2AE 		bls	.L26
+ 395:Core/Src/ui/ui_state.c **** 
+ 837              		.loc 1 395 9 is_stmt 1 view .LVU235
+ 395:Core/Src/ui/ui_state.c **** 
+ 838              		.loc 1 395 36 is_stmt 0 view .LVU236
+ 839 0258 9C4B     		ldr	r3, .L139
+ 840 025a 5C60     		str	r4, [r3, #4]
+ 397:Core/Src/ui/ui_state.c ****         {
+ 841              		.loc 1 397 9 is_stmt 1 view .LVU237
+ 397:Core/Src/ui/ui_state.c ****         {
+ 842              		.loc 1 397 21 is_stmt 0 view .LVU238
+ 843 025c 9B78     		ldrb	r3, [r3, #2]	@ zero_extendqisi2
+ 397:Core/Src/ui/ui_state.c ****         {
+ 844              		.loc 1 397 12 view .LVU239
+ 845 025e 002B     		cmp	r3, #0
+ 846 0260 00F04B81 		beq	.L86
+ 400:Core/Src/ui/ui_state.c **** 
+ 847              		.loc 1 400 13 is_stmt 1 view .LVU240
+ 400:Core/Src/ui/ui_state.c **** 
+ 848              		.loc 1 400 40 is_stmt 0 view .LVU241
+ 849 0264 994B     		ldr	r3, .L139
+ 850 0266 0022     		movs	r2, #0
+ 851 0268 9A70     		strb	r2, [r3, #2]
+ 402:Core/Src/ui/ui_state.c ****             {
+ 852              		.loc 1 402 13 is_stmt 1 view .LVU242
+ 402:Core/Src/ui/ui_state.c ****             {
+ 853              		.loc 1 402 29 is_stmt 0 view .LVU243
+ 854 026a 1B78     		ldrb	r3, [r3]	@ zero_extendqisi2
+ 402:Core/Src/ui/ui_state.c ****             {
+ 855              		.loc 1 402 13 view .LVU244
+ 856 026c 0C2B     		cmp	r3, #12
+ 857 026e 3FF6D5AE 		bhi	.L26
+ 858 0272 DFE813F0 		tbh	[pc, r3, lsl #1]
+ 859              	.L88:
+ 860 0276 0C01     		.2byte	(.L100-.L88)/2
+ 861 0278 0F01     		.2byte	(.L99-.L88)/2
+ 862 027a 1201     		.2byte	(.L98-.L88)/2
+ 863 027c 1501     		.2byte	(.L97-.L88)/2
+ 864 027e 1801     		.2byte	(.L96-.L88)/2
+ 865 0280 1B01     		.2byte	(.L95-.L88)/2
+ 866 0282 1E01     		.2byte	(.L94-.L88)/2
+ 867 0284 2201     		.2byte	(.L93-.L88)/2
+ 868 0286 2501     		.2byte	(.L92-.L88)/2
+ 869 0288 2801     		.2byte	(.L91-.L88)/2
+ 870 028a 3901     		.2byte	(.L90-.L88)/2
+ 871 028c 3C01     		.2byte	(.L89-.L88)/2
+ 872 028e 3F01     		.2byte	(.L87-.L88)/2
+ 873              	.LVL53:
+ 874              		.p2align 1
+ARM GAS  /tmp/ccjqjIde.s 			page 28
+
+
+ 875              	.L121:
+ 229:Core/Src/ui/ui_state.c ****             if (enc_delta < 0) UI_NavigateTo(UI_SCREEN_STATS);   /* wrap around */
+ 876              		.loc 1 229 32 is_stmt 1 discriminator 1 view .LVU245
+ 877 0290 0220     		movs	r0, #2
+ 878 0292 FFF7FEFF 		bl	UI_NavigateTo
+ 879              	.LVL54:
+ 880 0296 D5E7     		b	.L62
+ 881              	.L122:
+ 230:Core/Src/ui/ui_state.c ****             break;
+ 882              		.loc 1 230 32 discriminator 1 view .LVU246
+ 883 0298 0520     		movs	r0, #5
+ 884 029a FFF7FEFF 		bl	UI_NavigateTo
+ 885              	.LVL55:
+ 886 029e D3E7     		b	.L49
+ 887              	.L60:
+ 234:Core/Src/ui/ui_state.c ****             if (enc_delta < 0) UI_NavigateTo(UI_SCREEN_MAIN);
+ 888              		.loc 1 234 13 view .LVU247
+ 234:Core/Src/ui/ui_state.c ****             if (enc_delta < 0) UI_NavigateTo(UI_SCREEN_MAIN);
+ 889              		.loc 1 234 16 is_stmt 0 view .LVU248
+ 890 02a0 002D     		cmp	r5, #0
+ 891 02a2 05DC     		bgt	.L123
+ 892              	.L63:
+ 235:Core/Src/ui/ui_state.c ****             break;
+ 893              		.loc 1 235 13 is_stmt 1 view .LVU249
+ 235:Core/Src/ui/ui_state.c ****             break;
+ 894              		.loc 1 235 16 is_stmt 0 view .LVU250
+ 895 02a4 002D     		cmp	r5, #0
+ 896 02a6 CFDA     		bge	.L49
+ 235:Core/Src/ui/ui_state.c ****             break;
+ 897              		.loc 1 235 32 is_stmt 1 discriminator 1 view .LVU251
+ 898 02a8 0120     		movs	r0, #1
+ 899 02aa FFF7FEFF 		bl	UI_NavigateTo
+ 900              	.LVL56:
+ 901 02ae CBE7     		b	.L49
+ 902              	.L123:
+ 234:Core/Src/ui/ui_state.c ****             if (enc_delta < 0) UI_NavigateTo(UI_SCREEN_MAIN);
+ 903              		.loc 1 234 32 discriminator 1 view .LVU252
+ 904 02b0 0320     		movs	r0, #3
+ 905 02b2 FFF7FEFF 		bl	UI_NavigateTo
+ 906              	.LVL57:
+ 907 02b6 F5E7     		b	.L63
+ 908              	.L59:
+ 239:Core/Src/ui/ui_state.c ****             if (enc_delta < 0) UI_NavigateTo(UI_SCREEN_DETAIL);
+ 909              		.loc 1 239 13 view .LVU253
+ 239:Core/Src/ui/ui_state.c ****             if (enc_delta < 0) UI_NavigateTo(UI_SCREEN_DETAIL);
+ 910              		.loc 1 239 16 is_stmt 0 view .LVU254
+ 911 02b8 002D     		cmp	r5, #0
+ 912 02ba 06DC     		bgt	.L124
+ 913              	.L64:
+ 240:Core/Src/ui/ui_state.c ****             if (click) Screen_Graph_CycleScale();
+ 914              		.loc 1 240 13 is_stmt 1 view .LVU255
+ 240:Core/Src/ui/ui_state.c ****             if (click) Screen_Graph_CycleScale();
+ 915              		.loc 1 240 16 is_stmt 0 view .LVU256
+ 916 02bc 002D     		cmp	r5, #0
+ 917 02be 08DB     		blt	.L125
+ 918              	.L65:
+ 241:Core/Src/ui/ui_state.c ****             break;
+ARM GAS  /tmp/ccjqjIde.s 			page 29
+
+
+ 919              		.loc 1 241 13 is_stmt 1 view .LVU257
+ 241:Core/Src/ui/ui_state.c ****             break;
+ 920              		.loc 1 241 16 is_stmt 0 view .LVU258
+ 921 02c0 002E     		cmp	r6, #0
+ 922 02c2 C1D0     		beq	.L49
+ 241:Core/Src/ui/ui_state.c ****             break;
+ 923              		.loc 1 241 24 is_stmt 1 discriminator 1 view .LVU259
+ 924 02c4 FFF7FEFF 		bl	Screen_Graph_CycleScale
+ 925              	.LVL58:
+ 926 02c8 BEE7     		b	.L49
+ 927              	.L124:
+ 239:Core/Src/ui/ui_state.c ****             if (enc_delta < 0) UI_NavigateTo(UI_SCREEN_DETAIL);
+ 928              		.loc 1 239 32 discriminator 1 view .LVU260
+ 929 02ca 0420     		movs	r0, #4
+ 930 02cc FFF7FEFF 		bl	UI_NavigateTo
+ 931              	.LVL59:
+ 932 02d0 F4E7     		b	.L64
+ 933              	.L125:
+ 240:Core/Src/ui/ui_state.c ****             if (click) Screen_Graph_CycleScale();
+ 934              		.loc 1 240 32 discriminator 1 view .LVU261
+ 935 02d2 0220     		movs	r0, #2
+ 936 02d4 FFF7FEFF 		bl	UI_NavigateTo
+ 937              	.LVL60:
+ 938 02d8 F2E7     		b	.L65
+ 939              	.L58:
+ 245:Core/Src/ui/ui_state.c ****             if (enc_delta < 0) UI_NavigateTo(UI_SCREEN_GRAPH);
+ 940              		.loc 1 245 13 view .LVU262
+ 245:Core/Src/ui/ui_state.c ****             if (enc_delta < 0) UI_NavigateTo(UI_SCREEN_GRAPH);
+ 941              		.loc 1 245 16 is_stmt 0 view .LVU263
+ 942 02da 002D     		cmp	r5, #0
+ 943 02dc 05DC     		bgt	.L126
+ 944              	.L66:
+ 246:Core/Src/ui/ui_state.c ****             break;
+ 945              		.loc 1 246 13 is_stmt 1 view .LVU264
+ 246:Core/Src/ui/ui_state.c ****             break;
+ 946              		.loc 1 246 16 is_stmt 0 view .LVU265
+ 947 02de 002D     		cmp	r5, #0
+ 948 02e0 B2DA     		bge	.L49
+ 246:Core/Src/ui/ui_state.c ****             break;
+ 949              		.loc 1 246 32 is_stmt 1 discriminator 1 view .LVU266
+ 950 02e2 0320     		movs	r0, #3
+ 951 02e4 FFF7FEFF 		bl	UI_NavigateTo
+ 952              	.LVL61:
+ 953 02e8 AEE7     		b	.L49
+ 954              	.L126:
+ 245:Core/Src/ui/ui_state.c ****             if (enc_delta < 0) UI_NavigateTo(UI_SCREEN_GRAPH);
+ 955              		.loc 1 245 32 discriminator 1 view .LVU267
+ 956 02ea 0520     		movs	r0, #5
+ 957 02ec FFF7FEFF 		bl	UI_NavigateTo
+ 958              	.LVL62:
+ 959 02f0 F5E7     		b	.L66
+ 960              	.L57:
+ 250:Core/Src/ui/ui_state.c ****             if (enc_delta < 0) UI_NavigateTo(UI_SCREEN_PORTS);
+ 961              		.loc 1 250 13 view .LVU268
+ 250:Core/Src/ui/ui_state.c ****             if (enc_delta < 0) UI_NavigateTo(UI_SCREEN_PORTS);
+ 962              		.loc 1 250 16 is_stmt 0 view .LVU269
+ 963 02f2 002D     		cmp	r5, #0
+ARM GAS  /tmp/ccjqjIde.s 			page 30
+
+
+ 964 02f4 05DC     		bgt	.L127
+ 965              	.L67:
+ 251:Core/Src/ui/ui_state.c ****             break;
+ 966              		.loc 1 251 13 is_stmt 1 view .LVU270
+ 251:Core/Src/ui/ui_state.c ****             break;
+ 967              		.loc 1 251 16 is_stmt 0 view .LVU271
+ 968 02f6 002D     		cmp	r5, #0
+ 969 02f8 A6DA     		bge	.L49
+ 251:Core/Src/ui/ui_state.c ****             break;
+ 970              		.loc 1 251 32 is_stmt 1 discriminator 1 view .LVU272
+ 971 02fa 0420     		movs	r0, #4
+ 972 02fc FFF7FEFF 		bl	UI_NavigateTo
+ 973              	.LVL63:
+ 974 0300 A2E7     		b	.L49
+ 975              	.L127:
+ 250:Core/Src/ui/ui_state.c ****             if (enc_delta < 0) UI_NavigateTo(UI_SCREEN_PORTS);
+ 976              		.loc 1 250 32 discriminator 1 view .LVU273
+ 977 0302 0120     		movs	r0, #1
+ 978 0304 FFF7FEFF 		bl	UI_NavigateTo
+ 979              	.LVL64:
+ 980 0308 F5E7     		b	.L67
+ 981              	.L56:
+ 982              	.LBB8:
+ 258:Core/Src/ui/ui_state.c ****             static const uint8_t SETTINGS_ROWS = 8; /* A1, A2, Lab, C2, Lock all,
+ 983              		.loc 1 258 13 view .LVU274
+ 259:Core/Src/ui/ui_state.c ****                                                        Screen off, Light sleep, Exit */
+ 984              		.loc 1 259 13 view .LVU275
+ 262:Core/Src/ui/ui_state.c ****             {
+ 985              		.loc 1 262 13 view .LVU276
+ 262:Core/Src/ui/ui_state.c ****             {
+ 986              		.loc 1 262 16 is_stmt 0 view .LVU277
+ 987 030a 002D     		cmp	r5, #0
+ 988 030c 0DDC     		bgt	.L128
+ 268:Core/Src/ui/ui_state.c ****             {
+ 989              		.loc 1 268 18 is_stmt 1 view .LVU278
+ 268:Core/Src/ui/ui_state.c ****             {
+ 990              		.loc 1 268 21 is_stmt 0 view .LVU279
+ 991 030e 002D     		cmp	r5, #0
+ 992 0310 1ADB     		blt	.L129
+ 993              	.L69:
+ 277:Core/Src/ui/ui_state.c ****             {
+ 994              		.loc 1 277 13 is_stmt 1 view .LVU280
+ 277:Core/Src/ui/ui_state.c ****             {
+ 995              		.loc 1 277 16 is_stmt 0 view .LVU281
+ 996 0312 002E     		cmp	r6, #0
+ 997 0314 98D0     		beq	.L49
+ 279:Core/Src/ui/ui_state.c ****                 {
+ 998              		.loc 1 279 17 is_stmt 1 view .LVU282
+ 999 0316 6E4B     		ldr	r3, .L139+4
+ 1000 0318 1878     		ldrb	r0, [r3]	@ zero_extendqisi2
+ 1001 031a 0728     		cmp	r0, #7
+ 1002 031c 94D8     		bhi	.L49
+ 1003 031e DFE800F0 		tbb	[pc, r0]
+ 1004              	.L71:
+ 1005 0322 22       		.byte	(.L76-.L71)/2
+ 1006 0323 22       		.byte	(.L76-.L71)/2
+ 1007 0324 29       		.byte	(.L75-.L71)/2
+ARM GAS  /tmp/ccjqjIde.s 			page 31
+
+
+ 1008 0325 29       		.byte	(.L75-.L71)/2
+ 1009 0326 31       		.byte	(.L74-.L71)/2
+ 1010 0327 41       		.byte	(.L73-.L71)/2
+ 1011 0328 47       		.byte	(.L72-.L71)/2
+ 1012 0329 4D       		.byte	(.L70-.L71)/2
+ 1013              		.p2align 1
+ 1014              	.L128:
+ 265:Core/Src/ui/ui_state.c ****                 Screen_Settings_Update(settings_row);
+ 1015              		.loc 1 265 17 view .LVU283
+ 265:Core/Src/ui/ui_state.c ****                 Screen_Settings_Update(settings_row);
+ 1016              		.loc 1 265 46 is_stmt 0 view .LVU284
+ 1017 032a 6949     		ldr	r1, .L139+4
+ 1018 032c 0B78     		ldrb	r3, [r1]	@ zero_extendqisi2
+ 1019 032e 0133     		adds	r3, r3, #1
+ 265:Core/Src/ui/ui_state.c ****                 Screen_Settings_Update(settings_row);
+ 1020              		.loc 1 265 51 view .LVU285
+ 1021 0330 5A42     		rsbs	r2, r3, #0
+ 1022 0332 03F00703 		and	r3, r3, #7
+ 1023 0336 02F00702 		and	r2, r2, #7
+ 1024 033a 58BF     		it	pl
+ 1025 033c 5342     		rsbpl	r3, r2, #0
+ 265:Core/Src/ui/ui_state.c ****                 Screen_Settings_Update(settings_row);
+ 1026              		.loc 1 265 30 view .LVU286
+ 1027 033e D8B2     		uxtb	r0, r3
+ 1028 0340 0870     		strb	r0, [r1]
+ 266:Core/Src/ui/ui_state.c ****             }
+ 1029              		.loc 1 266 17 is_stmt 1 view .LVU287
+ 1030 0342 FFF7FEFF 		bl	Screen_Settings_Update
+ 1031              	.LVL65:
+ 1032 0346 E4E7     		b	.L69
+ 1033              	.L129:
+ 271:Core/Src/ui/ui_state.c ****                 Screen_Settings_Update(settings_row);
+ 1034              		.loc 1 271 17 view .LVU288
+ 271:Core/Src/ui/ui_state.c ****                 Screen_Settings_Update(settings_row);
+ 1035              		.loc 1 271 62 is_stmt 0 view .LVU289
+ 1036 0348 6149     		ldr	r1, .L139+4
+ 1037 034a 0B78     		ldrb	r3, [r1]	@ zero_extendqisi2
+ 1038 034c 0733     		adds	r3, r3, #7
+ 271:Core/Src/ui/ui_state.c ****                 Screen_Settings_Update(settings_row);
+ 1039              		.loc 1 271 67 view .LVU290
+ 1040 034e 5A42     		rsbs	r2, r3, #0
+ 1041 0350 03F00703 		and	r3, r3, #7
+ 1042 0354 02F00702 		and	r2, r2, #7
+ 1043 0358 58BF     		it	pl
+ 1044 035a 5342     		rsbpl	r3, r2, #0
+ 271:Core/Src/ui/ui_state.c ****                 Screen_Settings_Update(settings_row);
+ 1045              		.loc 1 271 30 view .LVU291
+ 1046 035c D8B2     		uxtb	r0, r3
+ 1047 035e 0870     		strb	r0, [r1]
+ 272:Core/Src/ui/ui_state.c ****             }
+ 1048              		.loc 1 272 17 is_stmt 1 view .LVU292
+ 1049 0360 FFF7FEFF 		bl	Screen_Settings_Update
+ 1050              	.LVL66:
+ 1051 0364 D5E7     		b	.L69
+ 1052              	.L76:
+ 282:Core/Src/ui/ui_state.c ****                         Screen_Settings_Update(settings_row);
+ 1053              		.loc 1 282 25 view .LVU293
+ARM GAS  /tmp/ccjqjIde.s 			page 32
+
+
+ 1054 0366 FFF7FEFF 		bl	Screen_Settings_Toggle
+ 1055              	.LVL67:
+ 283:Core/Src/ui/ui_state.c ****                         break;
+ 1056              		.loc 1 283 25 view .LVU294
+ 1057 036a 594B     		ldr	r3, .L139+4
+ 1058 036c 1878     		ldrb	r0, [r3]	@ zero_extendqisi2
+ 1059 036e FFF7FEFF 		bl	Screen_Settings_Update
+ 1060              	.LVL68:
+ 284:Core/Src/ui/ui_state.c ****                     case 2: case 3:             /* channel pages */
+ 1061              		.loc 1 284 25 view .LVU295
+ 1062 0372 69E7     		b	.L49
+ 1063              	.L75:
+ 286:Core/Src/ui/ui_state.c ****                         UI_NavigateTo(UI_SCREEN_OUTPUT);
+ 1064              		.loc 1 286 25 view .LVU296
+ 1065 0374 0238     		subs	r0, r0, #2
+ 1066 0376 C0B2     		uxtb	r0, r0
+ 1067 0378 FFF7FEFF 		bl	Screen_Output_Open
+ 1068              	.LVL69:
+ 287:Core/Src/ui/ui_state.c ****                         break;
+ 1069              		.loc 1 287 25 view .LVU297
+ 1070 037c 0720     		movs	r0, #7
+ 1071 037e FFF7FEFF 		bl	UI_NavigateTo
+ 1072              	.LVL70:
+ 288:Core/Src/ui/ui_state.c ****                     case 4:                     /* Lock all */
+ 1073              		.loc 1 288 25 view .LVU298
+ 1074 0382 61E7     		b	.L49
+ 1075              	.L74:
+ 290:Core/Src/ui/ui_state.c ****                         {
+ 1076              		.loc 1 290 25 view .LVU299
+ 290:Core/Src/ui/ui_state.c ****                         {
+ 1077              		.loc 1 290 30 is_stmt 0 view .LVU300
+ 1078 0384 FFF7FEFF 		bl	Screen_Settings_GetLockAll
+ 1079              	.LVL71:
+ 290:Core/Src/ui/ui_state.c ****                         {
+ 1080              		.loc 1 290 28 discriminator 1 view .LVU301
+ 1081 0388 20B9     		cbnz	r0, .L77
+ 293:Core/Src/ui/ui_state.c ****                             UI_OpenConfirm();
+ 1082              		.loc 1 293 29 is_stmt 1 view .LVU302
+ 1083 038a FFF7FEFF 		bl	Screen_Confirm_Open
+ 1084              	.LVL72:
+ 294:Core/Src/ui/ui_state.c ****                         }
+ 1085              		.loc 1 294 29 view .LVU303
+ 1086 038e FFF7FEFF 		bl	UI_OpenConfirm
+ 1087              	.LVL73:
+ 1088 0392 59E7     		b	.L49
+ 1089              	.L77:
+ 298:Core/Src/ui/ui_state.c ****                             Screen_Settings_Update(settings_row);
+ 1090              		.loc 1 298 29 view .LVU304
+ 1091 0394 0020     		movs	r0, #0
+ 1092 0396 FFF7FEFF 		bl	Screen_Settings_LockAll
+ 1093              	.LVL74:
+ 299:Core/Src/ui/ui_state.c ****                         }
+ 1094              		.loc 1 299 29 view .LVU305
+ 1095 039a 4D4B     		ldr	r3, .L139+4
+ 1096 039c 1878     		ldrb	r0, [r3]	@ zero_extendqisi2
+ 1097 039e FFF7FEFF 		bl	Screen_Settings_Update
+ 1098              	.LVL75:
+ARM GAS  /tmp/ccjqjIde.s 			page 33
+
+
+ 1099 03a2 51E7     		b	.L49
+ 1100              	.L73:
+ 303:Core/Src/ui/ui_state.c ****                         UI_NavigateTo(UI_SCREEN_DISPLAYPG);
+ 1101              		.loc 1 303 25 view .LVU306
+ 1102 03a4 FFF7FEFF 		bl	Screen_Display_Open
+ 1103              	.LVL76:
+ 304:Core/Src/ui/ui_state.c ****                         break;
+ 1104              		.loc 1 304 25 view .LVU307
+ 1105 03a8 0820     		movs	r0, #8
+ 1106 03aa FFF7FEFF 		bl	UI_NavigateTo
+ 1107              	.LVL77:
+ 305:Core/Src/ui/ui_state.c ****                     case 6:                     /* test page */
+ 1108              		.loc 1 305 25 view .LVU308
+ 1109 03ae 4BE7     		b	.L49
+ 1110              	.L72:
+ 307:Core/Src/ui/ui_state.c ****                         UI_NavigateTo(UI_SCREEN_TESTPG);
+ 1111              		.loc 1 307 25 view .LVU309
+ 1112 03b0 FFF7FEFF 		bl	Screen_Test_Open
+ 1113              	.LVL78:
+ 308:Core/Src/ui/ui_state.c ****                         break;
+ 1114              		.loc 1 308 25 view .LVU310
+ 1115 03b4 0920     		movs	r0, #9
+ 1116 03b6 FFF7FEFF 		bl	UI_NavigateTo
+ 1117              	.LVL79:
+ 309:Core/Src/ui/ui_state.c ****                     case 7:                     /* Exit */
+ 1118              		.loc 1 309 25 view .LVU311
+ 1119 03ba 45E7     		b	.L49
+ 1120              	.L70:
+ 311:Core/Src/ui/ui_state.c ****                         break;
+ 1121              		.loc 1 311 25 view .LVU312
+ 1122 03bc FFF7FEFF 		bl	UI_CloseSettings
+ 1123              	.LVL80:
+ 312:Core/Src/ui/ui_state.c ****                 }
+ 1124              		.loc 1 312 25 view .LVU313
+ 1125 03c0 42E7     		b	.L49
+ 1126              	.L55:
+ 1127              	.LBE8:
+ 320:Core/Src/ui/ui_state.c ****             if (click) Screen_Output_OnPress();
+ 1128              		.loc 1 320 13 view .LVU314
+ 320:Core/Src/ui/ui_state.c ****             if (click) Screen_Output_OnPress();
+ 1129              		.loc 1 320 16 is_stmt 0 view .LVU315
+ 1130 03c2 2DB9     		cbnz	r5, .L130
+ 1131              	.L78:
+ 321:Core/Src/ui/ui_state.c ****             break;
+ 1132              		.loc 1 321 13 is_stmt 1 view .LVU316
+ 321:Core/Src/ui/ui_state.c ****             break;
+ 1133              		.loc 1 321 16 is_stmt 0 view .LVU317
+ 1134 03c4 002E     		cmp	r6, #0
+ 1135 03c6 3FF43FAF 		beq	.L49
+ 321:Core/Src/ui/ui_state.c ****             break;
+ 1136              		.loc 1 321 24 is_stmt 1 discriminator 1 view .LVU318
+ 1137 03ca FFF7FEFF 		bl	Screen_Output_OnPress
+ 1138              	.LVL81:
+ 1139 03ce 3BE7     		b	.L49
+ 1140              	.L130:
+ 320:Core/Src/ui/ui_state.c ****             if (click) Screen_Output_OnPress();
+ 1141              		.loc 1 320 33 discriminator 1 view .LVU319
+ARM GAS  /tmp/ccjqjIde.s 			page 34
+
+
+ 1142 03d0 2846     		mov	r0, r5
+ 1143 03d2 FFF7FEFF 		bl	Screen_Output_OnRotate
+ 1144              	.LVL82:
+ 1145 03d6 F5E7     		b	.L78
+ 1146              	.L54:
+ 325:Core/Src/ui/ui_state.c ****             if (click) Screen_Display_OnPress();
+ 1147              		.loc 1 325 13 view .LVU320
+ 325:Core/Src/ui/ui_state.c ****             if (click) Screen_Display_OnPress();
+ 1148              		.loc 1 325 16 is_stmt 0 view .LVU321
+ 1149 03d8 2DB9     		cbnz	r5, .L131
+ 1150              	.L79:
+ 326:Core/Src/ui/ui_state.c ****             break;
+ 1151              		.loc 1 326 13 is_stmt 1 view .LVU322
+ 326:Core/Src/ui/ui_state.c ****             break;
+ 1152              		.loc 1 326 16 is_stmt 0 view .LVU323
+ 1153 03da 002E     		cmp	r6, #0
+ 1154 03dc 3FF434AF 		beq	.L49
+ 326:Core/Src/ui/ui_state.c ****             break;
+ 1155              		.loc 1 326 24 is_stmt 1 discriminator 1 view .LVU324
+ 1156 03e0 FFF7FEFF 		bl	Screen_Display_OnPress
+ 1157              	.LVL83:
+ 1158 03e4 30E7     		b	.L49
+ 1159              	.L131:
+ 325:Core/Src/ui/ui_state.c ****             if (click) Screen_Display_OnPress();
+ 1160              		.loc 1 325 33 discriminator 1 view .LVU325
+ 1161 03e6 2846     		mov	r0, r5
+ 1162 03e8 FFF7FEFF 		bl	Screen_Display_OnRotate
+ 1163              	.LVL84:
+ 1164 03ec F5E7     		b	.L79
+ 1165              	.L53:
+ 330:Core/Src/ui/ui_state.c ****             if (click) Screen_Test_OnPress();
+ 1166              		.loc 1 330 13 view .LVU326
+ 330:Core/Src/ui/ui_state.c ****             if (click) Screen_Test_OnPress();
+ 1167              		.loc 1 330 16 is_stmt 0 view .LVU327
+ 1168 03ee 2DB9     		cbnz	r5, .L132
+ 1169              	.L80:
+ 331:Core/Src/ui/ui_state.c ****             break;
+ 1170              		.loc 1 331 13 is_stmt 1 view .LVU328
+ 331:Core/Src/ui/ui_state.c ****             break;
+ 1171              		.loc 1 331 16 is_stmt 0 view .LVU329
+ 1172 03f0 002E     		cmp	r6, #0
+ 1173 03f2 3FF429AF 		beq	.L49
+ 331:Core/Src/ui/ui_state.c ****             break;
+ 1174              		.loc 1 331 24 is_stmt 1 discriminator 1 view .LVU330
+ 1175 03f6 FFF7FEFF 		bl	Screen_Test_OnPress
+ 1176              	.LVL85:
+ 1177 03fa 25E7     		b	.L49
+ 1178              	.L132:
+ 330:Core/Src/ui/ui_state.c ****             if (click) Screen_Test_OnPress();
+ 1179              		.loc 1 330 33 discriminator 1 view .LVU331
+ 1180 03fc 2846     		mov	r0, r5
+ 1181 03fe FFF7FEFF 		bl	Screen_Test_OnRotate
+ 1182              	.LVL86:
+ 1183 0402 F5E7     		b	.L80
+ 1184              	.L52:
+ 335:Core/Src/ui/ui_state.c ****             if (click)
+ 1185              		.loc 1 335 13 view .LVU332
+ARM GAS  /tmp/ccjqjIde.s 			page 35
+
+
+ 335:Core/Src/ui/ui_state.c ****             if (click)
+ 1186              		.loc 1 335 16 is_stmt 0 view .LVU333
+ 1187 0404 5DB9     		cbnz	r5, .L133
+ 1188              	.L81:
+ 336:Core/Src/ui/ui_state.c ****             {
+ 1189              		.loc 1 336 13 is_stmt 1 view .LVU334
+ 336:Core/Src/ui/ui_state.c ****             {
+ 1190              		.loc 1 336 16 is_stmt 0 view .LVU335
+ 1191 0406 002E     		cmp	r6, #0
+ 1192 0408 3FF41EAF 		beq	.L49
+ 1193              	.LBB9:
+ 338:Core/Src/ui/ui_state.c ****                 if (r == 1)   /* user said yes */
+ 1194              		.loc 1 338 17 is_stmt 1 view .LVU336
+ 338:Core/Src/ui/ui_state.c ****                 if (r == 1)   /* user said yes */
+ 1195              		.loc 1 338 29 is_stmt 0 view .LVU337
+ 1196 040c FFF7FEFF 		bl	Screen_Confirm_OnPress
+ 1197              	.LVL87:
+ 339:Core/Src/ui/ui_state.c ****                 {
+ 1198              		.loc 1 339 17 is_stmt 1 view .LVU338
+ 339:Core/Src/ui/ui_state.c ****                 {
+ 1199              		.loc 1 339 20 is_stmt 0 view .LVU339
+ 1200 0410 0128     		cmp	r0, #1
+ 1201 0412 08D0     		beq	.L134
+ 354:Core/Src/ui/ui_state.c ****             }
+ 1202              		.loc 1 354 21 is_stmt 1 view .LVU340
+ 1203 0414 2F4B     		ldr	r3, .L139+8
+ 1204 0416 1878     		ldrb	r0, [r3]	@ zero_extendqisi2
+ 1205              	.LVL88:
+ 354:Core/Src/ui/ui_state.c ****             }
+ 1206              		.loc 1 354 21 is_stmt 0 view .LVU341
+ 1207 0418 FFF7FEFF 		bl	UI_NavigateTo
+ 1208              	.LVL89:
+ 1209 041c 14E7     		b	.L49
+ 1210              	.LVL90:
+ 1211              	.L133:
+ 354:Core/Src/ui/ui_state.c ****             }
+ 1212              		.loc 1 354 21 view .LVU342
+ 1213              	.LBE9:
+ 335:Core/Src/ui/ui_state.c ****             if (click)
+ 1214              		.loc 1 335 33 is_stmt 1 discriminator 1 view .LVU343
+ 1215 041e 2846     		mov	r0, r5
+ 1216 0420 FFF7FEFF 		bl	Screen_Confirm_OnRotate
+ 1217              	.LVL91:
+ 1218 0424 EFE7     		b	.L81
+ 1219              	.LVL92:
+ 1220              	.L134:
+ 1221              	.LBB10:
+ 341:Core/Src/ui/ui_state.c ****                     {
+ 1222              		.loc 1 341 21 view .LVU344
+ 341:Core/Src/ui/ui_state.c ****                     {
+ 1223              		.loc 1 341 25 is_stmt 0 view .LVU345
+ 1224 0426 FFF7FEFF 		bl	Screen_Confirm_GetAction
+ 1225              	.LVL93:
+ 341:Core/Src/ui/ui_state.c ****                     {
+ 1226              		.loc 1 341 24 discriminator 1 view .LVU346
+ 1227 042a 38B9     		cbnz	r0, .L83
+ 343:Core/Src/ui/ui_state.c ****                         UI_NavigateTo(_confirm_return);
+ARM GAS  /tmp/ccjqjIde.s 			page 36
+
+
+ 1228              		.loc 1 343 25 is_stmt 1 view .LVU347
+ 1229 042c 0120     		movs	r0, #1
+ 1230 042e FFF7FEFF 		bl	Screen_Settings_LockAll
+ 1231              	.LVL94:
+ 344:Core/Src/ui/ui_state.c ****                     }
+ 1232              		.loc 1 344 25 view .LVU348
+ 1233 0432 284B     		ldr	r3, .L139+8
+ 1234 0434 1878     		ldrb	r0, [r3]	@ zero_extendqisi2
+ 1235 0436 FFF7FEFF 		bl	UI_NavigateTo
+ 1236              	.LVL95:
+ 1237 043a 05E7     		b	.L49
+ 1238              	.L83:
+ 348:Core/Src/ui/ui_state.c ****                         Screen_Settings_LockAll(1);
+ 1239              		.loc 1 348 25 view .LVU349
+ 1240 043c 254B     		ldr	r3, .L139+8
+ 1241 043e 1878     		ldrb	r0, [r3]	@ zero_extendqisi2
+ 1242 0440 FFF7FEFF 		bl	UI_NavigateTo
+ 1243              	.LVL96:
+ 349:Core/Src/ui/ui_state.c ****                         UI_EnterSleepLight();
+ 1244              		.loc 1 349 25 view .LVU350
+ 1245 0444 0120     		movs	r0, #1
+ 1246 0446 FFF7FEFF 		bl	Screen_Settings_LockAll
+ 1247              	.LVL97:
+ 350:Core/Src/ui/ui_state.c ****                     }
+ 1248              		.loc 1 350 25 view .LVU351
+ 1249 044a FFF7FEFF 		bl	UI_EnterSleepLight
+ 1250              	.LVL98:
+ 1251 044e FBE6     		b	.L49
+ 1252              	.LVL99:
+ 1253              	.L50:
+ 350:Core/Src/ui/ui_state.c ****                     }
+ 1254              		.loc 1 350 25 is_stmt 0 view .LVU352
+ 1255              	.LBE10:
+ 361:Core/Src/ui/ui_state.c ****                 click = 1;
+ 1256              		.loc 1 361 13 is_stmt 1 view .LVU353
+ 361:Core/Src/ui/ui_state.c ****                 click = 1;
+ 1257              		.loc 1 361 16 is_stmt 0 view .LVU354
+ 1258 0450 3EB9     		cbnz	r6, .L84
+ 361:Core/Src/ui/ui_state.c ****                 click = 1;
+ 1259              		.loc 1 361 32 discriminator 1 view .LVU355
+ 1260 0452 214B     		ldr	r3, .L139+12
+ 1261 0454 1B68     		ldr	r3, [r3]
+ 1262 0456 E31A     		subs	r3, r4, r3
+ 361:Core/Src/ui/ui_state.c ****                 click = 1;
+ 1263              		.loc 1 361 24 discriminator 1 view .LVU356
+ 1264 0458 47F22F52 		movw	r2, #29999
+ 1265 045c 9342     		cmp	r3, r2
+ 1266 045e 7FF6F3AE 		bls	.L49
+ 1267              	.L84:
+ 1268              	.LVL100:
+ 365:Core/Src/ui/ui_state.c ****                 if (_warn_active == WARN_VCRIT)
+ 1269              		.loc 1 365 17 is_stmt 1 view .LVU357
+ 365:Core/Src/ui/ui_state.c ****                 if (_warn_active == WARN_VCRIT)
+ 1270              		.loc 1 365 28 is_stmt 0 view .LVU358
+ 1271 0462 1E4B     		ldr	r3, .L139+16
+ 1272 0464 1B78     		ldrb	r3, [r3]	@ zero_extendqisi2
+ 365:Core/Src/ui/ui_state.c ****                 if (_warn_active == WARN_VCRIT)
+ARM GAS  /tmp/ccjqjIde.s 			page 37
+
+
+ 1273              		.loc 1 365 43 view .LVU359
+ 1274 0466 1E4A     		ldr	r2, .L139+20
+ 1275 0468 0121     		movs	r1, #1
+ 1276 046a D154     		strb	r1, [r2, r3]
+ 366:Core/Src/ui/ui_state.c ****                 {
+ 1277              		.loc 1 366 17 is_stmt 1 view .LVU360
+ 366:Core/Src/ui/ui_state.c ****                 {
+ 1278              		.loc 1 366 20 is_stmt 0 view .LVU361
+ 1279 046c 022B     		cmp	r3, #2
+ 1280 046e 04D0     		beq	.L135
+ 378:Core/Src/ui/ui_state.c ****             }
+ 1281              		.loc 1 378 21 is_stmt 1 view .LVU362
+ 1282 0470 1C4B     		ldr	r3, .L139+24
+ 1283 0472 1878     		ldrb	r0, [r3]	@ zero_extendqisi2
+ 1284 0474 FFF7FEFF 		bl	UI_NavigateTo
+ 1285              	.LVL101:
+ 1286 0478 E6E6     		b	.L49
+ 1287              	.L135:
+ 373:Core/Src/ui/ui_state.c ****                     Screen_Settings_LockAll(1);
+ 1288              		.loc 1 373 21 view .LVU363
+ 1289 047a 1A4B     		ldr	r3, .L139+24
+ 1290 047c 1878     		ldrb	r0, [r3]	@ zero_extendqisi2
+ 1291 047e FFF7FEFF 		bl	UI_NavigateTo
+ 1292              	.LVL102:
+ 374:Core/Src/ui/ui_state.c ****                     UI_EnterSleepLight();
+ 1293              		.loc 1 374 21 view .LVU364
+ 1294 0482 0120     		movs	r0, #1
+ 1295 0484 FFF7FEFF 		bl	Screen_Settings_LockAll
+ 1296              	.LVL103:
+ 375:Core/Src/ui/ui_state.c ****                 }
+ 1297              		.loc 1 375 21 view .LVU365
+ 1298 0488 FFF7FEFF 		bl	UI_EnterSleepLight
+ 1299              	.LVL104:
+ 1300 048c DCE6     		b	.L49
+ 1301              	.L100:
+ 404:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_MAIN:     Screen_Main_Draw();      break;
+ 1302              		.loc 1 404 42 view .LVU366
+ 1303 048e FFF7FEFF 		bl	Screen_Boot_Draw
+ 1304              	.LVL105:
+ 404:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_MAIN:     Screen_Main_Draw();      break;
+ 1305              		.loc 1 404 67 discriminator 1 view .LVU367
+ 1306 0492 C3E5     		b	.L26
+ 1307              	.L99:
+ 405:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_DETAIL:   Screen_Detail_Draw();    break;
+ 1308              		.loc 1 405 42 view .LVU368
+ 1309 0494 FFF7FEFF 		bl	Screen_Main_Draw
+ 1310              	.LVL106:
+ 405:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_DETAIL:   Screen_Detail_Draw();    break;
+ 1311              		.loc 1 405 67 discriminator 1 view .LVU369
+ 1312 0498 C0E5     		b	.L26
+ 1313              	.L98:
+ 406:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_GRAPH:    Screen_Graph_Draw();     break;
+ 1314              		.loc 1 406 42 view .LVU370
+ 1315 049a FFF7FEFF 		bl	Screen_Detail_Draw
+ 1316              	.LVL107:
+ 406:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_GRAPH:    Screen_Graph_Draw();     break;
+ 1317              		.loc 1 406 67 discriminator 1 view .LVU371
+ARM GAS  /tmp/ccjqjIde.s 			page 38
+
+
+ 1318 049e BDE5     		b	.L26
+ 1319              	.L97:
+ 407:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_PORTS:    Screen_Ports_Draw();     break;
+ 1320              		.loc 1 407 42 view .LVU372
+ 1321 04a0 FFF7FEFF 		bl	Screen_Graph_Draw
+ 1322              	.LVL108:
+ 407:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_PORTS:    Screen_Ports_Draw();     break;
+ 1323              		.loc 1 407 67 discriminator 1 view .LVU373
+ 1324 04a4 BAE5     		b	.L26
+ 1325              	.L96:
+ 408:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_STATS:    Screen_Stats_Draw();     break;
+ 1326              		.loc 1 408 42 view .LVU374
+ 1327 04a6 FFF7FEFF 		bl	Screen_Ports_Draw
+ 1328              	.LVL109:
+ 408:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_STATS:    Screen_Stats_Draw();     break;
+ 1329              		.loc 1 408 67 discriminator 1 view .LVU375
+ 1330 04aa B7E5     		b	.L26
+ 1331              	.L95:
+ 409:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_SETTINGS: Screen_Settings_Draw(0); break;
+ 1332              		.loc 1 409 42 view .LVU376
+ 1333 04ac FFF7FEFF 		bl	Screen_Stats_Draw
+ 1334              	.LVL110:
+ 409:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_SETTINGS: Screen_Settings_Draw(0); break;
+ 1335              		.loc 1 409 67 discriminator 1 view .LVU377
+ 1336 04b0 B4E5     		b	.L26
+ 1337              	.L94:
+ 410:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_OUTPUT:   Screen_Output_Draw();     break;
+ 1338              		.loc 1 410 42 view .LVU378
+ 1339 04b2 0020     		movs	r0, #0
+ 1340 04b4 FFF7FEFF 		bl	Screen_Settings_Draw
+ 1341              	.LVL111:
+ 410:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_OUTPUT:   Screen_Output_Draw();     break;
+ 1342              		.loc 1 410 67 discriminator 1 view .LVU379
+ 1343 04b8 B0E5     		b	.L26
+ 1344              	.L93:
+ 411:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_DISPLAYPG: Screen_Display_Draw();   break;
+ 1345              		.loc 1 411 42 view .LVU380
+ 1346 04ba FFF7FEFF 		bl	Screen_Output_Draw
+ 1347              	.LVL112:
+ 411:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_DISPLAYPG: Screen_Display_Draw();   break;
+ 1348              		.loc 1 411 68 discriminator 1 view .LVU381
+ 1349 04be ADE5     		b	.L26
+ 1350              	.L92:
+ 412:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_TESTPG:    Screen_Test_Draw();      break;
+ 1351              		.loc 1 412 43 view .LVU382
+ 1352 04c0 FFF7FEFF 		bl	Screen_Display_Draw
+ 1353              	.LVL113:
+ 412:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_TESTPG:    Screen_Test_Draw();      break;
+ 1354              		.loc 1 412 68 discriminator 1 view .LVU383
+ 1355 04c4 AAE5     		b	.L26
+ 1356              	.L91:
+ 413:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_CONFIRM:  Screen_Confirm_Draw();    break;
+ 1357              		.loc 1 413 43 view .LVU384
+ 1358 04c6 FFF7FEFF 		bl	Screen_Test_Draw
+ 1359              	.LVL114:
+ 413:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_CONFIRM:  Screen_Confirm_Draw();    break;
+ 1360              		.loc 1 413 68 discriminator 1 view .LVU385
+ARM GAS  /tmp/ccjqjIde.s 			page 39
+
+
+ 1361 04ca A7E5     		b	.L26
+ 1362              	.L140:
+ 1363              		.align	2
+ 1364              	.L139:
+ 1365 04cc 00000000 		.word	ui_state
+ 1366 04d0 00000000 		.word	settings_row.0
+ 1367 04d4 00000000 		.word	_confirm_return
+ 1368 04d8 00000000 		.word	_warn_open_tick
+ 1369 04dc 00000000 		.word	_warn_active
+ 1370 04e0 00000000 		.word	_warn_acked
+ 1371 04e4 00000000 		.word	_warn_return
+ 1372              	.L90:
+ 414:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_WARNING:  Screen_Warning_Draw();    break;
+ 1373              		.loc 1 414 42 view .LVU386
+ 1374 04e8 FFF7FEFF 		bl	Screen_Confirm_Draw
+ 1375              	.LVL115:
+ 414:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_WARNING:  Screen_Warning_Draw();    break;
+ 1376              		.loc 1 414 68 discriminator 1 view .LVU387
+ 1377 04ec 96E5     		b	.L26
+ 1378              	.L89:
+ 415:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_SLEEP:    Screen_Sleep_Draw();      break;
+ 1379              		.loc 1 415 42 view .LVU388
+ 1380 04ee FFF7FEFF 		bl	Screen_Warning_Draw
+ 1381              	.LVL116:
+ 415:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_SLEEP:    Screen_Sleep_Draw();      break;
+ 1382              		.loc 1 415 68 discriminator 1 view .LVU389
+ 1383 04f2 93E5     		b	.L26
+ 1384              	.L87:
+ 416:Core/Src/ui/ui_state.c ****                 default: break;
+ 1385              		.loc 1 416 42 view .LVU390
+ 1386 04f4 FFF7FEFF 		bl	Screen_Sleep_Draw
+ 1387              	.LVL117:
+ 416:Core/Src/ui/ui_state.c ****                 default: break;
+ 1388              		.loc 1 416 68 discriminator 1 view .LVU391
+ 1389 04f8 90E5     		b	.L26
+ 1390              	.L86:
+ 424:Core/Src/ui/ui_state.c ****                 ui_state.current_screen != UI_SCREEN_SLEEP &&
+ 1391              		.loc 1 424 13 view .LVU392
+ 424:Core/Src/ui/ui_state.c ****                 ui_state.current_screen != UI_SCREEN_SLEEP &&
+ 1392              		.loc 1 424 25 is_stmt 0 view .LVU393
+ 1393 04fa 1A4B     		ldr	r3, .L141
+ 1394 04fc 1B78     		ldrb	r3, [r3]	@ zero_extendqisi2
+ 424:Core/Src/ui/ui_state.c ****                 ui_state.current_screen != UI_SCREEN_SLEEP &&
+ 1395              		.loc 1 424 16 view .LVU394
+ 1396 04fe 1BB1     		cbz	r3, .L101
+ 1397 0500 0A3B     		subs	r3, r3, #10
+ 1398 0502 DBB2     		uxtb	r3, r3
+ 1399 0504 022B     		cmp	r3, #2
+ 1400 0506 17D8     		bhi	.L136
+ 1401              	.L101:
+ 431:Core/Src/ui/ui_state.c ****             {
+ 1402              		.loc 1 431 13 is_stmt 1 view .LVU395
+ 431:Core/Src/ui/ui_state.c ****             {
+ 1403              		.loc 1 431 29 is_stmt 0 view .LVU396
+ 1404 0508 164B     		ldr	r3, .L141
+ 1405 050a 1B78     		ldrb	r3, [r3]	@ zero_extendqisi2
+ 431:Core/Src/ui/ui_state.c ****             {
+ARM GAS  /tmp/ccjqjIde.s 			page 40
+
+
+ 1406              		.loc 1 431 13 view .LVU397
+ 1407 050c 013B     		subs	r3, r3, #1
+ 1408 050e 062B     		cmp	r3, #6
+ 1409 0510 3FF684AD 		bhi	.L26
+ 1410 0514 01A2     		adr	r2, .L103
+ 1411 0516 52F823F0 		ldr	pc, [r2, r3, lsl #2]
+ 1412 051a 00BF     		.p2align 2
+ 1413              	.L103:
+ 1414 051c 3F050000 		.word	.L108+1
+ 1415 0520 45050000 		.word	.L107+1
+ 1416 0524 4B050000 		.word	.L106+1
+ 1417 0528 51050000 		.word	.L105+1
+ 1418 052c 5D050000 		.word	.L104+1
+ 1419 0530 1D000000 		.word	.L26+1
+ 1420 0534 57050000 		.word	.L102+1
+ 1421              		.p2align 1
+ 1422              	.L136:
+ 428:Core/Src/ui/ui_state.c **** 
+ 1423              		.loc 1 428 17 is_stmt 1 view .LVU398
+ 1424 0538 FFF7FEFF 		bl	Screen_Header_RefreshIcons
+ 1425              	.LVL118:
+ 1426 053c E4E7     		b	.L101
+ 1427              	.L108:
+ 433:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_DETAIL: Screen_Detail_Update(); break;
+ 1428              		.loc 1 433 40 view .LVU399
+ 1429 053e FFF7FEFF 		bl	Screen_Main_Update
+ 1430              	.LVL119:
+ 433:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_DETAIL: Screen_Detail_Update(); break;
+ 1431              		.loc 1 433 64 discriminator 1 view .LVU400
+ 1432 0542 6BE5     		b	.L26
+ 1433              	.L107:
+ 434:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_GRAPH:  Screen_Graph_Update();  break;
+ 1434              		.loc 1 434 40 view .LVU401
+ 1435 0544 FFF7FEFF 		bl	Screen_Detail_Update
+ 1436              	.LVL120:
+ 434:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_GRAPH:  Screen_Graph_Update();  break;
+ 1437              		.loc 1 434 64 discriminator 1 view .LVU402
+ 1438 0548 68E5     		b	.L26
+ 1439              	.L106:
+ 435:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_PORTS:  Screen_Ports_Update();  break;
+ 1440              		.loc 1 435 40 view .LVU403
+ 1441 054a FFF7FEFF 		bl	Screen_Graph_Update
+ 1442              	.LVL121:
+ 435:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_PORTS:  Screen_Ports_Update();  break;
+ 1443              		.loc 1 435 64 discriminator 1 view .LVU404
+ 1444 054e 65E5     		b	.L26
+ 1445              	.L105:
+ 436:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_OUTPUT: Screen_Output_Update(); break;
+ 1446              		.loc 1 436 40 view .LVU405
+ 1447 0550 FFF7FEFF 		bl	Screen_Ports_Update
+ 1448              	.LVL122:
+ 436:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_OUTPUT: Screen_Output_Update(); break;
+ 1449              		.loc 1 436 64 discriminator 1 view .LVU406
+ 1450 0554 62E5     		b	.L26
+ 1451              	.L102:
+ 437:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_STATS:  Screen_Stats_Update();  break;
+ 1452              		.loc 1 437 40 view .LVU407
+ARM GAS  /tmp/ccjqjIde.s 			page 41
+
+
+ 1453 0556 FFF7FEFF 		bl	Screen_Output_Update
+ 1454              	.LVL123:
+ 437:Core/Src/ui/ui_state.c ****                 case UI_SCREEN_STATS:  Screen_Stats_Update();  break;
+ 1455              		.loc 1 437 64 discriminator 1 view .LVU408
+ 1456 055a 5FE5     		b	.L26
+ 1457              	.L104:
+ 438:Core/Src/ui/ui_state.c **** 
+ 1458              		.loc 1 438 40 view .LVU409
+ 1459 055c FFF7FEFF 		bl	Screen_Stats_Update
+ 1460              	.LVL124:
+ 438:Core/Src/ui/ui_state.c **** 
+ 1461              		.loc 1 438 64 discriminator 1 view .LVU410
+ 1462 0560 5CE5     		b	.L26
+ 1463              	.L142:
+ 1464 0562 00BF     		.align	2
+ 1465              	.L141:
+ 1466 0564 00000000 		.word	ui_state
+ 1467              		.cfi_endproc
+ 1468              	.LFE221:
+ 1470              		.section	.text.UI_RearmWarning,"ax",%progbits
+ 1471              		.align	1
+ 1472              		.global	UI_RearmWarning
+ 1473              		.syntax unified
+ 1474              		.thumb
+ 1475              		.thumb_func
+ 1477              	UI_RearmWarning:
+ 1478              	.LFB227:
+ 487:Core/Src/ui/ui_state.c **** 
+ 488:Core/Src/ui/ui_state.c **** void UI_RearmWarning(void)
+ 489:Core/Src/ui/ui_state.c **** {
+ 1479              		.loc 1 489 1 view -0
+ 1480              		.cfi_startproc
+ 1481              		@ args = 0, pretend = 0, frame = 0
+ 1482              		@ frame_needed = 0, uses_anonymous_args = 0
+ 1483              		@ link register save eliminated.
+ 490:Core/Src/ui/ui_state.c ****     for (uint8_t i = 0; i < WARN_COUNT; i++) _warn_acked[i] = 0;
+ 1484              		.loc 1 490 5 view .LVU412
+ 1485              	.LBB11:
+ 1486              		.loc 1 490 10 view .LVU413
+ 1487              	.LVL125:
+ 1488              		.loc 1 490 18 is_stmt 0 view .LVU414
+ 1489 0000 0023     		movs	r3, #0
+ 1490              		.loc 1 490 5 view .LVU415
+ 1491 0002 04E0     		b	.L144
+ 1492              	.LVL126:
+ 1493              	.L145:
+ 1494              		.loc 1 490 46 is_stmt 1 discriminator 1 view .LVU416
+ 1495              		.loc 1 490 61 is_stmt 0 discriminator 1 view .LVU417
+ 1496 0004 034A     		ldr	r2, .L146
+ 1497 0006 0021     		movs	r1, #0
+ 1498 0008 D154     		strb	r1, [r2, r3]
+ 1499              		.loc 1 490 42 is_stmt 1 discriminator 1 view .LVU418
+ 1500 000a 0133     		adds	r3, r3, #1
+ 1501              	.LVL127:
+ 1502              		.loc 1 490 42 is_stmt 0 discriminator 1 view .LVU419
+ 1503 000c DBB2     		uxtb	r3, r3
+ 1504              	.LVL128:
+ARM GAS  /tmp/ccjqjIde.s 			page 42
+
+
+ 1505              	.L144:
+ 1506              		.loc 1 490 27 is_stmt 1 discriminator 2 view .LVU420
+ 1507 000e 022B     		cmp	r3, #2
+ 1508 0010 F8D9     		bls	.L145
+ 1509              	.LBE11:
+ 491:Core/Src/ui/ui_state.c **** }
+ 1510              		.loc 1 491 1 is_stmt 0 view .LVU421
+ 1511 0012 7047     		bx	lr
+ 1512              	.L147:
+ 1513              		.align	2
+ 1514              	.L146:
+ 1515 0014 00000000 		.word	_warn_acked
+ 1516              		.cfi_endproc
+ 1517              	.LFE227:
+ 1519              		.section	.text.UI_GetCurrentScreen,"ax",%progbits
+ 1520              		.align	1
+ 1521              		.global	UI_GetCurrentScreen
+ 1522              		.syntax unified
+ 1523              		.thumb
+ 1524              		.thumb_func
+ 1526              	UI_GetCurrentScreen:
+ 1527              	.LFB228:
+ 492:Core/Src/ui/ui_state.c **** 
+ 493:Core/Src/ui/ui_state.c **** UIScreen_t UI_GetCurrentScreen(void)
+ 494:Core/Src/ui/ui_state.c **** {
+ 1528              		.loc 1 494 1 is_stmt 1 view -0
+ 1529              		.cfi_startproc
+ 1530              		@ args = 0, pretend = 0, frame = 0
+ 1531              		@ frame_needed = 0, uses_anonymous_args = 0
+ 1532              		@ link register save eliminated.
+ 495:Core/Src/ui/ui_state.c ****     return ui_state.current_screen;
+ 1533              		.loc 1 495 5 view .LVU423
+ 496:Core/Src/ui/ui_state.c **** }...
+ 1534              		.loc 1 496 1 is_stmt 0 view .LVU424
+ 1535 0000 014B     		ldr	r3, .L149
+ 1536 0002 1878     		ldrb	r0, [r3]	@ zero_extendqisi2
+ 1537 0004 7047     		bx	lr
+ 1538              	.L150:
+ 1539 0006 00BF     		.align	2
+ 1540              	.L149:
+ 1541 0008 00000000 		.word	ui_state
+ 1542              		.cfi_endproc
+ 1543              	.LFE228:
+ 1545              		.section	.bss.settings_row.0,"aw",%nobits
+ 1548              	settings_row.0:
+ 1549 0000 00       		.space	1
+ 1550              		.section	.bss._pend_tick.1,"aw",%nobits
+ 1551              		.align	2
+ 1554              	_pend_tick.1:
+ 1555 0000 00000000 		.space	4
+ 1556              		.section	.bss._pend.2,"aw",%nobits
+ 1559              	_pend.2:
+ 1560 0000 00       		.space	1
+ 1561              		.section	.bss._boot_start_tick,"aw",%nobits
+ 1562              		.align	2
+ 1565              	_boot_start_tick:
+ 1566 0000 00000000 		.space	4
+ARM GAS  /tmp/ccjqjIde.s 			page 43
+
+
+ 1567              		.section	.data._boot_duration,"aw"
+ 1568              		.align	2
+ 1571              	_boot_duration:
+ 1572 0000 DC050000 		.word	1500
+ 1573              		.section	.data._boot_dest,"aw"
+ 1576              	_boot_dest:
+ 1577 0000 01       		.byte	1
+ 1578              		.section	.bss._sleep_light,"aw",%nobits
+ 1581              	_sleep_light:
+ 1582 0000 00       		.space	1
+ 1583              		.section	.data._sleep_return,"aw"
+ 1586              	_sleep_return:
+ 1587 0000 01       		.byte	1
+ 1588              		.section	.data._confirm_return,"aw"
+ 1591              	_confirm_return:
+ 1592 0000 06       		.byte	6
+ 1593              		.section	.bss._warn_open_tick,"aw",%nobits
+ 1594              		.align	2
+ 1597              	_warn_open_tick:
+ 1598 0000 00000000 		.space	4
+ 1599              		.section	.bss._last_activity,"aw",%nobits
+ 1600              		.align	2
+ 1603              	_last_activity:
+ 1604 0000 00000000 		.space	4
+ 1605              		.section	.data._warn_return,"aw"
+ 1608              	_warn_return:
+ 1609 0000 01       		.byte	1
+ 1610              		.section	.bss._warn_active,"aw",%nobits
+ 1613              	_warn_active:
+ 1614 0000 00       		.space	1
+ 1615              		.section	.bss._warn_acked,"aw",%nobits
+ 1616              		.align	2
+ 1619              	_warn_acked:
+ 1620 0000 000000   		.space	3
+ 1621              		.section	.data._settings_return,"aw"
+ 1624              	_settings_return:
+ 1625 0000 01       		.byte	1
+ 1626              		.global	ui_state
+ 1627              		.section	.bss.ui_state,"aw",%nobits
+ 1628              		.align	2
+ 1631              	ui_state:
+ 1632 0000 00000000 		.space	16
+ 1632      00000000 
+ 1632      00000000 
+ 1632      00000000 
+ 1633              		.text
+ 1634              	.Letext0:
+ 1635              		.file 2 "/usr/arm-none-eabi/include/machine/_default_types.h"
+ 1636              		.file 3 "/usr/arm-none-eabi/include/sys/_stdint.h"
+ 1637              		.file 4 "Core/Inc/ui/ui_state.h"
+ 1638              		.file 5 "Core/Inc/ui/screens.h"
+ 1639              		.file 6 "Core/Inc/app/telemetry.h"
+ 1640              		.file 7 "Core/Inc/app/encoder.h"
+ 1641              		.file 8 "Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h"
+ARM GAS  /tmp/ccjqjIde.s 			page 44
+
+
+DEFINED SYMBOLS
+                            *ABS*:00000000 ui_state.c
+     /tmp/ccjqjIde.s:21     .text.UI_Init:00000000 $t
+     /tmp/ccjqjIde.s:27     .text.UI_Init:00000000 UI_Init
+     /tmp/ccjqjIde.s:74     .text.UI_Init:00000024 $d
+     /tmp/ccjqjIde.s:1631   .bss.ui_state:00000000 ui_state
+     /tmp/ccjqjIde.s:1565   .bss._boot_start_tick:00000000 _boot_start_tick
+     /tmp/ccjqjIde.s:80     .text.UI_NavigateTo:00000000 $t
+     /tmp/ccjqjIde.s:86     .text.UI_NavigateTo:00000000 UI_NavigateTo
+     /tmp/ccjqjIde.s:117    .text.UI_NavigateTo:00000014 $d
+     /tmp/ccjqjIde.s:122    .text.UI_EnterSleep:00000000 $t
+     /tmp/ccjqjIde.s:128    .text.UI_EnterSleep:00000000 UI_EnterSleep
+     /tmp/ccjqjIde.s:170    .text.UI_EnterSleep:00000024 $d
+     /tmp/ccjqjIde.s:1581   .bss._sleep_light:00000000 _sleep_light
+     /tmp/ccjqjIde.s:1624   .data._settings_return:00000000 _settings_return
+     /tmp/ccjqjIde.s:1586   .data._sleep_return:00000000 _sleep_return
+     /tmp/ccjqjIde.s:178    .text.UI_EnterSleepLight:00000000 $t
+     /tmp/ccjqjIde.s:184    .text.UI_EnterSleepLight:00000000 UI_EnterSleepLight
+     /tmp/ccjqjIde.s:208    .text.UI_EnterSleepLight:00000010 $d
+     /tmp/ccjqjIde.s:213    .text.UI_OpenConfirm:00000000 $t
+     /tmp/ccjqjIde.s:219    .text.UI_OpenConfirm:00000000 UI_OpenConfirm
+     /tmp/ccjqjIde.s:246    .text.UI_OpenConfirm:00000014 $d
+     /tmp/ccjqjIde.s:1591   .data._confirm_return:00000000 _confirm_return
+     /tmp/ccjqjIde.s:252    .text.UI_CloseSettings:00000000 $t
+     /tmp/ccjqjIde.s:258    .text.UI_CloseSettings:00000000 UI_CloseSettings
+     /tmp/ccjqjIde.s:279    .text.UI_CloseSettings:0000000c $d
+     /tmp/ccjqjIde.s:284    .text.UI_Tick:00000000 $t
+     /tmp/ccjqjIde.s:290    .text.UI_Tick:00000000 UI_Tick
+     /tmp/ccjqjIde.s:759    .text.UI_Tick:000001d6 $d
+     /tmp/ccjqjIde.s:771    .text.UI_Tick:000001ec $t
+     /tmp/ccjqjIde.s:795    .text.UI_Tick:00000204 $d
+     /tmp/ccjqjIde.s:1571   .data._boot_duration:00000000 _boot_duration
+     /tmp/ccjqjIde.s:1576   .data._boot_dest:00000000 _boot_dest
+     /tmp/ccjqjIde.s:1603   .bss._last_activity:00000000 _last_activity
+     /tmp/ccjqjIde.s:1619   .bss._warn_acked:00000000 _warn_acked
+     /tmp/ccjqjIde.s:1613   .bss._warn_active:00000000 _warn_active
+     /tmp/ccjqjIde.s:1608   .data._warn_return:00000000 _warn_return
+     /tmp/ccjqjIde.s:1597   .bss._warn_open_tick:00000000 _warn_open_tick
+     /tmp/ccjqjIde.s:1559   .bss._pend.2:00000000 _pend.2
+     /tmp/ccjqjIde.s:1554   .bss._pend_tick.1:00000000 _pend_tick.1
+     /tmp/ccjqjIde.s:816    .text.UI_Tick:00000240 $t
+     /tmp/ccjqjIde.s:860    .text.UI_Tick:00000276 $d
+     /tmp/ccjqjIde.s:874    .text.UI_Tick:00000290 $t
+     /tmp/ccjqjIde.s:1005   .text.UI_Tick:00000322 $d
+     /tmp/ccjqjIde.s:1013   .text.UI_Tick:0000032a $t
+     /tmp/ccjqjIde.s:1365   .text.UI_Tick:000004cc $d
+     /tmp/ccjqjIde.s:1548   .bss.settings_row.0:00000000 settings_row.0
+     /tmp/ccjqjIde.s:1374   .text.UI_Tick:000004e8 $t
+     /tmp/ccjqjIde.s:1414   .text.UI_Tick:0000051c $d
+     /tmp/ccjqjIde.s:1421   .text.UI_Tick:00000538 $t
+     /tmp/ccjqjIde.s:1466   .text.UI_Tick:00000564 $d
+     /tmp/ccjqjIde.s:1471   .text.UI_RearmWarning:00000000 $t
+     /tmp/ccjqjIde.s:1477   .text.UI_RearmWarning:00000000 UI_RearmWarning
+     /tmp/ccjqjIde.s:1515   .text.UI_RearmWarning:00000014 $d
+     /tmp/ccjqjIde.s:1520   .text.UI_GetCurrentScreen:00000000 $t
+     /tmp/ccjqjIde.s:1526   .text.UI_GetCurrentScreen:00000000 UI_GetCurrentScreen
+     /tmp/ccjqjIde.s:1541   .text.UI_GetCurrentScreen:00000008 $d
+ARM GAS  /tmp/ccjqjIde.s 			page 45
+
+
+     /tmp/ccjqjIde.s:1549   .bss.settings_row.0:00000000 $d
+     /tmp/ccjqjIde.s:1551   .bss._pend_tick.1:00000000 $d
+     /tmp/ccjqjIde.s:1560   .bss._pend.2:00000000 $d
+     /tmp/ccjqjIde.s:1562   .bss._boot_start_tick:00000000 $d
+     /tmp/ccjqjIde.s:1568   .data._boot_duration:00000000 $d
+     /tmp/ccjqjIde.s:1582   .bss._sleep_light:00000000 $d
+     /tmp/ccjqjIde.s:1594   .bss._warn_open_tick:00000000 $d
+     /tmp/ccjqjIde.s:1600   .bss._last_activity:00000000 $d
+     /tmp/ccjqjIde.s:1614   .bss._warn_active:00000000 $d
+     /tmp/ccjqjIde.s:1616   .bss._warn_acked:00000000 $d
+     /tmp/ccjqjIde.s:1628   .bss.ui_state:00000000 $d
+
+UNDEFINED SYMBOLS
+Screen_Boot_Draw
+HAL_GetTick
+Encoder_GetDelta
+Encoder_IsPressed
+Screen_Display_GetAutoSleepMs
+Encoder_IsHeld
+volt_alarm_pub
+temp_out_of_range_pub
+Screen_Warning_Open
+telemetry
+Telemetry_Poll
+Screen_Graph_CycleScale
+Screen_Settings_Update
+Screen_Settings_Toggle
+Screen_Output_Open
+Screen_Settings_GetLockAll
+Screen_Confirm_Open
+Screen_Settings_LockAll
+Screen_Display_Open
+Screen_Test_Open
+Screen_Output_OnPress
+Screen_Output_OnRotate
+Screen_Display_OnPress
+Screen_Display_OnRotate
+Screen_Test_OnPress
+Screen_Test_OnRotate
+Screen_Confirm_OnPress
+Screen_Confirm_OnRotate
+Screen_Confirm_GetAction
+Screen_Main_Draw
+Screen_Detail_Draw
+Screen_Graph_Draw
+Screen_Ports_Draw
+Screen_Stats_Draw
+Screen_Settings_Draw
+Screen_Output_Draw
+Screen_Display_Draw
+Screen_Test_Draw
+Screen_Confirm_Draw
+Screen_Warning_Draw
+Screen_Sleep_Draw
+Screen_Header_RefreshIcons
+Screen_Main_Update
+Screen_Detail_Update
+ARM GAS  /tmp/ccjqjIde.s 			page 46
+
+
+Screen_Graph_Update
+Screen_Ports_Update
+Screen_Output_Update
+Screen_Stats_Update

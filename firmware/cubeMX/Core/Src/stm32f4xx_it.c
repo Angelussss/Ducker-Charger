@@ -200,4 +200,15 @@ void SysTick_Handler(void)
 
 /* USER CODE BEGIN 1 */
 
+/**
+  * @brief This function handles EXTI line 0 interrupt (encoder push-button, PC0).
+  * @note  PC0 is declared as plain GPIO_Input in the .ioc; Encoder_Init()
+  *        re-configures it as an EXTI line at runtime. Kept in this USER CODE
+  *        section so a CubeMX regeneration does not remove it.
+  */
+void EXTI0_IRQHandler(void)
+{
+  HAL_GPIO_EXTI_IRQHandler(ENCOD_BUTT_Pin);
+}
+
 /* USER CODE END 1 */

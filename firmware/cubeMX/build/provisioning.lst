@@ -1,0 +1,1414 @@
+ARM GAS  /tmp/ccWANuVb.s 			page 1
+
+
+   1              		.cpu cortex-m4
+   2              		.arch armv7e-m
+   3              		.fpu fpv4-sp-d16
+   4              		.eabi_attribute 27, 1
+   5              		.eabi_attribute 28, 1
+   6              		.eabi_attribute 20, 1
+   7              		.eabi_attribute 21, 1
+   8              		.eabi_attribute 23, 3
+   9              		.eabi_attribute 24, 1
+  10              		.eabi_attribute 25, 1
+  11              		.eabi_attribute 26, 1
+  12              		.eabi_attribute 30, 1
+  13              		.eabi_attribute 34, 1
+  14              		.eabi_attribute 18, 4
+  15              		.file	"provisioning.c"
+  16              		.text
+  17              	.Ltext0:
+  18              		.cfi_sections	.debug_frame
+  19              		.file 1 "Core/Src/app/provisioning.c"
+  20              		.section	.text.reg_write,"ax",%progbits
+  21              		.align	1
+  22              		.syntax unified
+  23              		.thumb
+  24              		.thumb_func
+  26              	reg_write:
+  27              	.LVL0:
+  28              	.LFB220:
+   1:Core/Src/app/provisioning.c **** /**
+   2:Core/Src/app/provisioning.c ****  * @file    provisioning.c
+   3:Core/Src/app/provisioning.c ****  * @brief   BQ34Z100-R2 data-flash provisioning. See provisioning.h.
+   4:Core/Src/app/provisioning.c ****  *
+   5:Core/Src/app/provisioning.c ****  * Data-flash access protocol (BQ34Z100-R2 TRM, "Accessing Data Flash"):
+   6:Core/Src/app/provisioning.c ****  *   0x61  BlockDataControl  (write 0x00 to enable block access)
+   7:Core/Src/app/provisioning.c ****  *   0x3E  DataFlashClass    (subclass id)
+   8:Core/Src/app/provisioning.c ****  *   0x3F  DataFlashBlock    (32-byte block index within the subclass)
+   9:Core/Src/app/provisioning.c ****  *   0x40..0x5F              32-byte block data window
+  10:Core/Src/app/provisioning.c ****  *   0x60  BlockDataChecksum (255 - (sum of block bytes) & 0xFF)
+  11:Core/Src/app/provisioning.c ****  *
+  12:Core/Src/app/provisioning.c ****  * VERIFY BEFORE FIRST USE (marked CHECK):
+  13:Core/Src/app/provisioning.c ****  *   - Subclass IDs and offsets against the BQ34Z100-R2 TRM data-flash
+  14:Core/Src/app/provisioning.c ****  *     table (the TRM is already in the repo docs). The values below
+  15:Core/Src/app/provisioning.c ****  *     follow the TRM naming but MUST be cross-checked once.
+  16:Core/Src/app/provisioning.c ****  *   - Unseal keys: 0x0414/0x3672 are the TI defaults; if the gauge is
+  17:Core/Src/app/provisioning.c ****  *     ever sealed with custom keys, update them here.
+  18:Core/Src/app/provisioning.c ****  *   - The pack sits behind the ISO1540 on I2C_LP: all accesses go
+  19:Core/Src/app/provisioning.c ****  *     through the normal hi2c1 path, nothing special needed.
+  20:Core/Src/app/provisioning.c ****  */
+  21:Core/Src/app/provisioning.c **** 
+  22:Core/Src/app/provisioning.c **** #include "app/provisioning.h"
+  23:Core/Src/app/provisioning.c **** #include "main.h"
+  24:Core/Src/app/provisioning.c **** #include "i2c.h"        /* hi2c1 (I2C_LP -> ISO1540 -> gauge) */
+  25:Core/Src/app/provisioning.c **** 
+  26:Core/Src/app/provisioning.c **** #include <string.h>
+  27:Core/Src/app/provisioning.c **** #include <stdlib.h>
+  28:Core/Src/app/provisioning.c **** 
+  29:Core/Src/app/provisioning.c **** #define GAUGE_ADDR              (0x55u << 1)
+  30:Core/Src/app/provisioning.c **** #define I2C_TIMEOUT_MS          (50u)
+ARM GAS  /tmp/ccWANuVb.s 			page 2
+
+
+  31:Core/Src/app/provisioning.c **** 
+  32:Core/Src/app/provisioning.c **** /* Standard commands */
+  33:Core/Src/app/provisioning.c **** #define REG_CNTL                (0x00u)   /* Control(), 2 bytes */
+  34:Core/Src/app/provisioning.c **** #define REG_AI                  (0x0Au)   /* AverageCurrent, mA  */
+  35:Core/Src/app/provisioning.c **** #define REG_BDC                 (0x61u)   /* BlockDataControl    */
+  36:Core/Src/app/provisioning.c **** #define REG_DF_CLASS            (0x3Eu)
+  37:Core/Src/app/provisioning.c **** #define REG_DF_BLOCK            (0x3Fu)
+  38:Core/Src/app/provisioning.c **** #define REG_BLOCK_DATA          (0x40u)
+  39:Core/Src/app/provisioning.c **** #define REG_BLOCK_CSUM          (0x60u)
+  40:Core/Src/app/provisioning.c **** 
+  41:Core/Src/app/provisioning.c **** /* Control() subcommands */
+  42:Core/Src/app/provisioning.c **** #define CNTL_UNSEAL_KEY1        (0x0414u)
+  43:Core/Src/app/provisioning.c **** #define CNTL_UNSEAL_KEY2        (0x3672u)
+  44:Core/Src/app/provisioning.c **** #define CNTL_RESET              (0x0041u)
+  45:Core/Src/app/provisioning.c **** #define CNTL_DEVICE_TYPE        (0x0001u)
+  46:Core/Src/app/provisioning.c **** 
+  47:Core/Src/app/provisioning.c **** /* Control() DEVICE_TYPE response for the BQ34Z100 family. */
+  48:Core/Src/app/provisioning.c **** #define GAUGE_DEVICE_TYPE       (0x0100u)
+  49:Core/Src/app/provisioning.c **** 
+  50:Core/Src/app/provisioning.c **** /* Safety: refuse DF writes unless |AverageCurrent| below this. */
+  51:Core/Src/app/provisioning.c **** #define PROV_MAX_REST_MA        (50)
+  52:Core/Src/app/provisioning.c **** 
+  53:Core/Src/app/provisioning.c **** /* =========================================================
+  54:Core/Src/app/provisioning.c ****  * Pack parameters (CHECK every subclass/offset against the TRM table)
+  55:Core/Src/app/provisioning.c ****  * ========================================================= */
+  56:Core/Src/app/provisioning.c **** 
+  57:Core/Src/app/provisioning.c **** /* Subclass 48 "Data": Design Capacity (mAh, big endian in DF).
+  58:Core/Src/app/provisioning.c ****  * 3P of Murata VTC5 (2600 mAh) = 7800 mAh — adjust if cells change. */
+  59:Core/Src/app/provisioning.c **** #define SUBCLASS_DATA           (48u)
+  60:Core/Src/app/provisioning.c **** #define OFF_DESIGN_CAPACITY     (11u)     /* CHECK: TRM offset */
+  61:Core/Src/app/provisioning.c **** static const uint8_t design_capacity[2] = { (7800u >> 8) & 0xFFu,
+  62:Core/Src/app/provisioning.c ****                                              7800u & 0xFFu };
+  63:Core/Src/app/provisioning.c **** 
+  64:Core/Src/app/provisioning.c **** /* Subclass 64 "Registers": Pack Configuration + Number of Series Cells.
+  65:Core/Src/app/provisioning.c ****  * VOLTSEL (external divider) must be set for a 4S pack. */
+  66:Core/Src/app/provisioning.c **** #define SUBCLASS_REGISTERS      (64u)
+  67:Core/Src/app/provisioning.c **** #define OFF_PACK_CONFIG         (0u)      /* CHECK: TRM offset + bits  */
+  68:Core/Src/app/provisioning.c **** #define OFF_SERIES_CELLS        (7u)      /* CHECK: TRM offset         */
+  69:Core/Src/app/provisioning.c **** static const uint8_t series_cells[1] = { 4u };
+  70:Core/Src/app/provisioning.c **** 
+  71:Core/Src/app/provisioning.c **** /* Subclass 104 "Manufacturer Info Block A": we use the first two bytes
+  72:Core/Src/app/provisioning.c ****  * as our provisioning marker ("DK" + revision). Bump the revision when
+  73:Core/Src/app/provisioning.c ****  * the patch list changes so old units re-provision. */
+  74:Core/Src/app/provisioning.c **** #define SUBCLASS_MFG_INFO_A     (58u)     /* CHECK: TRM subclass id */
+  75:Core/Src/app/provisioning.c **** #define OFF_MARKER              (0u)
+  76:Core/Src/app/provisioning.c **** #define PROV_MARKER_0           ((uint8_t)'D')
+  77:Core/Src/app/provisioning.c **** #define PROV_MARKER_1           ((uint8_t)0x01)   /* pack config rev */
+  78:Core/Src/app/provisioning.c **** static const uint8_t marker[2] = { PROV_MARKER_0, PROV_MARKER_1 };
+  79:Core/Src/app/provisioning.c **** 
+  80:Core/Src/app/provisioning.c **** static const GaugeDfPatch_t patches[] = {
+  81:Core/Src/app/provisioning.c ****     { SUBCLASS_DATA,       OFF_DESIGN_CAPACITY, 2u, design_capacity },
+  82:Core/Src/app/provisioning.c ****     { SUBCLASS_REGISTERS,  OFF_SERIES_CELLS,    1u, series_cells    },
+  83:Core/Src/app/provisioning.c ****     /* Golden-image entries (Qmax, Ra tables, calibration) go here once
+  84:Core/Src/app/provisioning.c ****      * the learning cycle on the sample pack has been run in bqStudio. */
+  85:Core/Src/app/provisioning.c ****     { SUBCLASS_MFG_INFO_A, OFF_MARKER,          2u, marker          },
+  86:Core/Src/app/provisioning.c **** };
+  87:Core/Src/app/provisioning.c **** #define N_PATCHES  (sizeof(patches) / sizeof(patches[0]))
+ARM GAS  /tmp/ccWANuVb.s 			page 3
+
+
+  88:Core/Src/app/provisioning.c **** 
+  89:Core/Src/app/provisioning.c **** /* =========================================================
+  90:Core/Src/app/provisioning.c ****  * Low-level helpers
+  91:Core/Src/app/provisioning.c ****  * ========================================================= */
+  92:Core/Src/app/provisioning.c **** 
+  93:Core/Src/app/provisioning.c **** static HAL_StatusTypeDef reg_write(uint8_t reg, const uint8_t *d, uint8_t n)
+  94:Core/Src/app/provisioning.c **** {
+  29              		.loc 1 94 1 view -0
+  30              		.cfi_startproc
+  31              		@ args = 0, pretend = 0, frame = 40
+  32              		@ frame_needed = 0, uses_anonymous_args = 0
+  33              		.loc 1 94 1 is_stmt 0 view .LVU1
+  34 0000 10B5     		push	{r4, lr}
+  35              	.LCFI0:
+  36              		.cfi_def_cfa_offset 8
+  37              		.cfi_offset 4, -8
+  38              		.cfi_offset 14, -4
+  39 0002 8CB0     		sub	sp, sp, #48
+  40              	.LCFI1:
+  41              		.cfi_def_cfa_offset 56
+  42 0004 1446     		mov	r4, r2
+  95:Core/Src/app/provisioning.c ****     uint8_t buf[34];
+  43              		.loc 1 95 5 is_stmt 1 view .LVU2
+  96:Core/Src/app/provisioning.c ****     buf[0] = reg;
+  44              		.loc 1 96 5 view .LVU3
+  45              		.loc 1 96 12 is_stmt 0 view .LVU4
+  46 0006 8DF80C00 		strb	r0, [sp, #12]
+  97:Core/Src/app/provisioning.c ****     memcpy(&buf[1], d, n);
+  47              		.loc 1 97 5 is_stmt 1 view .LVU5
+  48 000a 0DF10D00 		add	r0, sp, #13
+  49              	.LVL1:
+  50              		.loc 1 97 5 is_stmt 0 view .LVU6
+  51 000e FFF7FEFF 		bl	memcpy
+  52              	.LVL2:
+  98:Core/Src/app/provisioning.c ****     return HAL_I2C_Master_Transmit(&hi2c1, GAUGE_ADDR, buf,
+  53              		.loc 1 98 5 is_stmt 1 view .LVU7
+  54              		.loc 1 98 12 is_stmt 0 view .LVU8
+  55 0012 3223     		movs	r3, #50
+  56 0014 0093     		str	r3, [sp]
+  57 0016 2346     		mov	r3, r4
+  58 0018 0133     		adds	r3, r3, #1
+  59 001a 03AA     		add	r2, sp, #12
+  60 001c AA21     		movs	r1, #170
+  61 001e 0248     		ldr	r0, .L3
+  62 0020 FFF7FEFF 		bl	HAL_I2C_Master_Transmit
+  63              	.LVL3:
+  99:Core/Src/app/provisioning.c ****                                    (uint16_t)(n + 1u), I2C_TIMEOUT_MS);
+ 100:Core/Src/app/provisioning.c **** }
+  64              		.loc 1 100 1 view .LVU9
+  65 0024 0CB0     		add	sp, sp, #48
+  66              	.LCFI2:
+  67              		.cfi_def_cfa_offset 8
+  68              		@ sp needed
+  69 0026 10BD     		pop	{r4, pc}
+  70              	.LVL4:
+  71              	.L4:
+  72              		.loc 1 100 1 view .LVU10
+ARM GAS  /tmp/ccWANuVb.s 			page 4
+
+
+  73              		.align	2
+  74              	.L3:
+  75 0028 00000000 		.word	hi2c1
+  76              		.cfi_endproc
+  77              	.LFE220:
+  79              		.section	.text.control_write,"ax",%progbits
+  80              		.align	1
+  81              		.syntax unified
+  82              		.thumb
+  83              		.thumb_func
+  85              	control_write:
+  86              	.LVL5:
+  87              	.LFB222:
+ 101:Core/Src/app/provisioning.c **** 
+ 102:Core/Src/app/provisioning.c **** static HAL_StatusTypeDef reg_read(uint8_t reg, uint8_t *d, uint8_t n)
+ 103:Core/Src/app/provisioning.c **** {
+ 104:Core/Src/app/provisioning.c ****     if (HAL_I2C_Master_Transmit(&hi2c1, GAUGE_ADDR, &reg, 1u,
+ 105:Core/Src/app/provisioning.c ****                                 I2C_TIMEOUT_MS) != HAL_OK)
+ 106:Core/Src/app/provisioning.c ****         return HAL_ERROR;
+ 107:Core/Src/app/provisioning.c ****     return HAL_I2C_Master_Receive(&hi2c1, GAUGE_ADDR, d, n, I2C_TIMEOUT_MS);
+ 108:Core/Src/app/provisioning.c **** }
+ 109:Core/Src/app/provisioning.c **** 
+ 110:Core/Src/app/provisioning.c **** static HAL_StatusTypeDef control_write(uint16_t sub)
+ 111:Core/Src/app/provisioning.c **** {
+  88              		.loc 1 111 1 is_stmt 1 view -0
+  89              		.cfi_startproc
+  90              		@ args = 0, pretend = 0, frame = 8
+  91              		@ frame_needed = 0, uses_anonymous_args = 0
+  92              		.loc 1 111 1 is_stmt 0 view .LVU12
+  93 0000 00B5     		push	{lr}
+  94              	.LCFI3:
+  95              		.cfi_def_cfa_offset 4
+  96              		.cfi_offset 14, -4
+  97 0002 83B0     		sub	sp, sp, #12
+  98              	.LCFI4:
+  99              		.cfi_def_cfa_offset 16
+ 112:Core/Src/app/provisioning.c ****     uint8_t d[2] = { (uint8_t)(sub & 0xFFu), (uint8_t)(sub >> 8) };
+ 100              		.loc 1 112 5 is_stmt 1 view .LVU13
+ 101              		.loc 1 112 13 is_stmt 0 view .LVU14
+ 102 0004 8DF80400 		strb	r0, [sp, #4]
+ 103              		.loc 1 112 46 view .LVU15
+ 104 0008 000A     		lsrs	r0, r0, #8
+ 105              	.LVL6:
+ 106              		.loc 1 112 13 view .LVU16
+ 107 000a 8DF80500 		strb	r0, [sp, #5]
+ 113:Core/Src/app/provisioning.c ****     return reg_write(REG_CNTL, d, 2u);
+ 108              		.loc 1 113 5 is_stmt 1 view .LVU17
+ 109              		.loc 1 113 12 is_stmt 0 view .LVU18
+ 110 000e 0222     		movs	r2, #2
+ 111 0010 01A9     		add	r1, sp, #4
+ 112 0012 0020     		movs	r0, #0
+ 113 0014 FFF7FEFF 		bl	reg_write
+ 114              	.LVL7:
+ 114:Core/Src/app/provisioning.c **** }
+ 115              		.loc 1 114 1 view .LVU19
+ 116 0018 03B0     		add	sp, sp, #12
+ 117              	.LCFI5:
+ARM GAS  /tmp/ccWANuVb.s 			page 5
+
+
+ 118              		.cfi_def_cfa_offset 4
+ 119              		@ sp needed
+ 120 001a 00BD     		pop	{pc}
+ 121              		.cfi_endproc
+ 122              	.LFE222:
+ 124              		.section	.text.df_write_block,"ax",%progbits
+ 125              		.align	1
+ 126              		.syntax unified
+ 127              		.thumb
+ 128              		.thumb_func
+ 130              	df_write_block:
+ 131              	.LVL8:
+ 132              	.LFB225:
+ 115:Core/Src/app/provisioning.c **** 
+ 116:Core/Src/app/provisioning.c **** /** Control() subcommand round-trip: write, settle, read the response. */
+ 117:Core/Src/app/provisioning.c **** static HAL_StatusTypeDef control_read(uint16_t sub, uint16_t *out)
+ 118:Core/Src/app/provisioning.c **** {
+ 119:Core/Src/app/provisioning.c ****     uint8_t d[2];
+ 120:Core/Src/app/provisioning.c **** 
+ 121:Core/Src/app/provisioning.c ****     if (control_write(sub) != HAL_OK)
+ 122:Core/Src/app/provisioning.c ****         return HAL_ERROR;
+ 123:Core/Src/app/provisioning.c ****     HAL_Delay(2);
+ 124:Core/Src/app/provisioning.c ****     if (reg_read(REG_CNTL, d, 2u) != HAL_OK)
+ 125:Core/Src/app/provisioning.c ****         return HAL_ERROR;
+ 126:Core/Src/app/provisioning.c **** 
+ 127:Core/Src/app/provisioning.c ****     *out = (uint16_t)d[0] | ((uint16_t)d[1] << 8);
+ 128:Core/Src/app/provisioning.c ****     return HAL_OK;
+ 129:Core/Src/app/provisioning.c **** }
+ 130:Core/Src/app/provisioning.c **** 
+ 131:Core/Src/app/provisioning.c **** /** Select subclass/block and load the 32-byte window into buf. */
+ 132:Core/Src/app/provisioning.c **** static HAL_StatusTypeDef df_read_block(uint8_t subclass, uint8_t block,
+ 133:Core/Src/app/provisioning.c ****                                        uint8_t *buf)
+ 134:Core/Src/app/provisioning.c **** {
+ 135:Core/Src/app/provisioning.c ****     uint8_t v;
+ 136:Core/Src/app/provisioning.c **** 
+ 137:Core/Src/app/provisioning.c ****     v = 0x00u;
+ 138:Core/Src/app/provisioning.c ****     if (reg_write(REG_BDC, &v, 1u) != HAL_OK)          return HAL_ERROR;
+ 139:Core/Src/app/provisioning.c ****     if (reg_write(REG_DF_CLASS, &subclass, 1u) != HAL_OK) return HAL_ERROR;
+ 140:Core/Src/app/provisioning.c ****     if (reg_write(REG_DF_BLOCK, &block, 1u) != HAL_OK) return HAL_ERROR;
+ 141:Core/Src/app/provisioning.c ****     HAL_Delay(2);
+ 142:Core/Src/app/provisioning.c ****     return reg_read(REG_BLOCK_DATA, buf, 32u);
+ 143:Core/Src/app/provisioning.c **** }
+ 144:Core/Src/app/provisioning.c **** 
+ 145:Core/Src/app/provisioning.c **** /** Write back a modified 32-byte window with its checksum. */
+ 146:Core/Src/app/provisioning.c **** static HAL_StatusTypeDef df_write_block(const uint8_t *buf)
+ 147:Core/Src/app/provisioning.c **** {
+ 133              		.loc 1 147 1 is_stmt 1 view -0
+ 134              		.cfi_startproc
+ 135              		@ args = 0, pretend = 0, frame = 8
+ 136              		@ frame_needed = 0, uses_anonymous_args = 0
+ 137              		.loc 1 147 1 is_stmt 0 view .LVU21
+ 138 0000 10B5     		push	{r4, lr}
+ 139              	.LCFI6:
+ 140              		.cfi_def_cfa_offset 8
+ 141              		.cfi_offset 4, -8
+ 142              		.cfi_offset 14, -4
+ 143 0002 82B0     		sub	sp, sp, #8
+ARM GAS  /tmp/ccWANuVb.s 			page 6
+
+
+ 144              	.LCFI7:
+ 145              		.cfi_def_cfa_offset 16
+ 146 0004 0446     		mov	r4, r0
+ 148:Core/Src/app/provisioning.c ****     uint32_t sum = 0;
+ 147              		.loc 1 148 5 is_stmt 1 view .LVU22
+ 148              	.LVL9:
+ 149:Core/Src/app/provisioning.c ****     uint8_t  csum;
+ 149              		.loc 1 149 5 view .LVU23
+ 150:Core/Src/app/provisioning.c **** 
+ 151:Core/Src/app/provisioning.c ****     if (reg_write(REG_BLOCK_DATA, buf, 32u) != HAL_OK)
+ 150              		.loc 1 151 5 view .LVU24
+ 151              		.loc 1 151 9 is_stmt 0 view .LVU25
+ 152 0006 2022     		movs	r2, #32
+ 153 0008 0146     		mov	r1, r0
+ 154 000a 4020     		movs	r0, #64
+ 155              	.LVL10:
+ 156              		.loc 1 151 9 view .LVU26
+ 157 000c FFF7FEFF 		bl	reg_write
+ 158              	.LVL11:
+ 159              		.loc 1 151 8 discriminator 1 view .LVU27
+ 160 0010 98B9     		cbnz	r0, .L11
+ 161 0012 0346     		mov	r3, r0
+ 148:Core/Src/app/provisioning.c ****     uint8_t  csum;
+ 162              		.loc 1 148 14 view .LVU28
+ 163 0014 0246     		mov	r2, r0
+ 164 0016 03E0     		b	.L8
+ 165              	.LVL12:
+ 166              	.L10:
+ 167              	.LBB2:
+ 152:Core/Src/app/provisioning.c ****         return HAL_ERROR;
+ 153:Core/Src/app/provisioning.c **** 
+ 154:Core/Src/app/provisioning.c ****     for (uint8_t i = 0; i < 32u; i++)
+ 155:Core/Src/app/provisioning.c ****         sum += buf[i];
+ 168              		.loc 1 155 9 is_stmt 1 view .LVU29
+ 169              		.loc 1 155 19 is_stmt 0 view .LVU30
+ 170 0018 E15C     		ldrb	r1, [r4, r3]	@ zero_extendqisi2
+ 171              		.loc 1 155 13 view .LVU31
+ 172 001a 0A44     		add	r2, r2, r1
+ 173              	.LVL13:
+ 154:Core/Src/app/provisioning.c ****         sum += buf[i];
+ 174              		.loc 1 154 35 is_stmt 1 discriminator 1 view .LVU32
+ 175 001c 0133     		adds	r3, r3, #1
+ 176              	.LVL14:
+ 154:Core/Src/app/provisioning.c ****         sum += buf[i];
+ 177              		.loc 1 154 35 is_stmt 0 discriminator 1 view .LVU33
+ 178 001e DBB2     		uxtb	r3, r3
+ 179              	.LVL15:
+ 180              	.L8:
+ 154:Core/Src/app/provisioning.c ****         sum += buf[i];
+ 181              		.loc 1 154 27 is_stmt 1 discriminator 2 view .LVU34
+ 182 0020 1F2B     		cmp	r3, #31
+ 183 0022 F9D9     		bls	.L10
+ 184              	.LBE2:
+ 156:Core/Src/app/provisioning.c ****     csum = (uint8_t)(255u - (sum & 0xFFu));
+ 185              		.loc 1 156 5 view .LVU35
+ 186              		.loc 1 156 12 is_stmt 0 view .LVU36
+ 187 0024 D243     		mvns	r2, r2
+ARM GAS  /tmp/ccWANuVb.s 			page 7
+
+
+ 188              	.LVL16:
+ 189              		.loc 1 156 10 view .LVU37
+ 190 0026 8DF80720 		strb	r2, [sp, #7]
+ 157:Core/Src/app/provisioning.c **** 
+ 158:Core/Src/app/provisioning.c ****     if (reg_write(REG_BLOCK_CSUM, &csum, 1u) != HAL_OK)
+ 191              		.loc 1 158 5 is_stmt 1 view .LVU38
+ 192              		.loc 1 158 9 is_stmt 0 view .LVU39
+ 193 002a 0122     		movs	r2, #1
+ 194              	.LVL17:
+ 195              		.loc 1 158 9 view .LVU40
+ 196 002c 0DF10701 		add	r1, sp, #7
+ 197 0030 6020     		movs	r0, #96
+ 198 0032 FFF7FEFF 		bl	reg_write
+ 199              	.LVL18:
+ 200              		.loc 1 158 8 discriminator 1 view .LVU41
+ 201 0036 0446     		mov	r4, r0
+ 202              	.LVL19:
+ 203              		.loc 1 158 8 discriminator 1 view .LVU42
+ 204 0038 18B1     		cbz	r0, .L14
+ 205              	.LVL20:
+ 206              	.L11:
+ 152:Core/Src/app/provisioning.c **** 
+ 207              		.loc 1 152 16 view .LVU43
+ 208 003a 0124     		movs	r4, #1
+ 209              	.L9:
+ 159:Core/Src/app/provisioning.c ****         return HAL_ERROR;
+ 160:Core/Src/app/provisioning.c **** 
+ 161:Core/Src/app/provisioning.c ****     HAL_Delay(100);     /* DF write time, TRM-mandated pause */
+ 162:Core/Src/app/provisioning.c ****     return HAL_OK;
+ 163:Core/Src/app/provisioning.c **** }
+ 210              		.loc 1 163 1 view .LVU44
+ 211 003c 2046     		mov	r0, r4
+ 212 003e 02B0     		add	sp, sp, #8
+ 213              	.LCFI8:
+ 214              		.cfi_remember_state
+ 215              		.cfi_def_cfa_offset 8
+ 216              		@ sp needed
+ 217 0040 10BD     		pop	{r4, pc}
+ 218              	.LVL21:
+ 219              	.L14:
+ 220              	.LCFI9:
+ 221              		.cfi_restore_state
+ 161:Core/Src/app/provisioning.c ****     return HAL_OK;
+ 222              		.loc 1 161 5 is_stmt 1 view .LVU45
+ 223 0042 6420     		movs	r0, #100
+ 224 0044 FFF7FEFF 		bl	HAL_Delay
+ 225              	.LVL22:
+ 162:Core/Src/app/provisioning.c **** }
+ 226              		.loc 1 162 5 view .LVU46
+ 162:Core/Src/app/provisioning.c **** }
+ 227              		.loc 1 162 12 is_stmt 0 view .LVU47
+ 228 0048 F8E7     		b	.L9
+ 229              		.cfi_endproc
+ 230              	.LFE225:
+ 232              		.section	.text.reg_read,"ax",%progbits
+ 233              		.align	1
+ 234              		.syntax unified
+ARM GAS  /tmp/ccWANuVb.s 			page 8
+
+
+ 235              		.thumb
+ 236              		.thumb_func
+ 238              	reg_read:
+ 239              	.LVL23:
+ 240              	.LFB221:
+ 103:Core/Src/app/provisioning.c ****     if (HAL_I2C_Master_Transmit(&hi2c1, GAUGE_ADDR, &reg, 1u,
+ 241              		.loc 1 103 1 is_stmt 1 view -0
+ 242              		.cfi_startproc
+ 243              		@ args = 0, pretend = 0, frame = 8
+ 244              		@ frame_needed = 0, uses_anonymous_args = 0
+ 103:Core/Src/app/provisioning.c ****     if (HAL_I2C_Master_Transmit(&hi2c1, GAUGE_ADDR, &reg, 1u,
+ 245              		.loc 1 103 1 is_stmt 0 view .LVU49
+ 246 0000 30B5     		push	{r4, r5, lr}
+ 247              	.LCFI10:
+ 248              		.cfi_def_cfa_offset 12
+ 249              		.cfi_offset 4, -12
+ 250              		.cfi_offset 5, -8
+ 251              		.cfi_offset 14, -4
+ 252 0002 85B0     		sub	sp, sp, #20
+ 253              	.LCFI11:
+ 254              		.cfi_def_cfa_offset 32
+ 255 0004 0D46     		mov	r5, r1
+ 256 0006 1446     		mov	r4, r2
+ 257 0008 8DF80F00 		strb	r0, [sp, #15]
+ 104:Core/Src/app/provisioning.c ****                                 I2C_TIMEOUT_MS) != HAL_OK)
+ 258              		.loc 1 104 5 is_stmt 1 view .LVU50
+ 104:Core/Src/app/provisioning.c ****                                 I2C_TIMEOUT_MS) != HAL_OK)
+ 259              		.loc 1 104 9 is_stmt 0 view .LVU51
+ 260 000c 3223     		movs	r3, #50
+ 261 000e 0093     		str	r3, [sp]
+ 262 0010 0123     		movs	r3, #1
+ 263 0012 0DF10F02 		add	r2, sp, #15
+ 264              	.LVL24:
+ 104:Core/Src/app/provisioning.c ****                                 I2C_TIMEOUT_MS) != HAL_OK)
+ 265              		.loc 1 104 9 view .LVU52
+ 266 0016 AA21     		movs	r1, #170
+ 267              	.LVL25:
+ 104:Core/Src/app/provisioning.c ****                                 I2C_TIMEOUT_MS) != HAL_OK)
+ 268              		.loc 1 104 9 view .LVU53
+ 269 0018 0748     		ldr	r0, .L20
+ 270              	.LVL26:
+ 104:Core/Src/app/provisioning.c ****                                 I2C_TIMEOUT_MS) != HAL_OK)
+ 271              		.loc 1 104 9 view .LVU54
+ 272 001a FFF7FEFF 		bl	HAL_I2C_Master_Transmit
+ 273              	.LVL27:
+ 104:Core/Src/app/provisioning.c ****                                 I2C_TIMEOUT_MS) != HAL_OK)
+ 274              		.loc 1 104 8 discriminator 1 view .LVU55
+ 275 001e 10B1     		cbz	r0, .L19
+ 106:Core/Src/app/provisioning.c ****     return HAL_I2C_Master_Receive(&hi2c1, GAUGE_ADDR, d, n, I2C_TIMEOUT_MS);
+ 276              		.loc 1 106 16 view .LVU56
+ 277 0020 0120     		movs	r0, #1
+ 278              	.L16:
+ 108:Core/Src/app/provisioning.c **** 
+ 279              		.loc 1 108 1 view .LVU57
+ 280 0022 05B0     		add	sp, sp, #20
+ 281              	.LCFI12:
+ 282              		.cfi_remember_state
+ARM GAS  /tmp/ccWANuVb.s 			page 9
+
+
+ 283              		.cfi_def_cfa_offset 12
+ 284              		@ sp needed
+ 285 0024 30BD     		pop	{r4, r5, pc}
+ 286              	.LVL28:
+ 287              	.L19:
+ 288              	.LCFI13:
+ 289              		.cfi_restore_state
+ 107:Core/Src/app/provisioning.c **** }
+ 290              		.loc 1 107 5 is_stmt 1 view .LVU58
+ 107:Core/Src/app/provisioning.c **** }
+ 291              		.loc 1 107 12 is_stmt 0 view .LVU59
+ 292 0026 3223     		movs	r3, #50
+ 293 0028 0093     		str	r3, [sp]
+ 294 002a 2346     		mov	r3, r4
+ 295 002c 2A46     		mov	r2, r5
+ 296 002e AA21     		movs	r1, #170
+ 297 0030 0148     		ldr	r0, .L20
+ 298 0032 FFF7FEFF 		bl	HAL_I2C_Master_Receive
+ 299              	.LVL29:
+ 107:Core/Src/app/provisioning.c **** }
+ 300              		.loc 1 107 12 discriminator 1 view .LVU60
+ 301 0036 F4E7     		b	.L16
+ 302              	.L21:
+ 303              		.align	2
+ 304              	.L20:
+ 305 0038 00000000 		.word	hi2c1
+ 306              		.cfi_endproc
+ 307              	.LFE221:
+ 309              		.section	.text.control_read,"ax",%progbits
+ 310              		.align	1
+ 311              		.syntax unified
+ 312              		.thumb
+ 313              		.thumb_func
+ 315              	control_read:
+ 316              	.LVL30:
+ 317              	.LFB223:
+ 118:Core/Src/app/provisioning.c ****     uint8_t d[2];
+ 318              		.loc 1 118 1 is_stmt 1 view -0
+ 319              		.cfi_startproc
+ 320              		@ args = 0, pretend = 0, frame = 8
+ 321              		@ frame_needed = 0, uses_anonymous_args = 0
+ 118:Core/Src/app/provisioning.c ****     uint8_t d[2];
+ 322              		.loc 1 118 1 is_stmt 0 view .LVU62
+ 323 0000 10B5     		push	{r4, lr}
+ 324              	.LCFI14:
+ 325              		.cfi_def_cfa_offset 8
+ 326              		.cfi_offset 4, -8
+ 327              		.cfi_offset 14, -4
+ 328 0002 82B0     		sub	sp, sp, #8
+ 329              	.LCFI15:
+ 330              		.cfi_def_cfa_offset 16
+ 331 0004 0C46     		mov	r4, r1
+ 119:Core/Src/app/provisioning.c **** 
+ 332              		.loc 1 119 5 is_stmt 1 view .LVU63
+ 121:Core/Src/app/provisioning.c ****         return HAL_ERROR;
+ 333              		.loc 1 121 5 view .LVU64
+ 121:Core/Src/app/provisioning.c ****         return HAL_ERROR;
+ARM GAS  /tmp/ccWANuVb.s 			page 10
+
+
+ 334              		.loc 1 121 9 is_stmt 0 view .LVU65
+ 335 0006 FFF7FEFF 		bl	control_write
+ 336              	.LVL31:
+ 121:Core/Src/app/provisioning.c ****         return HAL_ERROR;
+ 337              		.loc 1 121 8 discriminator 1 view .LVU66
+ 338 000a 10B1     		cbz	r0, .L23
+ 339              	.L25:
+ 122:Core/Src/app/provisioning.c ****     HAL_Delay(2);
+ 340              		.loc 1 122 16 view .LVU67
+ 341 000c 0120     		movs	r0, #1
+ 342              	.L24:
+ 129:Core/Src/app/provisioning.c **** 
+ 343              		.loc 1 129 1 view .LVU68
+ 344 000e 02B0     		add	sp, sp, #8
+ 345              	.LCFI16:
+ 346              		.cfi_remember_state
+ 347              		.cfi_def_cfa_offset 8
+ 348              		@ sp needed
+ 349 0010 10BD     		pop	{r4, pc}
+ 350              	.LVL32:
+ 351              	.L23:
+ 352              	.LCFI17:
+ 353              		.cfi_restore_state
+ 123:Core/Src/app/provisioning.c ****     if (reg_read(REG_CNTL, d, 2u) != HAL_OK)
+ 354              		.loc 1 123 5 is_stmt 1 view .LVU69
+ 355 0012 0220     		movs	r0, #2
+ 356 0014 FFF7FEFF 		bl	HAL_Delay
+ 357              	.LVL33:
+ 124:Core/Src/app/provisioning.c ****         return HAL_ERROR;
+ 358              		.loc 1 124 5 view .LVU70
+ 124:Core/Src/app/provisioning.c ****         return HAL_ERROR;
+ 359              		.loc 1 124 9 is_stmt 0 view .LVU71
+ 360 0018 0222     		movs	r2, #2
+ 361 001a 01A9     		add	r1, sp, #4
+ 362 001c 0020     		movs	r0, #0
+ 363 001e FFF7FEFF 		bl	reg_read
+ 364              	.LVL34:
+ 124:Core/Src/app/provisioning.c ****         return HAL_ERROR;
+ 365              		.loc 1 124 8 discriminator 1 view .LVU72
+ 366 0022 0028     		cmp	r0, #0
+ 367 0024 F2D1     		bne	.L25
+ 127:Core/Src/app/provisioning.c ****     return HAL_OK;
+ 368              		.loc 1 127 5 is_stmt 1 view .LVU73
+ 127:Core/Src/app/provisioning.c ****     return HAL_OK;
+ 369              		.loc 1 127 23 is_stmt 0 view .LVU74
+ 370 0026 9DF80430 		ldrb	r3, [sp, #4]	@ zero_extendqisi2
+ 127:Core/Src/app/provisioning.c ****     return HAL_OK;
+ 371              		.loc 1 127 41 view .LVU75
+ 372 002a 9DF80520 		ldrb	r2, [sp, #5]	@ zero_extendqisi2
+ 127:Core/Src/app/provisioning.c ****     return HAL_OK;
+ 373              		.loc 1 127 27 view .LVU76
+ 374 002e 43EA0223 		orr	r3, r3, r2, lsl #8
+ 127:Core/Src/app/provisioning.c ****     return HAL_OK;
+ 375              		.loc 1 127 10 view .LVU77
+ 376 0032 2380     		strh	r3, [r4]	@ movhi
+ 128:Core/Src/app/provisioning.c **** }
+ 377              		.loc 1 128 5 is_stmt 1 view .LVU78
+ARM GAS  /tmp/ccWANuVb.s 			page 11
+
+
+ 128:Core/Src/app/provisioning.c **** }
+ 378              		.loc 1 128 12 is_stmt 0 view .LVU79
+ 379 0034 EBE7     		b	.L24
+ 380              		.cfi_endproc
+ 381              	.LFE223:
+ 383              		.section	.text.df_read_block,"ax",%progbits
+ 384              		.align	1
+ 385              		.syntax unified
+ 386              		.thumb
+ 387              		.thumb_func
+ 389              	df_read_block:
+ 390              	.LVL35:
+ 391              	.LFB224:
+ 134:Core/Src/app/provisioning.c ****     uint8_t v;
+ 392              		.loc 1 134 1 is_stmt 1 view -0
+ 393              		.cfi_startproc
+ 394              		@ args = 0, pretend = 0, frame = 16
+ 395              		@ frame_needed = 0, uses_anonymous_args = 0
+ 134:Core/Src/app/provisioning.c ****     uint8_t v;
+ 396              		.loc 1 134 1 is_stmt 0 view .LVU81
+ 397 0000 10B5     		push	{r4, lr}
+ 398              	.LCFI18:
+ 399              		.cfi_def_cfa_offset 8
+ 400              		.cfi_offset 4, -8
+ 401              		.cfi_offset 14, -4
+ 402 0002 84B0     		sub	sp, sp, #16
+ 403              	.LCFI19:
+ 404              		.cfi_def_cfa_offset 24
+ 405 0004 1446     		mov	r4, r2
+ 406 0006 8DF80700 		strb	r0, [sp, #7]
+ 407 000a 8DF80610 		strb	r1, [sp, #6]
+ 135:Core/Src/app/provisioning.c **** 
+ 408              		.loc 1 135 5 is_stmt 1 view .LVU82
+ 137:Core/Src/app/provisioning.c ****     if (reg_write(REG_BDC, &v, 1u) != HAL_OK)          return HAL_ERROR;
+ 409              		.loc 1 137 5 view .LVU83
+ 137:Core/Src/app/provisioning.c ****     if (reg_write(REG_BDC, &v, 1u) != HAL_OK)          return HAL_ERROR;
+ 410              		.loc 1 137 7 is_stmt 0 view .LVU84
+ 411 000e 0023     		movs	r3, #0
+ 412 0010 8DF80F30 		strb	r3, [sp, #15]
+ 138:Core/Src/app/provisioning.c ****     if (reg_write(REG_DF_CLASS, &subclass, 1u) != HAL_OK) return HAL_ERROR;
+ 413              		.loc 1 138 5 is_stmt 1 view .LVU85
+ 138:Core/Src/app/provisioning.c ****     if (reg_write(REG_DF_CLASS, &subclass, 1u) != HAL_OK) return HAL_ERROR;
+ 414              		.loc 1 138 9 is_stmt 0 view .LVU86
+ 415 0014 0122     		movs	r2, #1
+ 416              	.LVL36:
+ 138:Core/Src/app/provisioning.c ****     if (reg_write(REG_DF_CLASS, &subclass, 1u) != HAL_OK) return HAL_ERROR;
+ 417              		.loc 1 138 9 view .LVU87
+ 418 0016 0DF10F01 		add	r1, sp, #15
+ 419              	.LVL37:
+ 138:Core/Src/app/provisioning.c ****     if (reg_write(REG_DF_CLASS, &subclass, 1u) != HAL_OK) return HAL_ERROR;
+ 420              		.loc 1 138 9 view .LVU88
+ 421 001a 6120     		movs	r0, #97
+ 422              	.LVL38:
+ 138:Core/Src/app/provisioning.c ****     if (reg_write(REG_DF_CLASS, &subclass, 1u) != HAL_OK) return HAL_ERROR;
+ 423              		.loc 1 138 9 view .LVU89
+ 424 001c FFF7FEFF 		bl	reg_write
+ 425              	.LVL39:
+ARM GAS  /tmp/ccWANuVb.s 			page 12
+
+
+ 138:Core/Src/app/provisioning.c ****     if (reg_write(REG_DF_CLASS, &subclass, 1u) != HAL_OK) return HAL_ERROR;
+ 426              		.loc 1 138 8 discriminator 1 view .LVU90
+ 427 0020 10B1     		cbz	r0, .L28
+ 428              	.L30:
+ 138:Core/Src/app/provisioning.c ****     if (reg_write(REG_DF_CLASS, &subclass, 1u) != HAL_OK) return HAL_ERROR;
+ 429              		.loc 1 138 63 discriminator 2 view .LVU91
+ 430 0022 0120     		movs	r0, #1
+ 431              	.L29:
+ 143:Core/Src/app/provisioning.c **** 
+ 432              		.loc 1 143 1 view .LVU92
+ 433 0024 04B0     		add	sp, sp, #16
+ 434              	.LCFI20:
+ 435              		.cfi_remember_state
+ 436              		.cfi_def_cfa_offset 8
+ 437              		@ sp needed
+ 438 0026 10BD     		pop	{r4, pc}
+ 439              	.LVL40:
+ 440              	.L28:
+ 441              	.LCFI21:
+ 442              		.cfi_restore_state
+ 139:Core/Src/app/provisioning.c ****     if (reg_write(REG_DF_BLOCK, &block, 1u) != HAL_OK) return HAL_ERROR;
+ 443              		.loc 1 139 5 is_stmt 1 view .LVU93
+ 139:Core/Src/app/provisioning.c ****     if (reg_write(REG_DF_BLOCK, &block, 1u) != HAL_OK) return HAL_ERROR;
+ 444              		.loc 1 139 9 is_stmt 0 view .LVU94
+ 445 0028 0122     		movs	r2, #1
+ 446 002a 0DF10701 		add	r1, sp, #7
+ 447 002e 3E20     		movs	r0, #62
+ 448 0030 FFF7FEFF 		bl	reg_write
+ 449              	.LVL41:
+ 139:Core/Src/app/provisioning.c ****     if (reg_write(REG_DF_BLOCK, &block, 1u) != HAL_OK) return HAL_ERROR;
+ 450              		.loc 1 139 8 discriminator 1 view .LVU95
+ 451 0034 0028     		cmp	r0, #0
+ 452 0036 F4D1     		bne	.L30
+ 140:Core/Src/app/provisioning.c ****     HAL_Delay(2);
+ 453              		.loc 1 140 5 is_stmt 1 view .LVU96
+ 140:Core/Src/app/provisioning.c ****     HAL_Delay(2);
+ 454              		.loc 1 140 9 is_stmt 0 view .LVU97
+ 455 0038 0122     		movs	r2, #1
+ 456 003a 0DF10601 		add	r1, sp, #6
+ 457 003e 3F20     		movs	r0, #63
+ 458 0040 FFF7FEFF 		bl	reg_write
+ 459              	.LVL42:
+ 140:Core/Src/app/provisioning.c ****     HAL_Delay(2);
+ 460              		.loc 1 140 8 discriminator 1 view .LVU98
+ 461 0044 0028     		cmp	r0, #0
+ 462 0046 ECD1     		bne	.L30
+ 141:Core/Src/app/provisioning.c ****     return reg_read(REG_BLOCK_DATA, buf, 32u);
+ 463              		.loc 1 141 5 is_stmt 1 view .LVU99
+ 464 0048 0220     		movs	r0, #2
+ 465 004a FFF7FEFF 		bl	HAL_Delay
+ 466              	.LVL43:
+ 142:Core/Src/app/provisioning.c **** }
+ 467              		.loc 1 142 5 view .LVU100
+ 142:Core/Src/app/provisioning.c **** }
+ 468              		.loc 1 142 12 is_stmt 0 view .LVU101
+ 469 004e 2022     		movs	r2, #32
+ 470 0050 2146     		mov	r1, r4
+ARM GAS  /tmp/ccWANuVb.s 			page 13
+
+
+ 471 0052 4020     		movs	r0, #64
+ 472 0054 FFF7FEFF 		bl	reg_read
+ 473              	.LVL44:
+ 142:Core/Src/app/provisioning.c **** }
+ 474              		.loc 1 142 12 discriminator 1 view .LVU102
+ 475 0058 E4E7     		b	.L29
+ 476              		.cfi_endproc
+ 477              	.LFE224:
+ 479              		.section	.text.df_apply,"ax",%progbits
+ 480              		.align	1
+ 481              		.syntax unified
+ 482              		.thumb
+ 483              		.thumb_func
+ 485              	df_apply:
+ 486              	.LVL45:
+ 487              	.LFB226:
+ 164:Core/Src/app/provisioning.c **** 
+ 165:Core/Src/app/provisioning.c **** /** Apply one patch (read-modify-write of the containing block). */
+ 166:Core/Src/app/provisioning.c **** static HAL_StatusTypeDef df_apply(const GaugeDfPatch_t *p)
+ 167:Core/Src/app/provisioning.c **** {
+ 488              		.loc 1 167 1 is_stmt 1 view -0
+ 489              		.cfi_startproc
+ 490              		@ args = 0, pretend = 0, frame = 32
+ 491              		@ frame_needed = 0, uses_anonymous_args = 0
+ 492              		.loc 1 167 1 is_stmt 0 view .LVU104
+ 493 0000 F0B5     		push	{r4, r5, r6, r7, lr}
+ 494              	.LCFI22:
+ 495              		.cfi_def_cfa_offset 20
+ 496              		.cfi_offset 4, -20
+ 497              		.cfi_offset 5, -16
+ 498              		.cfi_offset 6, -12
+ 499              		.cfi_offset 7, -8
+ 500              		.cfi_offset 14, -4
+ 501 0002 89B0     		sub	sp, sp, #36
+ 502              	.LCFI23:
+ 503              		.cfi_def_cfa_offset 56
+ 504 0004 0446     		mov	r4, r0
+ 168:Core/Src/app/provisioning.c ****     uint8_t buf[32];
+ 505              		.loc 1 168 5 is_stmt 1 view .LVU105
+ 169:Core/Src/app/provisioning.c ****     uint8_t block  = p->offset / 32u;
+ 506              		.loc 1 169 5 view .LVU106
+ 507              		.loc 1 169 23 is_stmt 0 view .LVU107
+ 508 0006 4078     		ldrb	r0, [r0, #1]	@ zero_extendqisi2
+ 509              	.LVL46:
+ 170:Core/Src/app/provisioning.c ****     uint8_t in_off = p->offset % 32u;
+ 510              		.loc 1 170 5 is_stmt 1 view .LVU108
+ 511              		.loc 1 170 13 is_stmt 0 view .LVU109
+ 512 0008 00F01F05 		and	r5, r0, #31
+ 513              	.LVL47:
+ 171:Core/Src/app/provisioning.c **** 
+ 172:Core/Src/app/provisioning.c ****     if ((in_off + p->len) > 32u)
+ 514              		.loc 1 172 5 is_stmt 1 view .LVU110
+ 515              		.loc 1 172 20 is_stmt 0 view .LVU111
+ 516 000c A378     		ldrb	r3, [r4, #2]	@ zero_extendqisi2
+ 517              		.loc 1 172 17 view .LVU112
+ 518 000e 2B44     		add	r3, r3, r5
+ 519              		.loc 1 172 8 view .LVU113
+ARM GAS  /tmp/ccWANuVb.s 			page 14
+
+
+ 520 0010 202B     		cmp	r3, #32
+ 521 0012 04D9     		bls	.L33
+ 522              	.LVL48:
+ 523              	.L35:
+ 173:Core/Src/app/provisioning.c ****         return HAL_ERROR;           /* patch must not straddle blocks */
+ 524              		.loc 1 173 16 view .LVU114
+ 525 0014 0123     		movs	r3, #1
+ 526 0016 1F46     		mov	r7, r3
+ 527              	.LVL49:
+ 528              	.L34:
+ 174:Core/Src/app/provisioning.c **** 
+ 175:Core/Src/app/provisioning.c ****     if (df_read_block(p->subclass, block, buf) != HAL_OK)
+ 176:Core/Src/app/provisioning.c ****         return HAL_ERROR;
+ 177:Core/Src/app/provisioning.c **** 
+ 178:Core/Src/app/provisioning.c ****     if (memcmp(&buf[in_off], p->data, p->len) == 0)
+ 179:Core/Src/app/provisioning.c ****         return HAL_OK;              /* already correct: spare the flash */
+ 180:Core/Src/app/provisioning.c **** 
+ 181:Core/Src/app/provisioning.c ****     memcpy(&buf[in_off], p->data, p->len);
+ 182:Core/Src/app/provisioning.c ****     return df_write_block(buf);
+ 183:Core/Src/app/provisioning.c **** }
+ 529              		.loc 1 183 1 view .LVU115
+ 530 0018 3846     		mov	r0, r7
+ 531 001a 09B0     		add	sp, sp, #36
+ 532              	.LCFI24:
+ 533              		.cfi_remember_state
+ 534              		.cfi_def_cfa_offset 20
+ 535              		@ sp needed
+ 536 001c F0BD     		pop	{r4, r5, r6, r7, pc}
+ 537              	.LVL50:
+ 538              	.L33:
+ 539              	.LCFI25:
+ 540              		.cfi_restore_state
+ 541              		.loc 1 183 1 view .LVU116
+ 542 001e 4109     		lsrs	r1, r0, #5
+ 175:Core/Src/app/provisioning.c ****         return HAL_ERROR;
+ 543              		.loc 1 175 5 is_stmt 1 view .LVU117
+ 175:Core/Src/app/provisioning.c ****         return HAL_ERROR;
+ 544              		.loc 1 175 9 is_stmt 0 view .LVU118
+ 545 0020 6A46     		mov	r2, sp
+ 546 0022 2078     		ldrb	r0, [r4]	@ zero_extendqisi2
+ 547              	.LVL51:
+ 175:Core/Src/app/provisioning.c ****         return HAL_ERROR;
+ 548              		.loc 1 175 9 view .LVU119
+ 549 0024 FFF7FEFF 		bl	df_read_block
+ 550              	.LVL52:
+ 175:Core/Src/app/provisioning.c ****         return HAL_ERROR;
+ 551              		.loc 1 175 8 discriminator 1 view .LVU120
+ 552 0028 0746     		mov	r7, r0
+ 553 002a 0028     		cmp	r0, #0
+ 554 002c F2D1     		bne	.L35
+ 178:Core/Src/app/provisioning.c ****         return HAL_OK;              /* already correct: spare the flash */
+ 555              		.loc 1 178 5 is_stmt 1 view .LVU121
+ 178:Core/Src/app/provisioning.c ****         return HAL_OK;              /* already correct: spare the flash */
+ 556              		.loc 1 178 16 is_stmt 0 view .LVU122
+ 557 002e 6D44     		add	r5, r5, sp
+ 558              	.LVL53:
+ 178:Core/Src/app/provisioning.c ****         return HAL_OK;              /* already correct: spare the flash */
+ARM GAS  /tmp/ccWANuVb.s 			page 15
+
+
+ 559              		.loc 1 178 31 view .LVU123
+ 560 0030 6368     		ldr	r3, [r4, #4]
+ 561 0032 1E46     		mov	r6, r3
+ 178:Core/Src/app/provisioning.c ****         return HAL_OK;              /* already correct: spare the flash */
+ 562              		.loc 1 178 40 view .LVU124
+ 563 0034 A478     		ldrb	r4, [r4, #2]	@ zero_extendqisi2
+ 564              	.LVL54:
+ 178:Core/Src/app/provisioning.c ****         return HAL_OK;              /* already correct: spare the flash */
+ 565              		.loc 1 178 9 view .LVU125
+ 566 0036 2246     		mov	r2, r4
+ 567 0038 1946     		mov	r1, r3
+ 568 003a 2846     		mov	r0, r5
+ 569 003c FFF7FEFF 		bl	memcmp
+ 570              	.LVL55:
+ 178:Core/Src/app/provisioning.c ****         return HAL_OK;              /* already correct: spare the flash */
+ 571              		.loc 1 178 8 discriminator 1 view .LVU126
+ 572 0040 0028     		cmp	r0, #0
+ 573 0042 E9D0     		beq	.L34
+ 181:Core/Src/app/provisioning.c ****     return df_write_block(buf);
+ 574              		.loc 1 181 5 is_stmt 1 view .LVU127
+ 575 0044 2246     		mov	r2, r4
+ 576 0046 3146     		mov	r1, r6
+ 577 0048 2846     		mov	r0, r5
+ 578 004a FFF7FEFF 		bl	memcpy
+ 579              	.LVL56:
+ 182:Core/Src/app/provisioning.c **** }
+ 580              		.loc 1 182 5 view .LVU128
+ 182:Core/Src/app/provisioning.c **** }
+ 581              		.loc 1 182 12 is_stmt 0 view .LVU129
+ 582 004e 6846     		mov	r0, sp
+ 583 0050 FFF7FEFF 		bl	df_write_block
+ 584              	.LVL57:
+ 585 0054 0746     		mov	r7, r0
+ 182:Core/Src/app/provisioning.c **** }
+ 586              		.loc 1 182 12 discriminator 1 view .LVU130
+ 587 0056 DFE7     		b	.L34
+ 588              		.cfi_endproc
+ 589              	.LFE226:
+ 591              		.section	.text.Provisioning_Check,"ax",%progbits
+ 592              		.align	1
+ 593              		.global	Provisioning_Check
+ 594              		.syntax unified
+ 595              		.thumb
+ 596              		.thumb_func
+ 598              	Provisioning_Check:
+ 599              	.LVL58:
+ 600              	.LFB227:
+ 184:Core/Src/app/provisioning.c **** 
+ 185:Core/Src/app/provisioning.c **** /* =========================================================
+ 186:Core/Src/app/provisioning.c ****  * Public API
+ 187:Core/Src/app/provisioning.c ****  * ========================================================= */
+ 188:Core/Src/app/provisioning.c **** 
+ 189:Core/Src/app/provisioning.c **** ProvCheck_t Provisioning_Check(uint8_t *rev_out)
+ 190:Core/Src/app/provisioning.c **** {
+ 601              		.loc 1 190 1 is_stmt 1 view -0
+ 602              		.cfi_startproc
+ 603              		@ args = 0, pretend = 0, frame = 40
+ARM GAS  /tmp/ccWANuVb.s 			page 16
+
+
+ 604              		@ frame_needed = 0, uses_anonymous_args = 0
+ 605              		.loc 1 190 1 is_stmt 0 view .LVU132
+ 606 0000 10B5     		push	{r4, lr}
+ 607              	.LCFI26:
+ 608              		.cfi_def_cfa_offset 8
+ 609              		.cfi_offset 4, -8
+ 610              		.cfi_offset 14, -4
+ 611 0002 8AB0     		sub	sp, sp, #40
+ 612              	.LCFI27:
+ 613              		.cfi_def_cfa_offset 48
+ 191:Core/Src/app/provisioning.c ****     uint16_t devtype = 0;
+ 614              		.loc 1 191 5 is_stmt 1 view .LVU133
+ 615              		.loc 1 191 14 is_stmt 0 view .LVU134
+ 616 0004 0023     		movs	r3, #0
+ 617 0006 ADF82630 		strh	r3, [sp, #38]	@ movhi
+ 192:Core/Src/app/provisioning.c ****     uint8_t  buf[32];
+ 618              		.loc 1 192 5 is_stmt 1 view .LVU135
+ 193:Core/Src/app/provisioning.c **** 
+ 194:Core/Src/app/provisioning.c ****     if (rev_out != NULL)
+ 619              		.loc 1 194 5 view .LVU136
+ 620              		.loc 1 194 8 is_stmt 0 view .LVU137
+ 621 000a 0446     		mov	r4, r0
+ 622 000c 00B1     		cbz	r0, .L38
+ 195:Core/Src/app/provisioning.c ****         *rev_out = 0u;
+ 623              		.loc 1 195 9 is_stmt 1 view .LVU138
+ 624              		.loc 1 195 18 is_stmt 0 view .LVU139
+ 625 000e 0370     		strb	r3, [r0]
+ 626              	.L38:
+ 196:Core/Src/app/provisioning.c **** 
+ 197:Core/Src/app/provisioning.c ****     /* 1. Right chip on the bus? */
+ 198:Core/Src/app/provisioning.c ****     if (control_read(CNTL_DEVICE_TYPE, &devtype) != HAL_OK)
+ 627              		.loc 1 198 5 is_stmt 1 view .LVU140
+ 628              		.loc 1 198 9 is_stmt 0 view .LVU141
+ 629 0010 0DF12601 		add	r1, sp, #38
+ 630 0014 0120     		movs	r0, #1
+ 631              	.LVL59:
+ 632              		.loc 1 198 9 view .LVU142
+ 633 0016 FFF7FEFF 		bl	control_read
+ 634              	.LVL60:
+ 635              		.loc 1 198 8 discriminator 1 view .LVU143
+ 636 001a 38B9     		cbnz	r0, .L41
+ 199:Core/Src/app/provisioning.c ****         return PROV_CHECK_BUS_ERROR;
+ 200:Core/Src/app/provisioning.c ****     if (devtype != GAUGE_DEVICE_TYPE)
+ 637              		.loc 1 200 5 is_stmt 1 view .LVU144
+ 638              		.loc 1 200 17 is_stmt 0 view .LVU145
+ 639 001c BDF82630 		ldrh	r3, [sp, #38]
+ 640              		.loc 1 200 8 view .LVU146
+ 641 0020 B3F5807F 		cmp	r3, #256
+ 642 0024 04D0     		beq	.L47
+ 201:Core/Src/app/provisioning.c ****         return PROV_CHECK_WRONG_DEVICE;
+ 643              		.loc 1 201 16 view .LVU147
+ 644 0026 0320     		movs	r0, #3
+ 645              	.L40:
+ 202:Core/Src/app/provisioning.c **** 
+ 203:Core/Src/app/provisioning.c ****     /* 2. Provisioning marker + revision */
+ 204:Core/Src/app/provisioning.c ****     if (df_read_block(SUBCLASS_MFG_INFO_A, 0u, buf) != HAL_OK)
+ 205:Core/Src/app/provisioning.c ****         return PROV_CHECK_BUS_ERROR;
+ARM GAS  /tmp/ccWANuVb.s 			page 17
+
+
+ 206:Core/Src/app/provisioning.c **** 
+ 207:Core/Src/app/provisioning.c ****     if (buf[OFF_MARKER] != PROV_MARKER_0)
+ 208:Core/Src/app/provisioning.c ****         return PROV_CHECK_BLANK;
+ 209:Core/Src/app/provisioning.c **** 
+ 210:Core/Src/app/provisioning.c ****     if (rev_out != NULL)
+ 211:Core/Src/app/provisioning.c ****         *rev_out = buf[OFF_MARKER + 1u];
+ 212:Core/Src/app/provisioning.c **** 
+ 213:Core/Src/app/provisioning.c ****     return (buf[OFF_MARKER + 1u] == PROV_MARKER_1)
+ 214:Core/Src/app/provisioning.c ****            ? PROV_CHECK_OK : PROV_CHECK_OLD_REV;
+ 215:Core/Src/app/provisioning.c **** }
+ 646              		.loc 1 215 1 view .LVU148
+ 647 0028 0AB0     		add	sp, sp, #40
+ 648              	.LCFI28:
+ 649              		.cfi_remember_state
+ 650              		.cfi_def_cfa_offset 8
+ 651              		@ sp needed
+ 652 002a 10BD     		pop	{r4, pc}
+ 653              	.LVL61:
+ 654              	.L41:
+ 655              	.LCFI29:
+ 656              		.cfi_restore_state
+ 199:Core/Src/app/provisioning.c ****     if (devtype != GAUGE_DEVICE_TYPE)
+ 657              		.loc 1 199 16 view .LVU149
+ 658 002c 0420     		movs	r0, #4
+ 659 002e FBE7     		b	.L40
+ 660              	.L47:
+ 204:Core/Src/app/provisioning.c ****         return PROV_CHECK_BUS_ERROR;
+ 661              		.loc 1 204 5 is_stmt 1 view .LVU150
+ 204:Core/Src/app/provisioning.c ****         return PROV_CHECK_BUS_ERROR;
+ 662              		.loc 1 204 9 is_stmt 0 view .LVU151
+ 663 0030 01AA     		add	r2, sp, #4
+ 664 0032 0146     		mov	r1, r0
+ 665 0034 3A20     		movs	r0, #58
+ 666 0036 FFF7FEFF 		bl	df_read_block
+ 667              	.LVL62:
+ 204:Core/Src/app/provisioning.c ****         return PROV_CHECK_BUS_ERROR;
+ 668              		.loc 1 204 8 discriminator 1 view .LVU152
+ 669 003a 0028     		cmp	r0, #0
+ 670 003c F6D1     		bne	.L41
+ 207:Core/Src/app/provisioning.c ****         return PROV_CHECK_BLANK;
+ 671              		.loc 1 207 5 is_stmt 1 view .LVU153
+ 207:Core/Src/app/provisioning.c ****         return PROV_CHECK_BLANK;
+ 672              		.loc 1 207 12 is_stmt 0 view .LVU154
+ 673 003e 9DF80430 		ldrb	r3, [sp, #4]	@ zero_extendqisi2
+ 207:Core/Src/app/provisioning.c ****         return PROV_CHECK_BLANK;
+ 674              		.loc 1 207 8 view .LVU155
+ 675 0042 442B     		cmp	r3, #68
+ 676 0044 09D1     		bne	.L44
+ 210:Core/Src/app/provisioning.c ****         *rev_out = buf[OFF_MARKER + 1u];
+ 677              		.loc 1 210 5 is_stmt 1 view .LVU156
+ 210:Core/Src/app/provisioning.c ****         *rev_out = buf[OFF_MARKER + 1u];
+ 678              		.loc 1 210 8 is_stmt 0 view .LVU157
+ 679 0046 14B1     		cbz	r4, .L42
+ 211:Core/Src/app/provisioning.c **** 
+ 680              		.loc 1 211 9 is_stmt 1 view .LVU158
+ 211:Core/Src/app/provisioning.c **** 
+ 681              		.loc 1 211 23 is_stmt 0 view .LVU159
+ARM GAS  /tmp/ccWANuVb.s 			page 18
+
+
+ 682 0048 9DF80530 		ldrb	r3, [sp, #5]	@ zero_extendqisi2
+ 211:Core/Src/app/provisioning.c **** 
+ 683              		.loc 1 211 18 view .LVU160
+ 684 004c 2370     		strb	r3, [r4]
+ 685              	.L42:
+ 213:Core/Src/app/provisioning.c ****            ? PROV_CHECK_OK : PROV_CHECK_OLD_REV;
+ 686              		.loc 1 213 5 is_stmt 1 view .LVU161
+ 213:Core/Src/app/provisioning.c ****            ? PROV_CHECK_OK : PROV_CHECK_OLD_REV;
+ 687              		.loc 1 213 16 is_stmt 0 view .LVU162
+ 688 004e 9DF80530 		ldrb	r3, [sp, #5]	@ zero_extendqisi2
+ 214:Core/Src/app/provisioning.c **** }
+ 689              		.loc 1 214 28 view .LVU163
+ 690 0052 012B     		cmp	r3, #1
+ 691 0054 E8D0     		beq	.L40
+ 214:Core/Src/app/provisioning.c **** }
+ 692              		.loc 1 214 28 discriminator 2 view .LVU164
+ 693 0056 0220     		movs	r0, #2
+ 694 0058 E6E7     		b	.L40
+ 695              	.L44:
+ 208:Core/Src/app/provisioning.c **** 
+ 696              		.loc 1 208 16 view .LVU165
+ 697 005a 0120     		movs	r0, #1
+ 698 005c E4E7     		b	.L40
+ 699              		.cfi_endproc
+ 700              	.LFE227:
+ 702              		.section	.text.Provisioning_Required,"ax",%progbits
+ 703              		.align	1
+ 704              		.global	Provisioning_Required
+ 705              		.syntax unified
+ 706              		.thumb
+ 707              		.thumb_func
+ 709              	Provisioning_Required:
+ 710              	.LFB228:
+ 216:Core/Src/app/provisioning.c **** 
+ 217:Core/Src/app/provisioning.c **** uint8_t Provisioning_Required(void)
+ 218:Core/Src/app/provisioning.c **** {
+ 711              		.loc 1 218 1 is_stmt 1 view -0
+ 712              		.cfi_startproc
+ 713              		@ args = 0, pretend = 0, frame = 0
+ 714              		@ frame_needed = 0, uses_anonymous_args = 0
+ 715 0000 08B5     		push	{r3, lr}
+ 716              	.LCFI30:
+ 717              		.cfi_def_cfa_offset 8
+ 718              		.cfi_offset 3, -8
+ 719              		.cfi_offset 14, -4
+ 219:Core/Src/app/provisioning.c ****     ProvCheck_t c = Provisioning_Check(NULL);
+ 720              		.loc 1 219 5 view .LVU167
+ 721              		.loc 1 219 21 is_stmt 0 view .LVU168
+ 722 0002 0020     		movs	r0, #0
+ 723 0004 FFF7FEFF 		bl	Provisioning_Check
+ 724              	.LVL63:
+ 220:Core/Src/app/provisioning.c **** 
+ 221:Core/Src/app/provisioning.c ****     /* Bus errors and wrong devices are NOT "please provision me":
+ 222:Core/Src/app/provisioning.c ****      * writing the data flash of an unknown chip would be reckless. */
+ 223:Core/Src/app/provisioning.c ****     return (c == PROV_CHECK_BLANK || c == PROV_CHECK_OLD_REV) ? 1u : 0u;
+ 725              		.loc 1 223 5 is_stmt 1 view .LVU169
+ 726              		.loc 1 223 35 is_stmt 0 view .LVU170
+ARM GAS  /tmp/ccWANuVb.s 			page 19
+
+
+ 727 0008 0138     		subs	r0, r0, #1
+ 728              	.LVL64:
+ 729              		.loc 1 223 35 view .LVU171
+ 730 000a C0B2     		uxtb	r0, r0
+ 731              	.LVL65:
+ 732              		.loc 1 223 68 view .LVU172
+ 733 000c 0128     		cmp	r0, #1
+ 734 000e 01D9     		bls	.L52
+ 735              		.loc 1 223 68 discriminator 2 view .LVU173
+ 736 0010 0020     		movs	r0, #0
+ 737              	.L49:
+ 224:Core/Src/app/provisioning.c **** }
+ 738              		.loc 1 224 1 view .LVU174
+ 739 0012 08BD     		pop	{r3, pc}
+ 740              	.L52:
+ 223:Core/Src/app/provisioning.c **** }
+ 741              		.loc 1 223 68 discriminator 1 view .LVU175
+ 742 0014 0120     		movs	r0, #1
+ 743 0016 FCE7     		b	.L49
+ 744              		.cfi_endproc
+ 745              	.LFE228:
+ 747              		.section	.text.Provisioning_RunGauge,"ax",%progbits
+ 748              		.align	1
+ 749              		.global	Provisioning_RunGauge
+ 750              		.syntax unified
+ 751              		.thumb
+ 752              		.thumb_func
+ 754              	Provisioning_RunGauge:
+ 755              	.LFB229:
+ 225:Core/Src/app/provisioning.c **** 
+ 226:Core/Src/app/provisioning.c **** ProvStatus_t Provisioning_RunGauge(void)
+ 227:Core/Src/app/provisioning.c **** {
+ 756              		.loc 1 227 1 is_stmt 1 view -0
+ 757              		.cfi_startproc
+ 758              		@ args = 0, pretend = 0, frame = 8
+ 759              		@ frame_needed = 0, uses_anonymous_args = 0
+ 760 0000 30B5     		push	{r4, r5, lr}
+ 761              	.LCFI31:
+ 762              		.cfi_def_cfa_offset 12
+ 763              		.cfi_offset 4, -12
+ 764              		.cfi_offset 5, -8
+ 765              		.cfi_offset 14, -4
+ 766 0002 83B0     		sub	sp, sp, #12
+ 767              	.LCFI32:
+ 768              		.cfi_def_cfa_offset 24
+ 228:Core/Src/app/provisioning.c ****     int16_t avg_ma = 0;
+ 769              		.loc 1 228 5 view .LVU177
+ 770              		.loc 1 228 13 is_stmt 0 view .LVU178
+ 771 0004 0020     		movs	r0, #0
+ 772 0006 ADF80600 		strh	r0, [sp, #6]	@ movhi
+ 773              	.LBB3:
+ 229:Core/Src/app/provisioning.c **** 
+ 230:Core/Src/app/provisioning.c ****     {
+ 231:Core/Src/app/provisioning.c ****         ProvCheck_t c = Provisioning_Check(NULL);
+ 774              		.loc 1 231 9 is_stmt 1 view .LVU179
+ 775              		.loc 1 231 25 is_stmt 0 view .LVU180
+ 776 000a FFF7FEFF 		bl	Provisioning_Check
+ARM GAS  /tmp/ccWANuVb.s 			page 20
+
+
+ 777              	.LVL66:
+ 232:Core/Src/app/provisioning.c ****         if (c == PROV_CHECK_OK)
+ 778              		.loc 1 232 9 is_stmt 1 view .LVU181
+ 779              		.loc 1 232 12 is_stmt 0 view .LVU182
+ 780 000e 0028     		cmp	r0, #0
+ 781 0010 3CD0     		beq	.L59
+ 233:Core/Src/app/provisioning.c ****             return PROV_NOT_NEEDED;
+ 234:Core/Src/app/provisioning.c ****         if (c != PROV_CHECK_BLANK && c != PROV_CHECK_OLD_REV)
+ 782              		.loc 1 234 9 is_stmt 1 view .LVU183
+ 783              		.loc 1 234 35 is_stmt 0 view .LVU184
+ 784 0012 431E     		subs	r3, r0, #1
+ 785 0014 DBB2     		uxtb	r3, r3
+ 786              		.loc 1 234 12 view .LVU185
+ 787 0016 012B     		cmp	r3, #1
+ 788 0018 2CD8     		bhi	.L56
+ 789              	.LBE3:
+ 235:Core/Src/app/provisioning.c ****             return PROV_FAILED;     /* wrong device / bus error */
+ 236:Core/Src/app/provisioning.c ****     }
+ 237:Core/Src/app/provisioning.c **** 
+ 238:Core/Src/app/provisioning.c ****     /* Safety gate: pack must be at rest for DF writes. */
+ 239:Core/Src/app/provisioning.c ****     if (reg_read(REG_AI, (uint8_t *)&avg_ma, 2u) != HAL_OK)
+ 790              		.loc 1 239 5 is_stmt 1 view .LVU186
+ 791              		.loc 1 239 9 is_stmt 0 view .LVU187
+ 792 001a 0222     		movs	r2, #2
+ 793 001c 0DF10601 		add	r1, sp, #6
+ 794 0020 0A20     		movs	r0, #10
+ 795              	.LVL67:
+ 796              		.loc 1 239 9 view .LVU188
+ 797 0022 FFF7FEFF 		bl	reg_read
+ 798              	.LVL68:
+ 799              		.loc 1 239 8 discriminator 1 view .LVU189
+ 800 0026 28BB     		cbnz	r0, .L56
+ 240:Core/Src/app/provisioning.c ****         return PROV_FAILED;
+ 241:Core/Src/app/provisioning.c ****     if (avg_ma > PROV_MAX_REST_MA || avg_ma < -PROV_MAX_REST_MA)
+ 801              		.loc 1 241 5 is_stmt 1 view .LVU190
+ 802              		.loc 1 241 35 is_stmt 0 view .LVU191
+ 803 0028 BDF80630 		ldrh	r3, [sp, #6]
+ 804 002c 3233     		adds	r3, r3, #50
+ 805 002e 9BB2     		uxth	r3, r3
+ 806              		.loc 1 241 8 view .LVU192
+ 807 0030 642B     		cmp	r3, #100
+ 808 0032 2ED8     		bhi	.L60
+ 242:Core/Src/app/provisioning.c ****         return PROV_UNSAFE;
+ 243:Core/Src/app/provisioning.c **** 
+ 244:Core/Src/app/provisioning.c ****     /* Unseal (TI default keys; no-op if already unsealed). */
+ 245:Core/Src/app/provisioning.c ****     if (control_write(CNTL_UNSEAL_KEY1) != HAL_OK) return PROV_FAILED;
+ 809              		.loc 1 245 5 is_stmt 1 view .LVU193
+ 810              		.loc 1 245 9 is_stmt 0 view .LVU194
+ 811 0034 40F21440 		movw	r0, #1044
+ 812 0038 FFF7FEFF 		bl	control_write
+ 813              	.LVL69:
+ 814              		.loc 1 245 8 discriminator 1 view .LVU195
+ 815 003c D0B9     		cbnz	r0, .L56
+ 246:Core/Src/app/provisioning.c ****     HAL_Delay(2);
+ 816              		.loc 1 246 5 is_stmt 1 view .LVU196
+ 817 003e 0220     		movs	r0, #2
+ 818 0040 FFF7FEFF 		bl	HAL_Delay
+ARM GAS  /tmp/ccWANuVb.s 			page 21
+
+
+ 819              	.LVL70:
+ 247:Core/Src/app/provisioning.c ****     if (control_write(CNTL_UNSEAL_KEY2) != HAL_OK) return PROV_FAILED;
+ 820              		.loc 1 247 5 view .LVU197
+ 821              		.loc 1 247 9 is_stmt 0 view .LVU198
+ 822 0044 43F27260 		movw	r0, #13938
+ 823 0048 FFF7FEFF 		bl	control_write
+ 824              	.LVL71:
+ 825              		.loc 1 247 8 discriminator 1 view .LVU199
+ 826 004c 0446     		mov	r4, r0
+ 827 004e 0546     		mov	r5, r0
+ 828 0050 80B9     		cbnz	r0, .L56
+ 248:Core/Src/app/provisioning.c ****     HAL_Delay(2);
+ 829              		.loc 1 248 5 is_stmt 1 view .LVU200
+ 830 0052 0220     		movs	r0, #2
+ 831 0054 FFF7FEFF 		bl	HAL_Delay
+ 832              	.LVL72:
+ 249:Core/Src/app/provisioning.c **** 
+ 250:Core/Src/app/provisioning.c ****     for (uint8_t i = 0; i < N_PATCHES; i++) {
+ 833              		.loc 1 250 5 view .LVU201
+ 834              	.LBB4:
+ 835              		.loc 1 250 10 view .LVU202
+ 836              		.loc 1 250 18 is_stmt 0 view .LVU203
+ 837 0058 2346     		mov	r3, r4
+ 838              	.LVL73:
+ 839              	.L57:
+ 840              		.loc 1 250 27 is_stmt 1 discriminator 2 view .LVU204
+ 841 005a 022B     		cmp	r3, #2
+ 842 005c 0FD8     		bhi	.L62
+ 251:Core/Src/app/provisioning.c ****         if (df_apply(&patches[i]) != HAL_OK)
+ 843              		.loc 1 251 9 view .LVU205
+ 844              		.loc 1 251 13 is_stmt 0 view .LVU206
+ 845 005e 0E48     		ldr	r0, .L63
+ 846 0060 1C46     		mov	r4, r3
+ 847 0062 00EBC300 		add	r0, r0, r3, lsl #3
+ 848 0066 FFF7FEFF 		bl	df_apply
+ 849              	.LVL74:
+ 850              		.loc 1 251 12 discriminator 1 view .LVU207
+ 851 006a 18B9     		cbnz	r0, .L56
+ 250:Core/Src/app/provisioning.c ****         if (df_apply(&patches[i]) != HAL_OK)
+ 852              		.loc 1 250 41 is_stmt 1 discriminator 1 view .LVU208
+ 853 006c 2346     		mov	r3, r4
+ 854 006e 0133     		adds	r3, r3, #1
+ 855 0070 DBB2     		uxtb	r3, r3
+ 856 0072 F2E7     		b	.L57
+ 857              	.LVL75:
+ 858              	.L56:
+ 250:Core/Src/app/provisioning.c ****         if (df_apply(&patches[i]) != HAL_OK)
+ 859              		.loc 1 250 41 is_stmt 0 discriminator 1 view .LVU209
+ 860              	.LBE4:
+ 861              	.LBB5:
+ 235:Core/Src/app/provisioning.c ****     }
+ 862              		.loc 1 235 20 view .LVU210
+ 863 0074 0223     		movs	r3, #2
+ 864 0076 1D46     		mov	r5, r3
+ 865              	.L54:
+ 866              	.LBE5:
+ 252:Core/Src/app/provisioning.c ****             return PROV_FAILED;
+ARM GAS  /tmp/ccWANuVb.s 			page 22
+
+
+ 253:Core/Src/app/provisioning.c ****     }
+ 254:Core/Src/app/provisioning.c **** 
+ 255:Core/Src/app/provisioning.c ****     /* Reset so the gauge reloads the new configuration. */
+ 256:Core/Src/app/provisioning.c ****     (void)control_write(CNTL_RESET);
+ 257:Core/Src/app/provisioning.c ****     HAL_Delay(250);
+ 258:Core/Src/app/provisioning.c **** 
+ 259:Core/Src/app/provisioning.c ****     return PROV_OK;
+ 260:Core/Src/app/provisioning.c **** }
+ 867              		.loc 1 260 1 view .LVU211
+ 868 0078 2846     		mov	r0, r5
+ 869 007a 03B0     		add	sp, sp, #12
+ 870              	.LCFI33:
+ 871              		.cfi_remember_state
+ 872              		.cfi_def_cfa_offset 12
+ 873              		@ sp needed
+ 874 007c 30BD     		pop	{r4, r5, pc}
+ 875              	.LVL76:
+ 876              	.L62:
+ 877              	.LCFI34:
+ 878              		.cfi_restore_state
+ 256:Core/Src/app/provisioning.c ****     HAL_Delay(250);
+ 879              		.loc 1 256 5 is_stmt 1 view .LVU212
+ 256:Core/Src/app/provisioning.c ****     HAL_Delay(250);
+ 880              		.loc 1 256 11 is_stmt 0 view .LVU213
+ 881 007e 4120     		movs	r0, #65
+ 882 0080 FFF7FEFF 		bl	control_write
+ 883              	.LVL77:
+ 257:Core/Src/app/provisioning.c **** 
+ 884              		.loc 1 257 5 is_stmt 1 view .LVU214
+ 885 0084 FA20     		movs	r0, #250
+ 886 0086 FFF7FEFF 		bl	HAL_Delay
+ 887              	.LVL78:
+ 259:Core/Src/app/provisioning.c **** }
+ 888              		.loc 1 259 5 view .LVU215
+ 259:Core/Src/app/provisioning.c **** }
+ 889              		.loc 1 259 12 is_stmt 0 view .LVU216
+ 890 008a F5E7     		b	.L54
+ 891              	.LVL79:
+ 892              	.L59:
+ 893              	.LBB6:
+ 233:Core/Src/app/provisioning.c ****         if (c != PROV_CHECK_BLANK && c != PROV_CHECK_OLD_REV)
+ 894              		.loc 1 233 20 view .LVU217
+ 895 008c 0123     		movs	r3, #1
+ 896 008e 1D46     		mov	r5, r3
+ 897 0090 F2E7     		b	.L54
+ 898              	.LVL80:
+ 899              	.L60:
+ 233:Core/Src/app/provisioning.c ****         if (c != PROV_CHECK_BLANK && c != PROV_CHECK_OLD_REV)
+ 900              		.loc 1 233 20 view .LVU218
+ 901              	.LBE6:
+ 242:Core/Src/app/provisioning.c **** 
+ 902              		.loc 1 242 16 view .LVU219
+ 903 0092 0323     		movs	r3, #3
+ 904 0094 1D46     		mov	r5, r3
+ 905 0096 EFE7     		b	.L54
+ 906              	.L64:
+ 907              		.align	2
+ARM GAS  /tmp/ccWANuVb.s 			page 23
+
+
+ 908              	.L63:
+ 909 0098 00000000 		.word	patches
+ 910              		.cfi_endproc
+ 911              	.LFE229:
+ 913              		.section	.rodata.patches,"a"
+ 914              		.align	2
+ 917              	patches:
+ 918 0000 30       		.byte	48
+ 919 0001 0B       		.byte	11
+ 920 0002 02       		.byte	2
+ 921 0003 00       		.space	1
+ 922 0004 00000000 		.word	design_capacity
+ 923 0008 40       		.byte	64
+ 924 0009 07       		.byte	7
+ 925 000a 01       		.byte	1
+ 926 000b 00       		.space	1
+ 927 000c 00000000 		.word	series_cells
+ 928 0010 3A       		.byte	58
+ 929 0011 00       		.byte	0
+ 930 0012 02       		.byte	2
+ 931 0013 00       		.space	1
+ 932 0014 00000000 		.word	marker
+ 933              		.section	.rodata.marker,"a"
+ 934              		.align	2
+ 937              	marker:
+ 938 0000 4401     		.ascii	"D\001"
+ 939              		.section	.rodata.series_cells,"a"
+ 940              		.align	2
+ 943              	series_cells:
+ 944 0000 04       		.ascii	"\004"
+ 945              		.section	.rodata.design_capacity,"a"
+ 946              		.align	2
+ 949              	design_capacity:
+ 950 0000 1E78     		.ascii	"\036x"
+ 951              		.text
+ 952              	.Letext0:
+ 953              		.file 2 "/usr/arm-none-eabi/include/machine/_default_types.h"
+ 954              		.file 3 "/usr/arm-none-eabi/include/sys/_stdint.h"
+ 955              		.file 4 "Core/Inc/app/provisioning.h"
+ 956              		.file 5 "Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f401xc.h"
+ 957              		.file 6 "Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_def.h"
+ 958              		.file 7 "Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_dma.h"
+ 959              		.file 8 "Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_i2c.h"
+ 960              		.file 9 "/usr/arm-none-eabi/include/string.h"
+ 961              		.file 10 "Core/Inc/i2c.h"
+ 962              		.file 11 "<built-in>"
+ 963              		.file 12 "Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h"
+ARM GAS  /tmp/ccWANuVb.s 			page 24
+
+
+DEFINED SYMBOLS
+                            *ABS*:00000000 provisioning.c
+     /tmp/ccWANuVb.s:21     .text.reg_write:00000000 $t
+     /tmp/ccWANuVb.s:26     .text.reg_write:00000000 reg_write
+     /tmp/ccWANuVb.s:75     .text.reg_write:00000028 $d
+     /tmp/ccWANuVb.s:80     .text.control_write:00000000 $t
+     /tmp/ccWANuVb.s:85     .text.control_write:00000000 control_write
+     /tmp/ccWANuVb.s:125    .text.df_write_block:00000000 $t
+     /tmp/ccWANuVb.s:130    .text.df_write_block:00000000 df_write_block
+     /tmp/ccWANuVb.s:233    .text.reg_read:00000000 $t
+     /tmp/ccWANuVb.s:238    .text.reg_read:00000000 reg_read
+     /tmp/ccWANuVb.s:305    .text.reg_read:00000038 $d
+     /tmp/ccWANuVb.s:310    .text.control_read:00000000 $t
+     /tmp/ccWANuVb.s:315    .text.control_read:00000000 control_read
+     /tmp/ccWANuVb.s:384    .text.df_read_block:00000000 $t
+     /tmp/ccWANuVb.s:389    .text.df_read_block:00000000 df_read_block
+     /tmp/ccWANuVb.s:480    .text.df_apply:00000000 $t
+     /tmp/ccWANuVb.s:485    .text.df_apply:00000000 df_apply
+     /tmp/ccWANuVb.s:592    .text.Provisioning_Check:00000000 $t
+     /tmp/ccWANuVb.s:598    .text.Provisioning_Check:00000000 Provisioning_Check
+     /tmp/ccWANuVb.s:703    .text.Provisioning_Required:00000000 $t
+     /tmp/ccWANuVb.s:709    .text.Provisioning_Required:00000000 Provisioning_Required
+     /tmp/ccWANuVb.s:748    .text.Provisioning_RunGauge:00000000 $t
+     /tmp/ccWANuVb.s:754    .text.Provisioning_RunGauge:00000000 Provisioning_RunGauge
+     /tmp/ccWANuVb.s:909    .text.Provisioning_RunGauge:00000098 $d
+     /tmp/ccWANuVb.s:917    .rodata.patches:00000000 patches
+     /tmp/ccWANuVb.s:914    .rodata.patches:00000000 $d
+     /tmp/ccWANuVb.s:949    .rodata.design_capacity:00000000 design_capacity
+     /tmp/ccWANuVb.s:943    .rodata.series_cells:00000000 series_cells
+     /tmp/ccWANuVb.s:937    .rodata.marker:00000000 marker
+     /tmp/ccWANuVb.s:934    .rodata.marker:00000000 $d
+     /tmp/ccWANuVb.s:940    .rodata.series_cells:00000000 $d
+     /tmp/ccWANuVb.s:946    .rodata.design_capacity:00000000 $d
+
+UNDEFINED SYMBOLS
+memcpy
+HAL_I2C_Master_Transmit
+hi2c1
+HAL_Delay
+HAL_I2C_Master_Receive
+memcmp

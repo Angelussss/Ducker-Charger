@@ -17,6 +17,12 @@
  *   No interrupts are needed: just read TIM3->CNT to know how much the
  *   encoder has been rotated. This is the most efficient approach possible.
  *
+ * BUTTON (PC0):
+ *   Edge-driven via EXTI0. Encoder_Init() re-configures PC0 as an interrupt
+ *   line (the .ioc leaves it as GPIO_Input) and the debounced press event is
+ *   latched in the EXTI callback, so short presses are never lost even if
+ *   the main loop is busy with a long display redraw.
+ *
  * TYPICAL USE:
  *   // In main(), after MX_TIM3_Init()
  *   Encoder_Init(&htim3);
@@ -43,9 +49,8 @@ extern "C" {
 
 /**
  * Button debounce time in milliseconds.
- * Below this threshold mechanical bounces of the button are ignored.
- * 50 ms is a standard value for most low-cost encoders.
- *
+ * EXTI edges arriving within this window of the last accepted transition
+ * are ignored. 50 ms is a standard value for most low-cost encoders.
  */
 #define ENCODER_DEBOUNCE_MS  50
 
@@ -76,9 +81,9 @@ int8_t Encoder_GetDelta(void);
 
 /**
  * @brief  Check whether the encoder push-button has been pressed.
- * @note   Debounce is handled internally. Returns 1 only once per press
- *         (falling-edge detection, not level detection).
- *         Uses PC0 (ENCOD_BUTT_Pin on GPIOC).
+ * @note   Debounce is handled internally (EXTI0 interrupt on PC0).
+ *         Returns 1 only once per press: the event is latched in the ISR,
+ *         so it is not lost while the main loop is busy.
  * @retval 1 if the button was pressed since the last call, 0 otherwise.
  */
 uint8_t Encoder_IsPressed(void);
