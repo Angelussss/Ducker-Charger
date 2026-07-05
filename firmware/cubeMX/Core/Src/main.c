@@ -29,6 +29,10 @@
 /* USER CODE BEGIN Includes */
 #include "app/initialization.h"   /* every-boot IC init (TPS25750 patch, INA3221, STPD01) */
 #include "app/provisioning.h"     /* one-time BQ34Z100 data-flash provisioning */
+#include "app/encoder.h"
+#include "app/telemetry.h"
+#include "display/ili9341.h"
+#include "ui/ui_state.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -110,6 +114,11 @@ int main(void)
   {
     (void)Provisioning_RunGauge();
   }
+
+  Encoder_Init(&htim3);
+  Telemetry_Init(&hi2c1, &hi2c3);
+  ILI9341_Init(&hspi1);
+  UI_Init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -119,6 +128,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    UI_Tick();
   }
   /* USER CODE END 3 */
 }
