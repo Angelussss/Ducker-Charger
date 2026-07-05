@@ -133,6 +133,8 @@ typedef enum {
 #define USB_IRQ_CTRL_GPIO_Port GPIOB        // IRQ GPIO channel is the B (PB14)
 #define USB_ST_INT_CTRL_Pin GPIO_PIN_12
 #define USB_ST_INT_CTRL_GPIO_Port GPIOC
+#define C2_RDY_CTRL_Pin GPIO_PIN_3
+#define C2_RDY_CTRL_GPIO_Port GPIOC
 #define USB_CHRG_OK_CTRL_Pin GPIO_PIN_13
 #define USB_CHRG_OK_CTRL_GPIO_Port GPIOB
 
@@ -171,6 +173,8 @@ void secondaryUSBC_ConnectionINT();
 bool setupSTPD01(float voltage, float current);
 
 bool checkSTPD01();
+
+void stpd01_PowerStateINT();
 
 void enable_USBA1();
 
