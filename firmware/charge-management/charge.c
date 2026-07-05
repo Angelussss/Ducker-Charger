@@ -45,6 +45,7 @@ const float BETA = 3950.0;      // To check in thermistor's datasheet
 int PD_IRQ = GPIO_PIN_RESET;
 int PD_IRQ_PREV = GPIO_PIN_SET;           // For checking previous state of PD_IRQ after its update; Normal: IRQ is set to HIGH
 int ST_INT = GPIO_PIN_SET;
+int C2_RDY = GPIO_PIN_SET;
 int CHRG_OK = GPIO_PIN_SET;
 
 // NON-Critical Signals
@@ -402,6 +403,9 @@ void readCS() {        // Check and update critical signals and their status (e.
     // Read C2_ST_INT (PC12): STUSB4710 interrupt — PD protocol event
     ST_INT = HAL_GPIO_ReadPin(USB_ST_INT_CTRL_GPIO_Port, USB_ST_INT_CTRL_Pin);
 
+    // Read C2_RDY (PC3): STPD01 interrupt — converter power state change
+    C2_RDY = HAL_GPIO_ReadPin(C2_RDY_CTRL_GPIO_Port, C2_RDY_CTRL_Pin);
+
     // Read HP.CHRG_OK (PB13) and update CHRG_OK status
     CHRG_OK = HAL_GPIO_ReadPin(USB_CHRG_OK_CTRL_GPIO_Port, USB_CHRG_OK_CTRL_Pin);
 
@@ -415,6 +419,10 @@ void readCS() {        // Check and update critical signals and their status (e.
 
     if (ST_INT == GPIO_PIN_RESET) {
         secondaryUSBC_ConnectionINT();
+    }
+
+    if (C2_RDY == GPIO_PIN_RESET) {
+        stpd01_PowerStateINT();
     }
 }
 
@@ -751,6 +759,34 @@ bool checkSTPD01() {
         return false;
     }
     return true;
+}
+
+void stpd01_PowerStateINT() {
+    uint8_t buffer;
+    if (HAL_I2C_Mem_Read(&hi2c1, STPD01_PD_ADDR, INT_STAT_REG_ADDR,
+                          I2C_MEMADD_SIZE_8BIT, &buffer, 1, HAL_MAX_DELAY) != HAL_OK) {
+        // Throw I2C operation error
+        return;
+    }
+
+    stpd01_status.overVoltageProtection         = (buffer >> 0) & 0x01;
+    stpd01_status.shortCircuitProtection        = (buffer >> 2) & 0x01;
+    stpd01_status.powerOn                       = (buffer >> 3) & 0x01;
+    stpd01_status.overTemperatureProtection     = (buffer >> 5) & 0x01;
+    stpd01_status.overTemperatureWarning        = (buffer >> 6) & 0x01;
+    stpd01_status.inductorPeakCurrentProtection = (buffer >> 7) & 0x01;
+
+    if (stpd01_status.overVoltageProtection        ||
+        stpd01_status.shortCircuitProtection       ||
+        stpd01_status.overTemperatureProtection    ||
+        stpd01_status.inductorPeakCurrentProtection) {
+        disable_USBC2();
+        disable_STPD01();
+        secondaryUSBC_PDContract.isNegotiationDone = false;
+        secondaryUSBC_PDContract.isPlugged = false;
+        // Throw: STPD01 hard fault during active charge
+    }
+    // OTW alone: log warning, keep charging
 }
 
 void enable_USBA1() {
