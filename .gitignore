@@ -71,3 +71,10 @@ CMakeLists.txt
 
 # obsidian
 .obsidian/
+
+# build
+build/
+
+# clangd
+.clangd
+compile_commands.json

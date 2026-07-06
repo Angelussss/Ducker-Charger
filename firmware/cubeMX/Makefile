@@ -37,6 +37,9 @@ BUILD_DIR = build
 # C sources
 C_SOURCES =  \
 Core/Src/main.c \
+Core/Src/system/event.c \
+Core/Src/system/fsm.c \
+Core/Src/system/charge.c \
 Core/Src/app/initialization.c \
 Core/Src/app/provisioning.c \
 Core/Src/app/tps25750_bundle.c \
