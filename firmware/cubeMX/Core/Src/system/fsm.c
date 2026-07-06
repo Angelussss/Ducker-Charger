@@ -67,9 +67,7 @@ static const PB_State_t StateTable[STATE_NUMBER] = {
 
 // ---- Transition matrix ----
 // Rows: current state. Columns: event. Value: next state, STATE_NUMBER = no
-// transition. GCC range designator [0 ... N] initializes all cells to
-// STATE_NUMBER, then specific entries override.
-
+// transition
 static const State_ID_t TransitionTable[STATE_NUMBER][EVT_NUMBER] = {
     [STATE_DEEP_SLEEP] =
         {
@@ -216,3 +214,164 @@ void PB_FSM_Update(FSM *fsm) {
   if (StateTable[fsm->currentState].onRun)
     StateTable[fsm->currentState].onRun(fsm);
 }
+
+// ---- State handlers ----
+
+// DEEP_SLEEP ---------------------------------------------------------------
+
+static void DeepSleep_Enter(FSM *fsm) {
+  (void)fsm;
+  disable_USBA1();
+  disable_USBA2();
+  disable_USBC2();
+  disable_STPD01();
+  HAL_GPIO_WritePin(BCKL_CTRL_GPIO_Port, BCKL_CTRL_Pin, GPIO_PIN_RESET);
+  HAL_SuspendTick();
+  HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+
+  HAL_ResumeTick();
+  SystemClock_Config();
+}
+
+static void DeepSleep_Run(FSM *fsm) { (void)fsm; }
+
+static void DeepSleep_Exit(FSM *fsm) {
+  (void)fsm;
+  HAL_GPIO_WritePin(BCKL_CTRL_GPIO_Port, BCKL_CTRL_Pin, GPIO_PIN_SET);
+}
+
+// SLEEP --------------------------------------------------------------------
+
+static void Sleep_Enter(FSM *fsm) {
+  (void)fsm;
+  HAL_GPIO_WritePin(BCKL_CTRL_GPIO_Port, BCKL_CTRL_Pin, GPIO_PIN_RESET);
+}
+
+static void Sleep_Run(FSM *fsm) {
+  (void)fsm;
+  readSensors();
+}
+
+static void Sleep_Exit(FSM *fsm) {
+  (void)fsm;
+  HAL_GPIO_WritePin(BCKL_CTRL_GPIO_Port, BCKL_CTRL_Pin, GPIO_PIN_SET);
+}
+
+// IDLE ---------------------------------------------------------------------
+
+static void Idle_Enter(FSM *fsm) {
+  (void)fsm;
+  enable_USBA1();
+  enable_USBA2();
+  HAL_GPIO_WritePin(BCKL_CTRL_GPIO_Port, BCKL_CTRL_Pin, GPIO_PIN_SET);
+}
+
+static void Idle_Run(FSM *fsm) {
+  (void)fsm;
+  readCS();
+  readSensors();
+  readINA();
+}
+
+static void Idle_Exit(FSM *fsm) { (void)fsm; }
+
+// SAFETY_LOCK --------------------------------------------------------------
+
+static void SafetyLock_Enter(FSM *fsm) {
+  (void)fsm;
+  disable_USBA1();
+  disable_USBA2();
+  disable_USBC2();
+  disable_STPD01();
+}
+
+static void SafetyLock_Run(FSM *fsm) {
+  (void)fsm;
+  readSensors();
+  readCS();
+}
+
+static void SafetyLock_Exit(FSM *fsm) { (void)fsm; }
+
+// LOW_V --------------------------------------------------------------------
+
+static void LowV_Enter(FSM *fsm) {
+  (void)fsm;
+  disable_USBA1();
+  disable_USBA2();
+  disable_USBC2();
+  disable_STPD01();
+  HAL_GPIO_WritePin(BCKL_CTRL_GPIO_Port, BCKL_CTRL_Pin, GPIO_PIN_RESET);
+}
+
+static void LowV_Run(FSM *fsm) {
+  (void)fsm;
+  readSensors();
+  readCS();
+}
+
+static void LowV_Exit(FSM *fsm) { (void)fsm; }
+
+// EMERGENCY ----------------------------------------------------------------
+
+static void Emergency_Enter(FSM *fsm) {
+  (void)fsm;
+  disable_USBA1();
+  disable_USBA2();
+  disable_USBC2();
+  disable_STPD01();
+}
+
+static void Emergency_Run(FSM *fsm) { (void)fsm; }
+
+static void Emergency_Exit(FSM *fsm) { (void)fsm; }
+
+// CHARGING -----------------------------------------------------------------
+
+static void Charging_Enter(FSM *fsm) {
+  (void)fsm;
+  disable_USBA1();
+  disable_USBA2();
+  disable_USBC2();
+  disable_STPD01();
+}
+
+static void Charging_Run(FSM *fsm) {
+  (void)fsm;
+  readCS();
+  readSensors();
+  readINA();
+}
+
+static void Charging_Exit(FSM *fsm) {
+  (void)fsm;
+  enable_USBA1();
+  enable_USBA2();
+}
+
+// MANUAL -------------------------------------------------------------------
+
+static void Manual_Enter(FSM *fsm) {
+  (void)fsm;
+  HAL_GPIO_WritePin(C2_LAB_EN_GPIO_Port, C2_LAB_EN_Pin, GPIO_PIN_SET);
+}
+
+static void Manual_Run(FSM *fsm) { (void)fsm; }
+
+static void Manual_Exit(FSM *fsm) {
+  (void)fsm;
+  disable_STPD01();
+  disable_USBC2();
+  HAL_GPIO_WritePin(C2_LAB_EN_GPIO_Port, C2_LAB_EN_Pin, GPIO_PIN_RESET);
+}
+
+// ERROR --------------------------------------------------------------------
+
+static void Error_Enter(FSM *fsm) { (void)fsm; }
+
+static void Error_Run(FSM *fsm) {
+  (void)fsm;
+  readSensors();
+}
+
+static void Error_Exit(FSM *fsm) { (void)fsm; }
