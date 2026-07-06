@@ -201,6 +201,15 @@ void readSensors() {
     HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x02, I2C_MEMADD_SIZE_8BIT, buffer, 1, HAL_MAX_DELAY);
     fuelGaugeSensors.SoC = buffer[0];
 
+    static float prevSoC = 100.0f;
+    if (fuelGaugeSensors.SoC < SOC_LOWV_THRESHOLD && prevSoC >= SOC_LOWV_THRESHOLD)
+        event_push(EVT_SOC_LOWV);
+    else if (fuelGaugeSensors.SoC < SOC_SAFETY_THRESHOLD && prevSoC >= SOC_SAFETY_THRESHOLD)
+        event_push(EVT_SOC_SAFETY);
+    if (fuelGaugeSensors.SoC >= SOC_OK_THRESHOLD && prevSoC < SOC_OK_THRESHOLD)
+        event_push(EVT_SOC_OK);
+    prevSoC = fuelGaugeSensors.SoC;
+
     currentlyReading = READ_AVG_TIME_TO_EMPTY;  // (0x18/0x19)
     HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x18, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY);
     fuelGaugeSensors.avgTimeToEmpty = (uint16_t)((buffer[1] << 8) | buffer[0]);
@@ -236,33 +245,37 @@ void readSensors() {
     // Low-Byte
     fuelGaugeSensors.flags.DSG = (rawLow >> 0) & 0x01;
 
-    // Throw faults
-    if (fuelGaugeSensors.flags.OTC) {
-        // Throw Over Temperature while Charging
-    }
-    if (fuelGaugeSensors.flags.OTD) {
-        // Throw Over Temperature while Discharging
-    }
-    if (fuelGaugeSensors.flags.BATHI) {
-        // Throw High Battery  voltage condition
-    }
-    if (fuelGaugeSensors.flags.BATLOW) {
-        // Throw Low Battery  voltage condition
-    }
+    // FSM fault events — edge-detected to avoid queue saturation
+    static bool prevOT     = false;
+    static bool prevBATHI  = false;
+    static bool prevBATLOW = false;
+
+    bool ot = fuelGaugeSensors.flags.OTC || fuelGaugeSensors.flags.OTD;
+    if (ot && !prevOT)     event_push(EVT_FAULT_OT);
+    prevOT = ot;
+
+    if (fuelGaugeSensors.flags.BATHI && !prevBATHI)   event_push(EVT_SOC_OVCH);
+    prevBATHI = fuelGaugeSensors.flags.BATHI;
+
+    bool underv = fuelGaugeSensors.flags.BATLOW || (fuelGaugeSensors.voltage < UNDERV_VOLTAGE_MV);
+    if (underv && !prevBATLOW) event_push(EVT_SOC_UNDERV);
+    prevBATLOW = underv;
+
+    // Display-only status flags — no FSM event
     if (fuelGaugeSensors.flags.CHG_INH) {
-        // Throw unable to start charging
+        // charging inhibited (display layer: show blocked indicator)
     }
     if (fuelGaugeSensors.flags.XCHG) {
-        // Throw charging not allowed
+        // charging not allowed (display layer: show blocked indicator)
     }
     if (fuelGaugeSensors.flags.FC) {
-        // Throw full charge detected                   <----
+        // full charge detected (display layer)
     }
     if (fuelGaugeSensors.flags.CHG) {
-        // Throw fast charging allowed                  <----
+        // fast charging active (display layer)
     }
     if (fuelGaugeSensors.flags.DSG) {
-        // Throw discharging detected                   <----
+        // discharging active (display layer)
     }
 }
 
@@ -293,15 +306,21 @@ void readINA() {
     ina3221_sensors.critical_alert_channel2 = (maskEnable >> 8) & 0x01;     // Channel 2 critical alert flag
     ina3221_sensors.critical_alert_channel3 = (maskEnable >> 7) & 0x01;     // Channel 3 critical alert flag
 
-    if (ina3221_sensors.critical_alert_channel1) {
-        // Throw channel 1 critical alert flag
+    static bool prevOCC1 = false;
+    static bool prevOCC2 = false;
+
+    if (ina3221_sensors.critical_alert_channel1 && !prevOCC1) {
+        disable_USBA1();
+        event_push(EVT_ERROR);
     }
-    if (ina3221_sensors.critical_alert_channel2) {
-        // Throw channel 2 critical alert flag
+    prevOCC1 = ina3221_sensors.critical_alert_channel1;
+
+    if (ina3221_sensors.critical_alert_channel2 && !prevOCC2) {
+        disable_USBA2();
+        event_push(EVT_ERROR);
     }
-    if (ina3221_sensors.critical_alert_channel3) {
-        // Throw channel 3 critical alert flag
-    }
+    prevOCC2 = ina3221_sensors.critical_alert_channel2;
+    // channel3 tied to GND — unused
 }
 
 /*
@@ -409,9 +428,10 @@ void readCS() {        // Check and update critical signals and their status (e.
     // Read HP.CHRG_OK (PB13) and update CHRG_OK status
     CHRG_OK = HAL_GPIO_ReadPin(USB_CHRG_OK_CTRL_GPIO_Port, USB_CHRG_OK_CTRL_Pin);
 
-    if (CHRG_OK == GPIO_PIN_RESET) {
-        // Throw high-current path not ok
-    }
+    static bool prevCHRG_OK = true;
+    bool chrgOkNow = (CHRG_OK == GPIO_PIN_SET);
+    if (!chrgOkNow && prevCHRG_OK) event_push(EVT_ERROR);
+    prevCHRG_OK = chrgOkNow;
 
     if (PD_IRQ == GPIO_PIN_RESET) {
         primaryUSBC_ConnectionINT();
@@ -474,8 +494,10 @@ void primaryUSBC_ConnectionINT() {
         if (primaryUSBC_Contract.isPlugged) {
             // Determine whether the powerbank is the source or the sink
             primaryUSBC_Contract.isSink = sourceSink;        // 1 -> is sink; 0 -> is source
+            if (sourceSink) event_push(EVT_CHARGER_CONNECTED);
         } else {        // if not plugged
             primaryUSBC_Contract.isNegotiationDone = false;
+            event_push(EVT_CHARGER_DISCONNECTED);
         }
     }
 
@@ -489,7 +511,7 @@ void primaryUSBC_ConnectionINT() {
         HAL_I2C_Mem_Read(&hi2c3, TPS25750_PD_CONTROLLER_ADDR, ACTIVE_CONTRACT_PDO_REG_ADDR, I2C_MEMADD_SIZE_8BIT, activeContractPDOBuffer, 6, HAL_MAX_DELAY);
         uint8_t pdoType = (activeContractPDOBuffer[3] >> 6) & 0x03;     // Bits 31:30
         if (pdoType != 0x00) {
-            // Throw "Uncompatible PDO contract type" (not Fixed)
+            event_push(EVT_ERROR);
         } else {
             // Read PDO for fetching Voltage a maximum Current
             uint16_t voltageRaw = ((activeContractPDOBuffer[2] & 0x0F) << 6) | ((activeContractPDOBuffer[1] >> 2) & 0x3F);  // (19:10)
@@ -515,7 +537,7 @@ void secondaryUSBC_ConnectionINT() {
     uint8_t alertBuffer;
     // Read alert status register (the register is read and clear)
     if (HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, ALERT_STATUS_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &alertBuffer, 1, HAL_MAX_DELAY) != HAL_OK) {
-        // Throw I2C operation error
+        event_push(EVT_ERROR);
         return;
     }
     bool PRT_STATUS_AL = (alertBuffer >> 1) & 0x01;      // If asserted: the PD protocol layer completed a message transaction
@@ -530,7 +552,7 @@ void secondaryUSBC_ConnectionINT() {
         disable_STPD01();
         secondaryUSBC_PDContract.isNegotiationDone = false;
         secondaryUSBC_PDContract.isPlugged = false;
-        // Throw: CC hardware fault on secondary USB-C
+        event_push(EVT_ERROR);
         return;
     }
 
@@ -548,7 +570,7 @@ void secondaryUSBC_ConnectionINT() {
     if (TYPEC_MONITORING_STATUS_AL) {
         uint8_t vbusBuffer;
         if (HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, VBUS_ENABLE_STATUS_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &vbusBuffer, 1, HAL_MAX_DELAY) != HAL_OK) {
-            // Throw I2C operation error
+            event_push(EVT_ERROR);
             return;
         }
         if (!(vbusBuffer & 0x01)) {
@@ -556,7 +578,7 @@ void secondaryUSBC_ConnectionINT() {
             disable_USBC2();
             disable_STPD01();
             secondaryUSBC_PDContract.isNegotiationDone = false;
-            // Throw: VBUS lost during active contract
+            event_push(EVT_ERROR);
         }
     }
 
@@ -565,7 +587,7 @@ void secondaryUSBC_ConnectionINT() {
     if (PORT_STATUS_AL) {
         uint8_t ccStatus;
         if (HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, CC_CONNECTION_STATUS_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &ccStatus, 1, HAL_MAX_DELAY) != HAL_OK) {
-            // Throw I2C operation error
+            event_push(EVT_ERROR);
             return;
         }
         switch ((ccStatus >> 5) & 0x07) {
@@ -585,17 +607,15 @@ void secondaryUSBC_ConnectionINT() {
                 secondaryUSBC_PDContract.isNegotiationDone = false;
                 disable_USBC2();
                 disable_STPD01();
-                //secondaryUSBC_PDContract.isSink = true;
-                // Throw error: secondary USB-C is source-only
+                event_push(EVT_ERROR);
                 break;
             }
-            default: {      // DBG_ATT / AUD_ATT / POW_ACC_ATT
-                // Accessory mode is not supported on secondary USB-C
+            default: {      // DBG_ATT / AUD_ATT / POW_ACC_ATT — not supported
                 secondaryUSBC_PDContract.isPlugged = false;
                 secondaryUSBC_PDContract.isNegotiationDone = false;
                 disable_USBC2();
                 disable_STPD01();
-                // Throw unexpected flag
+                event_push(EVT_ERROR);
             }
         }
     }
@@ -606,7 +626,7 @@ void secondaryUSBC_ConnectionINT() {
         // A PD message completed. If we have a plugged sink with no contract yet, check if we now have one
         uint8_t rdoBuffer[4];
         if (HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, SRC_RDO_REG_ADDR, I2C_MEMADD_SIZE_8BIT, rdoBuffer, 4, HAL_MAX_DELAY) != HAL_OK) {
-            // Throw I2C operation error
+            event_push(EVT_ERROR);
             return;
         }
 
@@ -639,7 +659,7 @@ void secondaryUSBC_ConnectionINT() {
                 break;
             }
             default: {
-                // Throw error
+                event_push(EVT_ERROR);
             }
         }
 
@@ -647,7 +667,7 @@ void secondaryUSBC_ConnectionINT() {
             uint16_t operatingCurrentRaw = ((rdoBuffer[2] & 0x0F) << 6) | ((rdoBuffer[1] >> 2) & 0x03F);        // (19:10)
             secondaryUSBC_PDContract.operatingCurrent = operatingCurrentRaw * 10.0f;  // To get mA (as stated in the USB_PD standard)
             if (!setupSTPD01(secondaryUSBC_PDContract.voltage, secondaryUSBC_PDContract.maxCurrent)) {
-                // Throw STPD01 setup error + don't enable STPD01
+                event_push(EVT_ERROR);
                 return;
             }
 
@@ -660,8 +680,8 @@ void secondaryUSBC_ConnectionINT() {
                 uint8_t vbusBuffer;
                 status = HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, VBUS_ENABLE_STATUS_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &vbusBuffer, 1, HAL_MAX_DELAY);
                 if (status != HAL_OK) {
-                    // Throw I2C operation error
                     disable_STPD01();
+                    event_push(EVT_ERROR);
                     return;
                 }
                 if (vbusBuffer & 0x01) {
@@ -669,26 +689,18 @@ void secondaryUSBC_ConnectionINT() {
                     secondaryUSBC_PDContract.isNegotiationDone = true;
                 } else {
                     disable_STPD01();
-                    // Throw VBUS_EN_SRC -> power path not available
+                    event_push(EVT_ERROR);
                 }
             } else {
-                disable_STPD01();
-                if (stpd01_status.shortCircuitProtection) {
-                    // Throw STPD01 short-circuit handling
-                    // Probably disables both STPD01 and USB-C2 (if enabled)
-                } else if (stpd01_status.overVoltageProtection) {
-                    // Throw STPD01 over voltage handling
-                    // Probably disables both STPD01 and USB-C2 (if enabled)
-                } else if (stpd01_status.overTemperatureWarning) {
-                    // Throw over temperature warning handling
-                    // (Possibly enables anyway the std01 and continues charging procedure)
+                // STPD01 already disabled above; port never became active
+                if (stpd01_status.shortCircuitProtection ||
+                    stpd01_status.overVoltageProtection  ||
+                    stpd01_status.inductorPeakCurrentProtection) {
+                    event_push(EVT_FAULT_CRITICAL);
                 } else if (stpd01_status.overTemperatureProtection) {
-                    // Throw STPD01 over temperature handling
-                    // Probably disables both STPD01 and USB-C2 (if enabled)
-                } else {
-                    // Throw inductor peak current protection handling
-                    // Probably disables both STPD01 and USB-C2 (if enabled)
+                    event_push(EVT_FAULT_OT);
                 }
+                // overTemperatureWarning alone: no FSM event
             }
         }
     }
@@ -727,15 +739,10 @@ bool setupSTPD01(float voltage_mV, float current_mA) {
 
     // --- Provide max voltage and max current addresses to STPD01
     status = HAL_I2C_Mem_Write(&hi2c1, STPD01_PD_ADDR, VOUT_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &voltageReg, 1, HAL_MAX_DELAY);
-    if (status != HAL_OK) {
-        // Throw I2C operation error
-        return false;
-    }
+    if (status != HAL_OK) return false;
+
     status = HAL_I2C_Mem_Write(&hi2c1, STPD01_PD_ADDR, ILIM_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &currentReg, 1, HAL_MAX_DELAY);
-    if (status != HAL_OK) {
-        // Throw I2C operation error
-        return false;
-    }
+    if (status != HAL_OK) return false;
     return true;
 }
 
@@ -765,7 +772,7 @@ void stpd01_PowerStateINT() {
     uint8_t buffer;
     if (HAL_I2C_Mem_Read(&hi2c1, STPD01_PD_ADDR, INT_STAT_REG_ADDR,
                           I2C_MEMADD_SIZE_8BIT, &buffer, 1, HAL_MAX_DELAY) != HAL_OK) {
-        // Throw I2C operation error
+        event_push(EVT_ERROR);
         return;
     }
 
@@ -776,17 +783,22 @@ void stpd01_PowerStateINT() {
     stpd01_status.overTemperatureWarning        = (buffer >> 6) & 0x01;
     stpd01_status.inductorPeakCurrentProtection = (buffer >> 7) & 0x01;
 
-    if (stpd01_status.overVoltageProtection        ||
-        stpd01_status.shortCircuitProtection       ||
-        stpd01_status.overTemperatureProtection    ||
+    if (stpd01_status.overVoltageProtection     ||
+        stpd01_status.shortCircuitProtection    ||
         stpd01_status.inductorPeakCurrentProtection) {
         disable_USBC2();
         disable_STPD01();
         secondaryUSBC_PDContract.isNegotiationDone = false;
         secondaryUSBC_PDContract.isPlugged = false;
-        // Throw: STPD01 hard fault during active charge
+        event_push(EVT_FAULT_CRITICAL);
+    } else if (stpd01_status.overTemperatureProtection) {
+        disable_USBC2();
+        disable_STPD01();
+        secondaryUSBC_PDContract.isNegotiationDone = false;
+        secondaryUSBC_PDContract.isPlugged = false;
+        event_push(EVT_FAULT_OT);
     }
-    // OTW alone: log warning, keep charging
+    // OTW alone: no FSM event, display layer handles the warning
 }
 
 void enable_USBA1() {
