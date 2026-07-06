@@ -249,7 +249,9 @@ static void Sleep_Enter(FSM *fsm) {
 
 static void Sleep_Run(FSM *fsm) {
   (void)fsm;
+  readCS();
   readSensors();
+  readINA();
 }
 
 static void Sleep_Exit(FSM *fsm) {
@@ -356,7 +358,12 @@ static void Manual_Enter(FSM *fsm) {
   HAL_GPIO_WritePin(C2_LAB_EN_GPIO_Port, C2_LAB_EN_Pin, GPIO_PIN_SET);
 }
 
-static void Manual_Run(FSM *fsm) { (void)fsm; }
+static void Manual_Run(FSM *fsm) {
+  (void)fsm;
+  readCS();
+  readSensors();
+  readINA();
+}
 
 static void Manual_Exit(FSM *fsm) {
   (void)fsm;
@@ -371,7 +378,9 @@ static void Error_Enter(FSM *fsm) { (void)fsm; }
 
 static void Error_Run(FSM *fsm) {
   (void)fsm;
+  readCS();
   readSensors();
+  readINA();
 }
 
 static void Error_Exit(FSM *fsm) { (void)fsm; }
