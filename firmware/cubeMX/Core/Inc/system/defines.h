@@ -9,8 +9,11 @@
 #define SOC_LOWV_THRESHOLD 10.0f   // % — SAFETY_LOCK → LOW_V
 #define SOC_OK_THRESHOLD 15.0f     // % — recovery back to IDLE
 #define UNDERV_VOLTAGE_MV                                                      \
-  12000.0f // mV pack — 3000 mV/cell, 200 mV above BQ7791500 UV cutoff (2900
+  12000.0f // mV pack — 3000 mV/cell, 100 mV above BQ7791500 UV cutoff (2900
            // mV/cell)
+#define BATHI_VOLTAGE_MV                                                       \
+  16400.0f // mV pack — 4100 mV/cell × 4S, mirrors BQ34Z100 BATHI data flash
+           // threshold
 
 #define INACTIVITY_TIMEOUT_MS 30000 // ms — IDLE/CHARGING/LOW_V → SLEEP
 
