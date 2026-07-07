@@ -242,12 +242,17 @@ void readSensors() {
     fuelGaugeSensors.flags.CHG = (rawHigh >> 0) & 0x01;
 
     // Low-Byte
-    fuelGaugeSensors.flags.DSG = (rawLow >> 0) & 0x01;
+    fuelGaugeSensors.flags.DSG  = (rawLow >> 0) & 0x01;
+    fuelGaugeSensors.flags.SOCF = (rawLow >> 1) & 0x01;
+    fuelGaugeSensors.flags.SOC1 = (rawLow >> 2) & 0x01;
+    fuelGaugeSensors.flags.CF   = (rawLow >> 4) & 0x01;
+    fuelGaugeSensors.flags.REST = (rawLow >> 7) & 0x01;
 
     // FSM fault events — edge-detected to avoid queue saturation
     static bool prevOT     = false;
     static bool prevBATHI  = false;
     static bool prevBATLOW = false;
+    static bool prevCF     = false;
 
     bool ot = fuelGaugeSensors.flags.OTC || fuelGaugeSensors.flags.OTD;
     if (ot && !prevOT)     event_push(EVT_FAULT_OT);
@@ -259,6 +264,9 @@ void readSensors() {
     bool underv = fuelGaugeSensors.flags.BATLOW || (fuelGaugeSensors.voltage < UNDERV_VOLTAGE_MV);
     if (underv && !prevBATLOW) event_push(EVT_SOC_UNDERV);
     prevBATLOW = underv;
+
+    if (fuelGaugeSensors.flags.CF && !prevCF) event_push(EVT_ERROR);
+    prevCF = fuelGaugeSensors.flags.CF;
 
     // Display-only status flags — no FSM event
     if (fuelGaugeSensors.flags.CHG_INH) {
@@ -310,13 +318,13 @@ void readINA() {
 
     if (ina3221_sensors.critical_alert_channel1 && !prevOCC1) {
         disable_USBA1();
-        event_push(EVT_ERROR);
+        event_push(EVT_FAULT_OCC);
     }
     prevOCC1 = ina3221_sensors.critical_alert_channel1;
 
     if (ina3221_sensors.critical_alert_channel2 && !prevOCC2) {
         disable_USBA2();
-        event_push(EVT_ERROR);
+        event_push(EVT_FAULT_OCC);
     }
     prevOCC2 = ina3221_sensors.critical_alert_channel2;
     // channel3 tied to GND — unused

@@ -25,6 +25,10 @@ typedef struct {
 
     // Low-Byte
     bool DSG;           // (BIT0) Discharging detected. True when set
+    bool SOCF;          // (BIT1) State of Charge below final threshold (critical low)
+    bool SOC1;          // (BIT2) State of Charge at threshold 1
+    bool CF;            // (BIT4) Condition Flag — re-learning cycle needed
+    bool REST;          // (BIT7) Rest condition detected
 } fuelGaugeFlags;
 
 typedef struct {
