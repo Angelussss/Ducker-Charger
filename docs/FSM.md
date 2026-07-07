@@ -188,15 +188,19 @@ When the device is being charged it gives all available power to the battery —
 
 #### SAFETY_LOCK
 
-Battery is low (or overcharged) — detach everything and wait. The display stays on so the user can see the SoC. `onRun` keeps polling so `EVT_SOC_LOWV` (further drain) or `EVT_SOC_OK` (charger brought it back) can be detected.
+Battery is low (or overcharged) — detach everything and wait. The display stays on so the user can see the SoC. `onRun` keeps polling so `EVT_SOC_LOWV` (further drain) or `EVT_SOC_OK` (charger brought it back) can be detected. `EVT_FAULT_OT` and `EVT_ERROR` also escalate to `STATE_ERROR` from here — a fresh overtemperature or sensor/bus fault while SoC is critically low is no longer silently dropped.
 
 `onExit` is empty — the destination state's `onEnter` handles re-enabling whatever is appropriate.
+
+*Note:* `onRun` does not currently call `readINA()`, unlike every other actively-monitored state — an INA3221 overcurrent condition is not detected while locked in this state.
 
 #### LOW_V
 
 `onEnter` disables all ports and turns the display off. The disable calls are redundant on the normal path (arriving from SAFETY_LOCK, ports are already off) but necessary for paths coming from SLEEP, IDLE, or ERROR where ports may still be active. At this SoC level every milliamp counts and the display is not worth the draw.
 
 `onRun` keeps sensors alive so `EVT_SOC_UNDERV` and `EVT_CHARGER_CONNECTED` can still be detected.
+
+*Note:* like `SAFETY_LOCK`, `onRun` does not currently call `readINA()` — an INA3221 overcurrent condition is not detected while in this state either.
 
 #### EMERGENCY
 
@@ -234,7 +238,7 @@ SLEEP        CHGR  —     SFTY  LOWV  EMRG   —    SFTY  ERR   EMRG   —     
 IDLE         CHGR  —     SFTY  LOWV  EMRG   —    SFTY  ERR   EMRG   —     ERR  —     SLEEP  —     DEEP  MAN   —
 CHARGING     —     IDLE  SFTY  LOWV  EMRG   —    SFTY  ERR   EMRG   SFTY  ERR  —     SLEEP  —     —     MAN   —
 MANUAL       —     —     SFTY  LOWV  EMRG   —    SFTY  ERR   EMRG   —     ERR  —     —      —     —     —     IDLE
-SAFETY_LOCK  CHGR* —     —     LOWV  EMRG   IDLE —     —     EMRG   —     —    —     —      —     —     —     —
+SAFETY_LOCK  CHGR* —     —     LOWV  EMRG   IDLE —     ERR   EMRG   —     ERR  —     —      —     —     —     —
 LOW_V        CHGR  —     —     —     EMRG   IDLE —     ERR   EMRG   —     ERR  —     SLEEP  —     —     —     —
 ERROR        CHGR  —     SFTY  LOWV  EMRG   —    —     —     EMRG   —     —    IDLE  —      IDLE  —     —     —
 EMERGENCY    —     —     —     —     —      —    —     —     —      —     —    —     —      —     —     —     —

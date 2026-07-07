@@ -2,13 +2,20 @@
  * @file    initialization.c
  * @brief   Every-boot IC initialization. See initialization.h.
  *
+ * All device I2C addresses and register offsets come from
+ * system/defines.h — the single source of truth also used by
+ * system/charge.c and app/provisioning.c. Do not redefine them here;
+ * a prior revision of this file kept its own copies and they drifted
+ * out of sync with defines.h for both STPD01 and TPS25750.
+ *
  * VERIFY BEFORE FIRST USE (marked CHECK):
- *   - TPS25750 I2C address: netlist analysis says 0x21 (ADCIN1/2 = GND);
- *     the charge-management branch used 0x20 with an open TODO. Confirm
- *     against the TPS25750 TRM table "I2C address selection".
+ *   - TPS25750 I2C address (TPS25750_PD_CONTROLLER_ADDR in defines.h):
+ *     charge.c's runtime PD-negotiation path already uses 0x20; this
+ *     file now uses the same constant. A netlist read (ADCIN1/2 = GND)
+ *     had suggested 0x21 — confirm against the TPS25750 TRM table
+ *     "I2C address selection" before relying on either value.
  *   - The PBMs data layout and burst-write chunking against the TRM
  *     section "Patch Bundle Burst Mode" (document already in the repo).
- *   - STPD01 register encodings (VOUT/ILIM LSB) against its datasheet.
  *
  * Design rules:
  *   - Bounded timeouts everywhere; never HAL_MAX_DELAY (a hung bus must
@@ -19,6 +26,7 @@
 #include "app/initialization.h"
 #include "main.h"
 #include "i2c.h"        /* hi2c1 (I2C_LP), hi2c3 (I2C_PD) */
+#include "system/defines.h"
 
 #include <string.h>
 
@@ -38,9 +46,6 @@ extern const uint32_t tps25750_bundle_size;
 #define I2C_TIMEOUT_MS          (50u)
 #define STEP_RETRIES            (2u)
 
-/* CHECK: 0x21 per netlist (ADCIN1/2=GND); charge.h used 0x20. */
-#define TPS25750_ADDR           (0x21u << 1)
-
 /* TPS25750 host-interface registers (length-prefixed I2C payloads). */
 #define TPS_REG_MODE            (0x03u)
 #define TPS_REG_CMD1            (0x08u)
@@ -59,23 +64,18 @@ extern const uint32_t tps25750_bundle_size;
 #define TPS_BURST_CHUNK         (256u)    /* bytes per burst I2C write */
 
 /* CHECK: burst target address is returned by PBMs; this is the default
- * suggested in the TRM examples. */
+ * suggested in the TRM examples. Distinct from TPS25750_PD_CONTROLLER_ADDR —
+ * burst mode targets a separate alternate address, not a duplicate of it. */
 #define TPS_BURST_ADDR_DEFAULT  (0x22u << 1)
 
-/* INA3221 (I2C_LP, A0=GND -> 0x40). CONFIG 0x6527:
- * ch1+ch2 enabled (ch3 grounded/unused), 16-sample averaging,
- * 1.1 ms bus & shunt conversion, continuous shunt+bus mode. */
-#define INA3221_ADDR            (0x40u << 1)
-#define INA3221_REG_CONFIG      (0x00u)
+/* INA3221 CONFIG value (ch1+ch2 enabled, ch3 grounded/unused, 16-sample
+ * averaging, 1.1 ms bus & shunt conversion, continuous shunt+bus mode).
+ * Address/register-offset macros come from system/defines.h. */
 #define INA3221_CONFIG_VALUE    (0x6527u)
 
-/* STPD01 (I2C_LP). CHECK: address 0x54 marked "to be verified" since
- * the charge-management branch; encodings below from datasheet tables.
- * VOUT: 3.0 V + 20 mV/LSB. ILIM: 100 mA + 100 mA/LSB. */
-#define STPD01_ADDR             (0x54u << 1)
-#define STPD01_REG_VOUT         (0x00u)
-#define STPD01_REG_ILIM         (0x01u)
-#define STPD01_REG_ENABLE       (0x06u)
+/* STPD01 safe-default encodings (VOUT: 3.0 V + 20 mV/LSB, ILIM: 100 mA +
+ * 100 mA/LSB — see datasheet tables). Address/register-offset macros come
+ * from system/defines.h. */
 #define STPD01_VOUT_5V          ((uint8_t)((5000u - 3000u) / 20u))
 #define STPD01_ILIM_3A          ((uint8_t)((3000u - 100u) / 100u))
 
@@ -90,10 +90,13 @@ static HAL_StatusTypeDef tps_read(uint8_t reg, uint8_t *buf, uint8_t len)
 {
     uint8_t raw[65];
 
-    if (HAL_I2C_Master_Transmit(&hi2c3, TPS25750_ADDR, &reg, 1u,
+    if (len > sizeof(raw) - 1u)
+        return HAL_ERROR;
+
+    if (HAL_I2C_Master_Transmit(&hi2c3, TPS25750_PD_CONTROLLER_ADDR, &reg, 1u,
                                 I2C_TIMEOUT_MS) != HAL_OK)
         return HAL_ERROR;
-    if (HAL_I2C_Master_Receive(&hi2c3, TPS25750_ADDR, raw,
+    if (HAL_I2C_Master_Receive(&hi2c3, TPS25750_PD_CONTROLLER_ADDR, raw,
                                (uint16_t)(len + 1u),
                                I2C_TIMEOUT_MS) != HAL_OK)
         return HAL_ERROR;
@@ -108,10 +111,13 @@ static HAL_StatusTypeDef tps_write(uint8_t reg, const uint8_t *data,
 {
     uint8_t raw[66];
 
+    if (len > sizeof(raw) - 2u)
+        return HAL_ERROR;
+
     raw[0] = reg;
     raw[1] = len;
     memcpy(&raw[2], data, len);
-    return HAL_I2C_Master_Transmit(&hi2c3, TPS25750_ADDR, raw,
+    return HAL_I2C_Master_Transmit(&hi2c3, TPS25750_PD_CONTROLLER_ADDR, raw,
                                    (uint16_t)(len + 2u), I2C_TIMEOUT_MS);
 }
 
@@ -245,17 +251,17 @@ static InitStatus_t init_ina3221(void)
 
 static InitStatus_t init_stpd01(void)
 {
-    uint8_t vout[2] = { STPD01_REG_VOUT, STPD01_VOUT_5V };
-    uint8_t ilim[2] = { STPD01_REG_ILIM, STPD01_ILIM_3A };
-    uint8_t dis [2] = { STPD01_REG_ENABLE, 0x00u };
+    uint8_t vout[2] = { VOUT_REG_ADDR, STPD01_VOUT_5V };
+    uint8_t ilim[2] = { ILIM_REG_ADDR, STPD01_ILIM_3A };
+    uint8_t dis [2] = { DIGITAL_ENABLE_REG_ADDR, 0x00u };
 
-    if (HAL_I2C_Master_Transmit(&hi2c1, STPD01_ADDR, vout, 2u,
+    if (HAL_I2C_Master_Transmit(&hi2c1, STPD01_PD_ADDR, vout, 2u,
                                 I2C_TIMEOUT_MS) != HAL_OK)
         return INIT_FAILED;
-    if (HAL_I2C_Master_Transmit(&hi2c1, STPD01_ADDR, ilim, 2u,
+    if (HAL_I2C_Master_Transmit(&hi2c1, STPD01_PD_ADDR, ilim, 2u,
                                 I2C_TIMEOUT_MS) != HAL_OK)
         return INIT_FAILED;
-    if (HAL_I2C_Master_Transmit(&hi2c1, STPD01_ADDR, dis, 2u,
+    if (HAL_I2C_Master_Transmit(&hi2c1, STPD01_PD_ADDR, dis, 2u,
                                 I2C_TIMEOUT_MS) != HAL_OK)
         return INIT_FAILED;
 

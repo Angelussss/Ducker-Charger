@@ -148,8 +148,12 @@ the lower address). The bundled [`bq34z100-r2.pdf`](../PCB/Ducker-Charger/docs/b
 - **FC:** Full charge is detected
 - **CHG:** (Fast) charging allowed. True when set  
 - **DSG:** Discharging detected. True when set
+- **SOCF:** State of Charge is below the final (critical) low threshold
+- **SOC1:** State of Charge is at threshold 1
+- **CF:** Condition Flag — indicates the gauge needs a re-learning cycle. Firmware pushes `EVT_ERROR` on rising edge
+- **REST:** Rest condition detected (no charge or discharge current for a sustained period)
 
-*Note:* The firmware decodes all high-byte bits and `DSG` from the low byte
+*Note:* The firmware decodes all high-byte bits and all four documented low-byte bits (`DSG`, `SOCF`, `SOC1`, `CF`, `REST`). `CF` is the only low-byte flag that pushes an FSM event; the rest are available for the display layer
 
 #### INA3221 Register Map @ 0x40
 

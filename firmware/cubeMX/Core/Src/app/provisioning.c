@@ -22,11 +22,12 @@
 #include "app/provisioning.h"
 #include "main.h"
 #include "i2c.h"        /* hi2c1 (I2C_LP -> ISO1540 -> gauge) */
+#include "system/defines.h"
 
 #include <string.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
-#define GAUGE_ADDR              (0x55u << 1)
 #define I2C_TIMEOUT_MS          (50u)
 
 /* Standard commands */
@@ -68,9 +69,11 @@ static const uint8_t design_capacity[2] = { (7800u >> 8) & 0xFFu,
 #define OFF_SERIES_CELLS        (7u)      /* CHECK: TRM offset         */
 static const uint8_t series_cells[1] = { 4u };
 
-/* Subclass 104 "Manufacturer Info Block A": we use the first two bytes
- * as our provisioning marker ("DK" + revision). Bump the revision when
- * the patch list changes so old units re-provision. */
+/* "Manufacturer Info Block A": we use the first two bytes as our
+ * provisioning marker ("DK" + revision). Bump the revision when the
+ * patch list changes so old units re-provision.
+ * CHECK: subclass id not yet cross-checked against the TRM table —
+ * 58 is a placeholder here, do not assume it is correct. */
 #define SUBCLASS_MFG_INFO_A     (58u)     /* CHECK: TRM subclass id */
 #define OFF_MARKER              (0u)
 #define PROV_MARKER_0           ((uint8_t)'D')
@@ -95,16 +98,16 @@ static HAL_StatusTypeDef reg_write(uint8_t reg, const uint8_t *d, uint8_t n)
     uint8_t buf[34];
     buf[0] = reg;
     memcpy(&buf[1], d, n);
-    return HAL_I2C_Master_Transmit(&hi2c1, GAUGE_ADDR, buf,
+    return HAL_I2C_Master_Transmit(&hi2c1, FUEL_GAUGE_ADDR, buf,
                                    (uint16_t)(n + 1u), I2C_TIMEOUT_MS);
 }
 
 static HAL_StatusTypeDef reg_read(uint8_t reg, uint8_t *d, uint8_t n)
 {
-    if (HAL_I2C_Master_Transmit(&hi2c1, GAUGE_ADDR, &reg, 1u,
+    if (HAL_I2C_Master_Transmit(&hi2c1, FUEL_GAUGE_ADDR, &reg, 1u,
                                 I2C_TIMEOUT_MS) != HAL_OK)
         return HAL_ERROR;
-    return HAL_I2C_Master_Receive(&hi2c1, GAUGE_ADDR, d, n, I2C_TIMEOUT_MS);
+    return HAL_I2C_Master_Receive(&hi2c1, FUEL_GAUGE_ADDR, d, n, I2C_TIMEOUT_MS);
 }
 
 static HAL_StatusTypeDef control_write(uint16_t sub)
@@ -160,6 +163,20 @@ static HAL_StatusTypeDef df_write_block(const uint8_t *buf)
 
     HAL_Delay(100);     /* DF write time, TRM-mandated pause */
     return HAL_OK;
+}
+
+/** Re-checkable safety gate: true if |AverageCurrent| is below the rest
+ * threshold. Called before the DF-write sequence starts AND again before
+ * every individual patch, since the sequence spans several I2C round-trips
+ * and HAL_Delay(2)/HAL_Delay(100) pauses during which a charger or load
+ * could start drawing current. */
+static bool pack_at_rest(void)
+{
+    int16_t avg_ma = 0;
+
+    if (reg_read(REG_AI, (uint8_t *)&avg_ma, 2u) != HAL_OK)
+        return false;
+    return (avg_ma <= PROV_MAX_REST_MA) && (avg_ma >= -PROV_MAX_REST_MA);
 }
 
 /** Apply one patch (read-modify-write of the containing block). */
@@ -225,8 +242,6 @@ uint8_t Provisioning_Required(void)
 
 ProvStatus_t Provisioning_RunGauge(void)
 {
-    int16_t avg_ma = 0;
-
     {
         ProvCheck_t c = Provisioning_Check(NULL);
         if (c == PROV_CHECK_OK)
@@ -236,9 +251,7 @@ ProvStatus_t Provisioning_RunGauge(void)
     }
 
     /* Safety gate: pack must be at rest for DF writes. */
-    if (reg_read(REG_AI, (uint8_t *)&avg_ma, 2u) != HAL_OK)
-        return PROV_FAILED;
-    if (avg_ma > PROV_MAX_REST_MA || avg_ma < -PROV_MAX_REST_MA)
+    if (!pack_at_rest())
         return PROV_UNSAFE;
 
     /* Unseal (TI default keys; no-op if already unsealed). */
@@ -247,7 +260,11 @@ ProvStatus_t Provisioning_RunGauge(void)
     if (control_write(CNTL_UNSEAL_KEY2) != HAL_OK) return PROV_FAILED;
     HAL_Delay(2);
 
+    /* Re-check before every patch: the sequence spans several I2C
+     * round-trips and delays during which a charger/load could attach. */
     for (uint8_t i = 0; i < N_PATCHES; i++) {
+        if (!pack_at_rest())
+            return PROV_UNSAFE;
         if (df_apply(&patches[i]) != HAL_OK)
             return PROV_FAILED;
     }

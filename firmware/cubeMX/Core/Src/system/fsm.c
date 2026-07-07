@@ -112,7 +112,9 @@ static const State_ID_t TransitionTable[STATE_NUMBER][EVT_NUMBER] = {
             [EVT_SOC_LOWV] = STATE_LOW_V,
             [EVT_SOC_UNDERV] = STATE_EMERGENCY,
             [EVT_SOC_OK] = STATE_IDLE,
+            [EVT_FAULT_OT] = STATE_ERROR,
             [EVT_FAULT_CRITICAL] = STATE_EMERGENCY,
+            [EVT_ERROR] = STATE_ERROR,
         },
     [STATE_LOW_V] =
         {
