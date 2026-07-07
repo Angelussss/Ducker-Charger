@@ -29,20 +29,30 @@
 #define ACTIVE_CONTRACT_PDO_REG_ADDR 0x34
 #define ACTIVE_CONTRACT_RDO_REG_ADDR 0x35
 
-// ---- STUSB4710 Secondary USB-C PD Controller @ I2C1 ----
-#define STUSB4710_PD_CONTROLLER_ADDR ((uint16_t)(0x28 << 1))
-#define ALERT_STATUS_REG_ADDR 0x0B
-#define CC_CONNECTION_STATUS_REG_ADDR 0x0E
-#define VBUS_ENABLE_STATUS_REG_ADDR 0x27
-#define SRC_PDO1_REG_ADDR 0x71
-#define SRC_PDO2_REG_ADDR 0x75
-#define SRC_PDO3_REG_ADDR 0x79
-#define SRC_PDO4_REG_ADDR 0x7D
-#define SRC_PDO5_REG_ADDR 0x81
-#define SRC_RDO_REG_ADDR 0x91
+// ---- CYPD3175-24LQXQ Secondary USB-C PD Controller @ I2C1 (CCG3PA, EZ-PD HPI) ----
+// Default 7-bit address; 0x08/0x12/0x44 are CCGx defaults per EZ-PD Config Utility §4.11.5
+#define CYPD3175_PD_CONTROLLER_ADDR     ((uint16_t)(0x08 << 1))
+// Device-level HPI registers (offsets from 0x0000, per cy_hpi_master_dev_reg_t)
+#define CYPD3175_INTR_REG               ((uint16_t)0x0006)
+#define CYPD3175_RESPONSE_REG           ((uint16_t)0x007E)
+// INTR_REG bit masks
+#define CYPD3175_INTR_DEV_BIT           (0x01U)
+#define CYPD3175_INTR_PORT0_BIT         (0x02U)
+// Port 0 HPI registers (port base 0x1000 + offset, per cy_hpi_master_port_reg_t)
+#define CYPD3175_PORT0_TYPE_C_STATUS    ((uint16_t)0x100C)
+#define CYPD3175_PORT0_CURRENT_PDO      ((uint16_t)0x1010)
+#define CYPD3175_PORT0_CURRENT_RDO      ((uint16_t)0x1014)
+// HPI event codes read from RESPONSE_REG (per cy_hpi_master_response_t)
+#define CYPD3175_EVT_OCP                (0x82U)
+#define CYPD3175_EVT_OVP                (0x83U)
+#define CYPD3175_EVT_DISCONNECT         (0x85U)
+#define CYPD3175_EVT_CONTRACT_COMPLETE  (0x86U)
+#define CYPD3175_EVT_HARD_RESET         (0x8FU)
+#define CYPD3175_EVT_OTP                (0xB6U)
 
 // ---- STPD01 Aux Buck Converter @ I2C1 ----
-#define STPD01_PD_ADDR ((uint16_t)(0x54 << 1))
+// 7-bit address per datasheet Table 9: ADD pin grounded on PCB -> ADD1,ADD0 = 01 -> 0b0000101
+#define STPD01_PD_ADDR ((uint16_t)(0x05 << 1))
 #define VOUT_REG_ADDR 0x00
 #define ILIM_REG_ADDR 0x01
 #define INT_STAT_REG_ADDR 0x02
@@ -59,10 +69,10 @@
 // ---- Critical signals (EXTI / status inputs) ----
 #define USB_IRQ_CTRL_Pin GPIO_PIN_14
 #define USB_IRQ_CTRL_GPIO_Port GPIOB
-#define USB_ST_INT_CTRL_Pin GPIO_PIN_12
-#define USB_ST_INT_CTRL_GPIO_Port GPIOC
-#define C2_RDY_CTRL_Pin GPIO_PIN_3
-#define C2_RDY_CTRL_GPIO_Port GPIOC
+#define STPD01_INT_Pin GPIO_PIN_12
+#define STPD01_INT_GPIO_Port GPIOC
+#define CYPD3175_INT_Pin GPIO_PIN_3
+#define CYPD3175_INT_GPIO_Port GPIOC
 #define USB_CHRG_OK_CTRL_Pin GPIO_PIN_13
 #define USB_CHRG_OK_CTRL_GPIO_Port GPIOB
 

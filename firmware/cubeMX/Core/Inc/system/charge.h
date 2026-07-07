@@ -131,16 +131,6 @@ void enable_USBC2();
 
 void disable_USBC2();
 
-void selectPDO1();
-
-void selectPDO2();
-
-void selectPDO3();
-
-void selectPDO4();
-
-void selectPDO5();
-
 // Get data functions
 SensorData getSensorData();
 
