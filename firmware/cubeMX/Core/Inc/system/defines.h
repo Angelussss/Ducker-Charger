@@ -61,6 +61,7 @@
 // ---- INA3221 3-Channel Current Monitor @ I2C1 ----
 // CH1 = USB-A1, CH2 = USB-A2, CH3 = GND (unused)
 #define INA3221_ADDR ((uint16_t)(0x40 << 1))
+#define INA3221_REG_CONFIG 0x00
 #define SHUNT_VOLTAGE_CH1_REG_ADDR 0x01
 #define SHUNT_VOLTAGE_CH2_REG_ADDR 0x03
 #define SHUNT_VOLTAGE_CH3_REG_ADDR 0x05
