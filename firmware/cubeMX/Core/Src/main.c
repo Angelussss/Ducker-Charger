@@ -27,10 +27,14 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "app/initialization.h" /* every-boot IC init (TPS25750 patch, INA3221, STPD01) */
-#include "app/provisioning.h" /* one-time BQ34Z100 data-flash provisioning */
+#include "app/initialization.h"   /* every-boot IC init (TPS25750 patch, INA3221, STPD01) */
+#include "app/provisioning.h"     /* one-time BQ34Z100 data-flash provisioning */
 #include "system/charge.h"
 #include "system/fsm.h"
+#include "app/encoder.h"
+#include "app/telemetry.h"
+#include "display/ili9341.h"
+#include "ui/ui_state.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -53,6 +57,7 @@
 /* USER CODE BEGIN PV */
 static FSM fsm;
 static uint32_t lastActivityTick = 0;
+static uint32_t lastEncoderActivityTick = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -113,6 +118,11 @@ int main(void) {
     (void)Provisioning_RunGauge();
   }
 
+  Encoder_Init(&htim3);
+  Telemetry_Init(&hi2c1, &hi2c3);
+  ILI9341_Init(&hspi1);
+  UI_Init();
+
   init();
   PB_FSM_Init(&fsm);
   lastActivityTick = HAL_GetTick();
@@ -133,12 +143,28 @@ int main(void) {
       PB_FSM_FireEvent(&fsm, evt);
     }
 
+    /* Real knob/button activity also counts against the global inactivity
+     * timer -- otherwise SLEEP/DEEP_SLEEP would still fire on schedule
+     * while the user is actively turning the encoder, since nothing else
+     * currently pushes EVT_BUTTON_SHORT/LONG from the encoder. */
+    uint32_t encoderActivityTick = Encoder_LastActivityTick();
+    if (encoderActivityTick != lastEncoderActivityTick) {
+      lastEncoderActivityTick = encoderActivityTick;
+      lastActivityTick = HAL_GetTick();
+    }
+
     if (HAL_GetTick() - lastActivityTick > INACTIVITY_TIMEOUT_MS) {
       event_push(EVT_INACTIVITY);
       lastActivityTick = HAL_GetTick();
     }
 
     PB_FSM_Update(&fsm);
+
+    /* Skip UI work while the FSM has the backlight physically off --
+     * avoids pointless SPI/CPU churn into a dark screen. */
+    if (PB_FSM_GetState(&fsm) != STATE_SLEEP) {
+      UI_Tick();
+    }
   }
   /* USER CODE END 3 */
 }

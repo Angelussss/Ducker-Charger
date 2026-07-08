@@ -47,4 +47,7 @@ void PB_FSM_RequestState(FSM *fsm, State_ID_t newState);
  *         Handles the overcharge conditional for SAFETY_LOCK. Must be called for every event popped from the queue. */
 void PB_FSM_FireEvent(FSM *fsm, Event_t event);
 
+/** @brief Return the FSM's current state. */
+State_ID_t PB_FSM_GetState(const FSM *fsm);
+
 #endif // FSM_H

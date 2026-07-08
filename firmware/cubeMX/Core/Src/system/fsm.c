@@ -202,6 +202,8 @@ void PB_FSM_FireEvent(FSM *fsm, Event_t event) {
     PB_FSM_RequestState(fsm, next);
 }
 
+State_ID_t PB_FSM_GetState(const FSM *fsm) { return fsm->currentState; }
+
 void PB_FSM_Update(FSM *fsm) {
   if (fsm->currentState != fsm->nextState) {
     if (StateTable[fsm->currentState].onExit)
