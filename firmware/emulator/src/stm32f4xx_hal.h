@@ -60,9 +60,11 @@ typedef struct {
 #define GPIO_MODE_INPUT              0x00000000u
 #define GPIO_MODE_OUTPUT_PP          0x00000001u
 #define GPIO_MODE_OUTPUT_OD          0x00000011u
+#define GPIO_MODE_AF_PP              0x00000002u
 #define GPIO_MODE_IT_RISING          0x10110000u
 #define GPIO_MODE_IT_FALLING         0x10210000u
 #define GPIO_MODE_IT_RISING_FALLING  0x10310000u
+#define GPIO_AF3_TIM10               0x03u
 #define GPIO_NOPULL                  0x00000000u
 #define GPIO_PULLUP                  0x00000001u
 #define GPIO_PULLDOWN                0x00000002u
@@ -78,7 +80,27 @@ typedef struct { int cur; }  ADC_HandleTypeDef;   /* scan-sequence rank */
 typedef struct { int id; }   UART_HandleTypeDef;
 
 typedef struct { volatile uint16_t CNT; } TIM_TypeDef;
-typedef struct { TIM_TypeDef *Instance; } TIM_HandleTypeDef;
+typedef struct {
+    uint32_t Prescaler, CounterMode, Period, ClockDivision,
+             AutoReloadPreload;
+} TIM_Base_InitTypeDef;
+typedef struct { TIM_TypeDef *Instance; TIM_Base_InitTypeDef Init; } TIM_HandleTypeDef;
+typedef struct {
+    uint32_t OCMode, Pulse, OCPolarity, OCFastMode;
+} TIM_OC_InitTypeDef;
+
+/* TIM10 is the backlight PWM timer (ili9341.c); regs live in hal_impl.c */
+extern TIM_TypeDef sim_tim10_regs;
+#define TIM10 (&sim_tim10_regs)
+
+#define TIM_COUNTERMODE_UP              0x0u
+#define TIM_CLOCKDIVISION_DIV1          0x0u
+#define TIM_AUTORELOAD_PRELOAD_DISABLE  0x0u
+#define TIM_OCMODE_PWM1                 0x60u
+#define TIM_OCPOLARITY_HIGH             0x0u
+#define TIM_OCPOLARITY_LOW              0x2u
+#define TIM_OCFAST_DISABLE              0x0u
+#define TIM_CHANNEL_1                   0x00000000u
 
 #define HAL_MAX_DELAY          0xFFFFFFFFu
 #define TIM_CHANNEL_ALL        0x0000003Cu
@@ -130,6 +152,10 @@ typedef struct {
 
 #define __HAL_TIM_GET_COUNTER(h)  ((h)->Instance->CNT)
 
+#define __HAL_RCC_TIM10_CLK_ENABLE()  do {} while (0)
+void sim_tim_set_compare(TIM_HandleTypeDef *h, uint32_t ch, uint32_t v);
+#define __HAL_TIM_SET_COMPARE(h, ch, v)  sim_tim_set_compare((h), (ch), (v))
+
 /* ---------------- Prototypes ---------------- */
 
 HAL_StatusTypeDef HAL_Init(void);
@@ -171,6 +197,11 @@ HAL_StatusTypeDef HAL_SPI_Transmit(SPI_HandleTypeDef *h, uint8_t *d,
                                    uint16_t n, uint32_t timeout);
 
 HAL_StatusTypeDef HAL_TIM_Encoder_Start(TIM_HandleTypeDef *h, uint32_t ch);
+HAL_StatusTypeDef HAL_TIM_PWM_Init(TIM_HandleTypeDef *h);
+HAL_StatusTypeDef HAL_TIM_PWM_ConfigChannel(TIM_HandleTypeDef *h,
+                                            TIM_OC_InitTypeDef *oc, uint32_t ch);
+HAL_StatusTypeDef HAL_TIM_PWM_Start(TIM_HandleTypeDef *h, uint32_t ch);
+HAL_StatusTypeDef HAL_TIM_PWM_Stop(TIM_HandleTypeDef *h, uint32_t ch);
 
 HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *h, uint8_t *d,
                                     uint16_t n, uint32_t timeout);

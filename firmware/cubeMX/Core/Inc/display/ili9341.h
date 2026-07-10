@@ -95,8 +95,9 @@ extern "C" {
  */
 void ILI9341_Init(SPI_HandleTypeDef *hspi_ptr);
 
-/* brightness 10-100%. real board: PWM on BCKL_CTRL (PB8, TIM10_CH1).
- * simulator: scale framebuffer pixels. */
+/* Brightness 0-100 %, PWM on BCKL_CTRL (PB8, TIM10_CH1 @ 20 kHz).
+ * Applied live when the backlight is on; falls back to plain on/off
+ * if the timer bring-up failed. */
 void ILI9341_SetBrightness(uint8_t pct);
 uint8_t ILI9341_GetBrightness(void);
 

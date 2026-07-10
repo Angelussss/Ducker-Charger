@@ -701,8 +701,8 @@ void Screen_Display_OnRotate(int8_t d)
 {
     if (_disp_edit && _disp_row == 0) {
         int v = ILI9341_GetBrightness() + d * 10;
+        /* live: SetBrightness reprograms the TIM10 PWM duty on the spot */
         ILI9341_SetBrightness((uint8_t)(v < 10 ? 10 : (v > 100 ? 100 : v)));
-        /* on real board: poke backlight PWM duty here */
     } else if (_disp_edit && _disp_row == 1) {
         _asleep_idx = (uint8_t)((_asleep_idx + (d > 0 ? 1 : 3)) % 4);
     } else {

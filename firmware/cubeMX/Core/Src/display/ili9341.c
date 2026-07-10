@@ -29,6 +29,10 @@
 /* SPI handle pointer saved during Init(). */
 static SPI_HandleTypeDef *_hspi = NULL;
 
+/* Backlight PWM bring-up (TIM10_CH1 on PB8), defined with the rest of
+ * the backlight code below. */
+static void bckl_pwm_init(void);
+
 /* =========================================================
  * CONTROL PIN MACROS
  *
@@ -100,6 +104,7 @@ void ILI9341_Init(SPI_HandleTypeDef *hspi_ptr)
 
     send_cmd(0x29);   /* Display On */
     HAL_Delay(25);
+    bckl_pwm_init();
     ILI9341_SetBrightness(100u);
 }
 
@@ -186,25 +191,89 @@ uint16_t ILI9341_RGB(uint8_t r, uint8_t g, uint8_t b)
 }
 
 /* =========================================================
- * BACKLIGHT (BCKL_CTRL / PB8)
+ * BACKLIGHT (BCKL_CTRL / PB8, PWM on TIM10_CH1)
  *
  * The backlight FET is selected by jumper JP402: in the PMOS position
  * the pin is ACTIVE LOW (low = backlight on), in the NMOS position it
  * is active high. Set DISP_BCKL_ACTIVE_LOW accordingly at bring-up.
- * Current implementation is plain on/off; true dimming needs PWM on
- * PB8 (TIM10_CH1) — TODO once the UI brightness page is exercised on
- * hardware.
+ *
+ * Dimming is PWM at 20 kHz — above both visible flicker and the audible
+ * range. The polarity is folded into the timer's OC polarity, so the
+ * duty register always reads "percent of time the backlight is lit"
+ * regardless of the jumper position.
  * ========================================================= */
 
 #define DISP_BCKL_ACTIVE_LOW  (1u)   /* JP402 in PMOS position */
 
+/* 84 MHz APB2 timer clock / 4200 = 20 kHz; 42 counts per percent, so
+ * CCR = pct * 42 and 100 % (CCR = ARR + 1) is a solid always-on level. */
+#define BCKL_PWM_PERIOD  (4200u - 1u)
+#define BCKL_PWM_STEP    (42u)
+
+static TIM_HandleTypeDef _htim_bckl;
 static uint8_t _brightness = 100u;
+static uint8_t _pwm_ready  = 0u;   /* 0 = fall back to plain on/off GPIO */
+
+/* Runtime promotion of PB8 from the .ioc's plain GPIO to TIM10_CH1 —
+ * same pattern as encoder.c re-configuring PC0 as EXTI, so no CubeMX
+ * regeneration is needed. Called once from ILI9341_Init(); on any HAL
+ * failure _pwm_ready stays 0 and the backlight degrades to on/off. */
+static void bckl_pwm_init(void)
+{
+    __HAL_RCC_TIM10_CLK_ENABLE();
+
+    _htim_bckl.Instance               = TIM10;
+    _htim_bckl.Init.Prescaler         = 0u;
+    _htim_bckl.Init.CounterMode       = TIM_COUNTERMODE_UP;
+    _htim_bckl.Init.Period            = BCKL_PWM_PERIOD;
+    _htim_bckl.Init.ClockDivision     = TIM_CLOCKDIVISION_DIV1;
+    _htim_bckl.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+    if (HAL_TIM_PWM_Init(&_htim_bckl) != HAL_OK)
+        return;
+
+    TIM_OC_InitTypeDef oc = {0};
+    oc.OCMode     = TIM_OCMODE_PWM1;
+    oc.Pulse      = (uint32_t)_brightness * BCKL_PWM_STEP;
+    /* PWM1 drives the ACTIVE level while CNT < CCR: with the PMOS
+     * (active-low) jumper position the active level must be low. */
+    oc.OCPolarity = DISP_BCKL_ACTIVE_LOW ? TIM_OCPOLARITY_LOW
+                                         : TIM_OCPOLARITY_HIGH;
+    oc.OCFastMode = TIM_OCFAST_DISABLE;
+    if (HAL_TIM_PWM_ConfigChannel(&_htim_bckl, &oc, TIM_CHANNEL_1) != HAL_OK)
+        return;
+
+    _pwm_ready = 1u;
+}
 
 void ILI9341_Backlight(uint8_t on)
 {
+    GPIO_InitTypeDef gpio = {0};
+    gpio.Pin   = BCKL_CTRL_Pin;
+    gpio.Pull  = GPIO_NOPULL;
+    gpio.Speed = GPIO_SPEED_FREQ_LOW;
+
+    if (on && _pwm_ready) {
+        __HAL_TIM_SET_COMPARE(&_htim_bckl, TIM_CHANNEL_1,
+                              (uint32_t)_brightness * BCKL_PWM_STEP);
+        HAL_TIM_PWM_Start(&_htim_bckl, TIM_CHANNEL_1);
+        gpio.Mode      = GPIO_MODE_AF_PP;
+        gpio.Alternate = GPIO_AF3_TIM10;
+        HAL_GPIO_Init(BCKL_CTRL_GPIO_Port, &gpio);
+        return;
+    }
+
+    /* Off (or PWM unavailable): demote the pin to plain GPIO at a
+     * definite level. Mandatory before DEEP_SLEEP: STOP mode freezes
+     * timer clocks, and a pin left in AF mode would stick at whatever
+     * PWM phase it happened to be in — possibly backlight ON inside a
+     * ~20 uA power budget. */
+    if (_pwm_ready)
+        HAL_TIM_PWM_Stop(&_htim_bckl, TIM_CHANNEL_1);
+    gpio.Mode = GPIO_MODE_OUTPUT_PP;
+    HAL_GPIO_Init(BCKL_CTRL_GPIO_Port, &gpio);
+
     GPIO_PinState lvl_on  = DISP_BCKL_ACTIVE_LOW ? GPIO_PIN_RESET : GPIO_PIN_SET;
     GPIO_PinState lvl_off = DISP_BCKL_ACTIVE_LOW ? GPIO_PIN_SET   : GPIO_PIN_RESET;
-
     HAL_GPIO_WritePin(BCKL_CTRL_GPIO_Port, BCKL_CTRL_Pin,
                       on ? lvl_on : lvl_off);
 }
@@ -213,7 +282,7 @@ void ILI9341_SetBrightness(uint8_t pct)
 {
     if (pct > 100u) pct = 100u;
     _brightness = pct;
-    ILI9341_Backlight(pct > 0u);
+    ILI9341_Backlight(pct > 0u);   /* re-applies the duty when already on */
 }
 
 uint8_t ILI9341_GetBrightness(void)

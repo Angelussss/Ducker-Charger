@@ -358,6 +358,72 @@ HAL_StatusTypeDef HAL_SPI_Transmit(SPI_HandleTypeDef *h, uint8_t *d,
 HAL_StatusTypeDef HAL_TIM_Encoder_Start(TIM_HandleTypeDef *h, uint32_t ch)
 { (void)h; (void)ch; return HAL_OK; }
 
+/* ---- TIM10_CH1 PWM: backlight dimming ----
+ * Board knowledge (like the pin_name table): TIM10_CH1 drives BCKL_CTRL
+ * (PB8). The panel model only needs a level, so the PWM collapses to
+ * "duty > 0 = active level on the pin", polarity taken from the OC
+ * config the firmware wrote — exactly the JP402 semantics ili9341.c
+ * folds into TIM_OCPOLARITY. Duty percent is logged so brightness
+ * changes are observable headless. */
+TIM_TypeDef sim_tim10_regs;
+
+static struct {
+    int running, active_low;
+    uint32_t ccr, period;
+} bckl_pwm;
+
+static void bckl_pwm_apply(void)
+{
+    if (!bckl_pwm.running)
+        return;
+    int active = bckl_pwm.ccr > 0;
+    int lv = bckl_pwm.active_low ? !active : active;
+    HAL_GPIO_WritePin(&sim_GPIOB, GPIO_PIN_8,
+                      lv ? GPIO_PIN_SET : GPIO_PIN_RESET);
+}
+
+HAL_StatusTypeDef HAL_TIM_PWM_Init(TIM_HandleTypeDef *h)
+{
+    if (h->Instance != TIM10) return HAL_ERROR;
+    bckl_pwm.period = h->Init.Period + 1u;
+    return HAL_OK;
+}
+
+HAL_StatusTypeDef HAL_TIM_PWM_ConfigChannel(TIM_HandleTypeDef *h,
+                                            TIM_OC_InitTypeDef *oc, uint32_t ch)
+{
+    (void)h; (void)ch;
+    bckl_pwm.ccr        = oc->Pulse;
+    bckl_pwm.active_low = (oc->OCPolarity == TIM_OCPOLARITY_LOW);
+    return HAL_OK;
+}
+
+HAL_StatusTypeDef HAL_TIM_PWM_Start(TIM_HandleTypeDef *h, uint32_t ch)
+{
+    (void)h; (void)ch;
+    bckl_pwm.running = 1;
+    bckl_pwm_apply();
+    return HAL_OK;
+}
+
+HAL_StatusTypeDef HAL_TIM_PWM_Stop(TIM_HandleTypeDef *h, uint32_t ch)
+{
+    (void)h; (void)ch;
+    bckl_pwm.running = 0;
+    return HAL_OK;
+}
+
+void sim_tim_set_compare(TIM_HandleTypeDef *h, uint32_t ch, uint32_t v)
+{
+    (void)h; (void)ch;
+    if (v != bckl_pwm.ccr && bckl_pwm.period) {
+        sim_log("[DISP] backlight PWM duty %lu%%",
+                (unsigned long)(v * 100u / bckl_pwm.period));
+    }
+    bckl_pwm.ccr = v;
+    bckl_pwm_apply();
+}
+
 HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *h, uint8_t *d,
                                     uint16_t n, uint32_t to)
 { (void)h; (void)to; fwrite(d, 1, n, stderr); return HAL_OK; }
