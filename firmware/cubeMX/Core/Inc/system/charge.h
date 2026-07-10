@@ -136,17 +136,13 @@ void enable_USBC2();
 void disable_USBC2();
 
 /** EN_OTG (PB15): gates whether the BQ25713 is allowed into OTG mode
- *  (C1 sourcing power out, i.e. discharging the pack). See charge.c for
- *  why this pin is a real kill switch, not just a status readback. */
+ *  (C1 sourcing power). See charge.c — it's a real kill switch, not a
+ *  status readback. */
 void enable_OTG();
 void disable_OTG();
 
-/** User ceiling on the C2 output (UI OUTPUT page). CYPD3175 only negotiates
- *  the PD contract; STPD01 is what actually drives the rail (shared with
- *  the Lab output), so this is a real clamp applied on top of whatever PD
- *  negotiated — it can only lower the delivered voltage/current, never
- *  raise it above the contract. Takes effect immediately if C2 is already
- *  connected and negotiated; otherwise it's stored for the next contract. */
+/** Ceiling on the C2 output (UI OUTPUT page): clamps what PD negotiated,
+ *  never raises it. Live if C2 is connected, else stored for next time. */
 void setSecondaryUSBC_VoltageCeiling(float mv);
 void setSecondaryUSBC_CurrentCeiling(float ma);
 
@@ -178,12 +174,9 @@ int get_STPD01_Enabled();
  *  interlock, this is the physical readback. */
 int get_LAB_Status();
 
-/** Voltage / current limit the STPD01 was last programmed to by
- *  setupSTPD01(), decoded back from the register encoding (so it is the
- *  quantized value the rail actually holds, not the requested one).
- *  The converter has no readback and its rail has no shunt, so this is
- *  the firmware's only knowledge of that rail's voltage. 0 before the
- *  first successful setupSTPD01(). */
+/** Voltage / current STPD01 was last programmed to (decoded from the
+ *  register encoding — the converter has no readback). 0 before the
+ *  first setupSTPD01() call. */
 float getSTPD01_SetpointVoltage();
 float getSTPD01_SetpointCurrent();
 

@@ -1266,10 +1266,8 @@ static void out_draw_rows(void)
     OutputChannel_t *ch = &_out_ch[_out_cur];
     char buf[32], v[8];
 
-    /* Row 0: enable — live pin (get_USBC2_Status), not the cached flag:
-     * this only ever runs for C2 (Lab returns above), and the connection
-     * interrupt can enable this port autonomously — see
-     * Screen_Output_RowStatus for the same reasoning. */
+    /* Row 0: enable — live pin, not the cached flag (only C2 reaches
+     * here; see Screen_Output_RowStatus). */
     snprintf(buf, sizeof(buf), "%-12s [%s]", "Enable",
              get_USBC2_Status() ? "ON " : "OFF");
     Widget_MenuRow_Draw(10, SETTINGS_ROW_START, 220, SETTINGS_ROW_H - 4,

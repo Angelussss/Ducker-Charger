@@ -273,14 +273,9 @@ static void DeepSleep_Enter(FSM *fsm) {
   disable_OTG();
   ILI9341_Backlight(0);
 
-  /* Encoder button (EXTI0) is the sole configured wake source — any press
-   * brings the clock back, but a genuine wake is only honored while a
-   * charger is present (HP_CHRG_OK, PB13): press the button with nothing
-   * plugged in and this loops straight back into STOP, transparently —
-   * screen and ports never come back, no event ever fires. This is a
-   * policy gate, not a second wake source: CHRG_OK is a plain input here,
-   * not an EXTI line, so it can never wake the MCU on its own (plugging in
-   * a charger while the button is untouched leaves it asleep). */
+  /* Button (EXTI0) is the sole wake source, but a wake only sticks if a
+   * charger is present (CHRG_OK, plain input, not an EXTI line): without
+   * one this loops straight back into STOP, transparently. */
   do {
     HAL_SuspendTick();
     HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);

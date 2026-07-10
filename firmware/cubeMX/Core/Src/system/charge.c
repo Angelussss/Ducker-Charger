@@ -64,12 +64,9 @@ int LAB_EN_STATUS = GPIO_PIN_RESET;
 static float stpd01_setpoint_mV = 0.0f;
 static float stpd01_setpoint_mA = 0.0f;
 
-// User-configurable ceiling on the C2 output (UI OUTPUT page, USB-C2 tab).
-// CYPD3175 only negotiates the PD contract; STPD01 is what actually produces
-// the rail (same converter as the Lab output, see setupSTPD01 call sites
-// below), so a ceiling is a real, physical clamp — never above what PD
-// negotiated, only below it. Defaults match STPD01's own max VOUT/ILIM, so
-// the clamp is a no-op until the user actually lowers one.
+// User ceiling on the C2 output (UI OUTPUT page): STPD01 produces the rail,
+// so this clamps what PD negotiated, never raises it. Defaults to STPD01's
+// max, so the clamp is a no-op until lowered.
 static float secondaryUSBC_voltageCeiling_mV = 20000.0f;
 static float secondaryUSBC_currentCeiling_mA = 3000.0f;
 
@@ -551,14 +548,11 @@ void primaryUSBC_ConnectionINT() {
     bool plugInsertOrRemoval = (eventBuffer[0] >> 3) & 0x01;    // USB Plug Status has Changed
     bool newContractAsCons = (eventBuffer[1] >> 4) & 0x01;      // Far-end source has accepted an RDO sent by the PD Controller as a Sink
     bool newContractAsProv = (eventBuffer[1] >> 5) & 0x01;      // An RDO from the far-end device has been accepted and the PD Controller is a Source
-    bool usbHostPresent = (eventBuffer[2] >> 4) & 0x01;         // Set when STATUS.UsbHostPresent transitions to 11b
-    bool usbHostPresentNoLonger = (eventBuffer[2] >> 5) & 0x01;          // Set when STATUS.UsbHostPresent transitions to anything other than 11b
     bool powerStatusUpdate = (eventBuffer[3] >> 0) & 0x01;      // Set if Power Status changes
 
     // Read from PowerStatus
-    bool powerConnection;       // Asserted if there is a connection
-    bool sourceSink;            // Source / Sink indicator
-    uint8_t typeCCurrent;       // If the port is connected as source, the field is updated upon initial connection only (useful for sink mode only)
+    bool powerConnection = false;   // Asserted if there is a connection
+    bool sourceSink      = false;   // Source / Sink indicator
     // For having more details about newContractAsCons and newContractAsProv, see ACTIVE_CONTRACT_PDO register (0x34) and ACTIVE_CONTRACT_RDO register (0x35)
 
     if (powerStatusUpdate) {
@@ -570,7 +564,6 @@ void primaryUSBC_ConnectionINT() {
         }
         powerConnection = (powerStatusBuffer[0] >> 0) & 0x01;
         sourceSink = (powerStatusBuffer[0] >> 1) & 0x01;
-        typeCCurrent = (powerStatusBuffer[0] >> 2) & 0x03;
     }
 
     // Check the AND gate in the if below
@@ -582,14 +575,9 @@ void primaryUSBC_ConnectionINT() {
             if (sourceSink) {
                 event_push(EVT_CHARGER_CONNECTED);
             } else {
-                // We are the source (OTG): BQ25713 needs EN_OTG (PB15) driven
-                // HIGH on top of the TPS25750 PD role before it will actually
-                // output anything (ChargeOption3.EN_OTG in the BQ25713 TRM is
-                // an AND with the pin, not an either/or — see disable_OTG()).
-                // Same auto-enable gate as the C2/STPD01 path above: only
-                // where outputs are allowed to be open (protection states
-                // already forced this pin low and must not be silently
-                // re-opened by a plug event arriving right after).
+                // Source (OTG): BQ25713 also needs EN_OTG driven HIGH (see
+                // disable_OTG()). Same auto-enable gate as the C2/STPD01
+                // path above.
                 State_ID_t st = PB_FSM_ActiveState();
                 if (st == STATE_IDLE || st == STATE_SLEEP)
                     enable_OTG();
@@ -792,15 +780,9 @@ void secondaryUSBC_ConnectionINT() {
         secondaryUSBC_PDContract.maxCurrent       = maxCurrentRaw * 10.0f;
         secondaryUSBC_PDContract.operatingCurrent = opCurrentRaw  * 10.0f;
 
-        // FSM gate: this handler runs from readCS() in nearly every state,
-        // and used to re-open STPD01/C2 unconditionally — including right
-        // after SAFETY_LOCK / LOW_V / CHARGING had shut every output to
-        // protect the pack. Auto-enable only where outputs are allowed:
-        //   IDLE, SLEEP (powerbank at rest — plugging a device is the
-        //   normal use case). Everywhere else the event is already acked
-        //   (INTR cleared above) and the contract stored; the output stays
-        //   off, replug once the state allows it. MANUAL is excluded too:
-        //   there the STPD01 rail belongs to the lab output (UI interlock).
+        // Auto-enable only where outputs are allowed (IDLE/SLEEP); MANUAL
+        // is excluded since the STPD01 rail belongs to the lab output.
+        // Elsewhere the contract is stored but the output stays off.
         {
             State_ID_t st = PB_FSM_ActiveState();
             if (st != STATE_IDLE && st != STATE_SLEEP)
@@ -962,12 +944,9 @@ void disable_USBC2() {
     USBC2_STATUS = false;
 }
 
-// EN_OTG (PB15): BQ25713 datasheet ChargeOption3.EN_OTG description —
-// "Enable device in OTG mode when EN_OTG pin is HIGH" — OTG (C1 sourcing
-// power out, discharging the pack) requires this pin HIGH *and* the I2C
-// bit TPS25750 sets once a sink device is negotiated. Either side alone
-// is not enough, so the MCU holding this LOW is a real, independent kill
-// switch on C1 ever discharging the battery — not just a status readback.
+// EN_OTG (PB15): OTG needs this pin HIGH *and* the I2C bit TPS25750 sets
+// (BQ25713 ChargeOption3.EN_OTG) — either alone isn't enough, so the MCU
+// holding this low is a real kill switch on C1 discharging the battery.
 void enable_OTG() {
     HAL_GPIO_WritePin(USB_OTG_CTRL_GPIO_Port, USB_OTG_CTRL_Pin, GPIO_PIN_SET);
     EN_OTG_STATUS = true;

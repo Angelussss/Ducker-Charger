@@ -191,16 +191,10 @@ uint16_t ILI9341_RGB(uint8_t r, uint8_t g, uint8_t b)
 }
 
 /* =========================================================
- * BACKLIGHT (BCKL_CTRL / PB8, PWM on TIM10_CH1)
+ * BACKLIGHT (BCKL_CTRL / PB8, PWM on TIM10_CH1 @ 20 kHz)
  *
- * The backlight FET is selected by jumper JP402: in the PMOS position
- * the pin is ACTIVE LOW (low = backlight on), in the NMOS position it
- * is active high. Set DISP_BCKL_ACTIVE_LOW accordingly at bring-up.
- *
- * Dimming is PWM at 20 kHz — above both visible flicker and the audible
- * range. The polarity is folded into the timer's OC polarity, so the
- * duty register always reads "percent of time the backlight is lit"
- * regardless of the jumper position.
+ * JP402 selects the FET polarity (DISP_BCKL_ACTIVE_LOW); folded into the
+ * timer's OC polarity so the duty register always means "% lit".
  * ========================================================= */
 
 #define DISP_BCKL_ACTIVE_LOW  (1u)   /* JP402 in PMOS position */
@@ -262,11 +256,9 @@ void ILI9341_Backlight(uint8_t on)
         return;
     }
 
-    /* Off (or PWM unavailable): demote the pin to plain GPIO at a
-     * definite level. Mandatory before DEEP_SLEEP: STOP mode freezes
-     * timer clocks, and a pin left in AF mode would stick at whatever
-     * PWM phase it happened to be in — possibly backlight ON inside a
-     * ~20 uA power budget. */
+    /* Demote to plain GPIO at a definite level. Mandatory before
+     * DEEP_SLEEP: STOP mode freezes timer clocks, so a pin left in AF
+     * mode would stick wherever its PWM phase happened to be. */
     if (_pwm_ready)
         HAL_TIM_PWM_Stop(&_htim_bckl, TIM_CHANNEL_1);
     gpio.Mode = GPIO_MODE_OUTPUT_PP;

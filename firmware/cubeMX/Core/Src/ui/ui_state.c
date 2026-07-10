@@ -402,19 +402,10 @@ void UI_Tick(void)
                     }
                     else      /* CONFIRM_SHUTDOWN */
                     {
-                        /* Same primitive a real long-press produces
-                         * (main.c). The transition table only honors it
-                         * from IDLE/SLEEP (fsm.c) — same gate hardware is
-                         * subject to — so this can't force DEEP_SLEEP out
-                         * of CHARGING or a protection state; it just asks,
-                         * same as holding the button would. Navigate back
-                         * regardless, same as the LOCKALL branch above: if
-                         * the event is honored, DeepSleep_Enter blocks in
-                         * STOP mode right after and UI_Tick() never runs
-                         * again until UI_OnDeepSleepWake() resets the
-                         * screen anyway; if it wasn't (wrong state), this
-                         * is what keeps the confirm dialog from being
-                         * stuck open with nothing left to do. */
+                        /* Same event a real long-press produces; the FSM
+                         * gate (fsm.c) decides if it's honored. Navigate
+                         * back regardless, so a refused request doesn't
+                         * leave the dialog stuck open. */
                         event_push(EVT_BUTTON_LONG);
                         UI_NavigateTo(_confirm_return);
                     }

@@ -77,12 +77,9 @@ void board_tick(uint32_t wall_dms)
     } else {
         board.lab_ma = 0.0f;
     }
-    /* C1 sourcing: OTG mode needs BOTH the provider contract on the private
-     * I2C_EX bus AND EN_OTG (PB15) driven HIGH by the MCU (BQ25713 TRM,
-     * ChargeOption3.EN_OTG: "Enable device in OTG mode when EN_OTG pin is
-     * HIGH" — an AND condition, not an either/or). The FSM holds this pin
-     * low in every protection state, so C1 can't discharge the pack there
-     * even with a sink device still plugged in. */
+    /* C1 sourcing needs both the PD contract AND EN_OTG (PB15) driven HIGH
+     * (BQ25713 ChargeOption3.EN_OTG is an AND, not an either/or) — the FSM
+     * holds this low in every protection state. */
     int otg_en = sim_gpio_get(1, 15);        /* PB15                 */
     board.c1_out_ma = (otg_en && board.c1_device_attached)
                      ? (float)cfg.c1src_ma : 0.0f;

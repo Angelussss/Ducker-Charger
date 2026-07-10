@@ -358,13 +358,9 @@ HAL_StatusTypeDef HAL_SPI_Transmit(SPI_HandleTypeDef *h, uint8_t *d,
 HAL_StatusTypeDef HAL_TIM_Encoder_Start(TIM_HandleTypeDef *h, uint32_t ch)
 { (void)h; (void)ch; return HAL_OK; }
 
-/* ---- TIM10_CH1 PWM: backlight dimming ----
- * Board knowledge (like the pin_name table): TIM10_CH1 drives BCKL_CTRL
- * (PB8). The panel model only needs a level, so the PWM collapses to
- * "duty > 0 = active level on the pin", polarity taken from the OC
- * config the firmware wrote — exactly the JP402 semantics ili9341.c
- * folds into TIM_OCPOLARITY. Duty percent is logged so brightness
- * changes are observable headless. */
+/* TIM10_CH1 drives BCKL_CTRL (PB8). The panel only needs a level, so PWM
+ * collapses to "duty > 0 = active level", polarity from the firmware's
+ * own OC config. Logged so brightness changes are visible headless. */
 TIM_TypeDef sim_tim10_regs;
 
 static struct {
