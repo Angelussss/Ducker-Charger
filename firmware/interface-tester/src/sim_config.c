@@ -5,7 +5,7 @@
 /* defaults = the usual demo numbers */
 SimCfg simcfg = {
     .soc = 73, .pack_mv = 15420, .batt_ma = 2150, .batt_ripple = 2200,
-    .temp_c = 31, .vbus = 1, .full = 0, .phase = 2,
+    .temp_c = 31, .vbus = 1, .full = 0, .phase = 1,
     .port = {
         { 1,  5000, 1800, 350 },   /* A1 */
         { 0,  5000,    0,   0 },   /* A2 */
@@ -38,8 +38,6 @@ int SimConfig_Load(const char *path)
         {"c2_ma",      &simcfg.port[3].ma},     {"c2_ripple", &simcfg.port[3].ripple},
         {"lab_active", &simcfg.port[4].active}, {"lab_mv", &simcfg.port[4].mv},
         {"lab_ma",     &simcfg.port[4].ma},     {"lab_ripple", &simcfg.port[4].ripple},
-        {"cell1_mv", &simcfg.cell_mv[0]}, {"cell2_mv", &simcfg.cell_mv[1]},
-        {"cell3_mv", &simcfg.cell_mv[2]}, {"cell4_mv", &simcfg.cell_mv[3]},
         {"cycles", &simcfg.cycles}, {"health", &simcfg.health},
         {"cap_full_mah", &simcfg.cap_full_mah}, {"cap_design_mah", &simcfg.cap_design_mah},
         {"charges", &simcfg.charges}, {"max_temp_c", &simcfg.max_temp_c},

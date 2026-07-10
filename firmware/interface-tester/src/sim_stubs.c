@@ -48,7 +48,6 @@ uint8_t Encoder_IsHeld(void)   { return enc_held; }
 
 /* ---- telemetry stub: believable fake numbers + sine history ---- */
 SystemTelemetry_t telemetry;
-uint16_t cell_mv[4];
 uint16_t tte_min, ttf_min;
 PortStats_t port_stats[5];
 SystemStats_t sys_stats;
@@ -121,9 +120,6 @@ void sim_telemetry_fill(void)
     telemetry.temp_celsius = (int16_t)simcfg.temp_c;
     telemetry.is_charging  = (simcfg.batt_ma > 0);
     telemetry.over_temp    = (simcfg.temp_c >= 60);   /* demo threshold */
-    for (int i = 0; i < 4; i++)
-        cell_mv[i] = simcfg.cell_mv[i] ? (uint16_t)simcfg.cell_mv[i]
-                                       : (uint16_t)(simcfg.pack_mv / 4);
     tte_min = (uint16_t)simcfg.tte_min;
     ttf_min = (uint16_t)simcfg.ttf_min;
     telemetry.vbus_present = (uint8_t)simcfg.vbus;

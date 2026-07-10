@@ -43,7 +43,7 @@ Key fields:
 | `batt_ripple` | Sine amplitude on `batt_ma` (0 = flat line on graph) |
 | `temp_c` | Battery temperature in °C |
 | `vbus` | 1 = USB-C charger plugged in |
-| `phase` | Charger phase: 0 idle · 1 pre-charge · 2 fast · 3 taper |
+| `phase` | Charger phase: 0 idle · 1 charging (the real UI can't tell pre-charge/taper apart — the chip that knows sits on a bus this MCU can't reach) |
 | `a1/a2/c1/c2/lab_active` | Port enabled/disabled |
 | `*_mv` / `*_ma` / `*_ripple` | Per-port voltage, current, graph ripple |
 | `tte_min` / `ttf_min` | Time-to-empty / time-to-full shown under SoC |
