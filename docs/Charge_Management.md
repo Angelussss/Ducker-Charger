@@ -22,7 +22,11 @@ This document covers the implementation of the charge management system of the D
 - Detecting faults (e.g. short circuit, over-temperature, etc...) and throwing interrupts accordingly
 - Reading status registers and flags of different key components (`BQ34Z100-R2`, `INA3221`, `TPS25750`, `CYPD3175`, `STPD01`) via two different `I2C` channels
 - Monitoring the secondary USB-C PD controller (`CYPD3175`) via HPI, reading the negotiated contract, configuring accordingly the power delivery and enabling/disabling the secondary USB-C port and the power delivery component
+- Gating the primary port's OTG (source) mode through `EN_OTG` (PB15) — enabled only when a sink device negotiates while the FSM allows outputs, dropped on unplug and in every protection state
+- Applying the user-configurable output ceiling on the secondary USB-C port (`setSecondaryUSBC_VoltageCeiling/CurrentCeiling`): the delivered rail is `min(ceiling, negotiated contract)` — the ceiling can only lower what PD negotiated, never raise it
 - Providing ready-to-use get functions for easy data fetch regarding sensors, statuses and components read
+
+All TPS25750 register access goes through `system/tps25750_io.c`: the host interface is length-prefixed on the wire (a read returns `[len][data...]`, a write is `[reg][len][data...]`), which `HAL_I2C_Mem_*` cannot produce — hence the dedicated `tps25750_read()`/`tps25750_write()` helpers on I2C3.
 
 
 ---
@@ -89,9 +93,10 @@ Signals used to enable power rails and modes.
 | ------------- | --------- | ----------------- | ------------------------------------- |
 | `USB_A1_CTRL` | PC1       | Q10 (Load Switch) | Enable USB-A Port 1 Output (5V)       |
 | `USB_A2_CTRL` | PC2       | Q11 (Load Switch) | Enable USB-A Port 2 Output (5V)       |
-| `USB_C2_CTRL` | PA12      | *(To be defined)* | Enable Secondary USB-C Port Output    |
-| `HP.EN_OTG`   | PB15      | U1/U2             | Enable OTG (Reverse Power) on HP Port |
-| `LP_ST_EN`    | PC11      | U3 (Enable Pin)   | Enable Aux Converter (V_OUT_AUX)      |
+| `C2_PORT_EN`  | PA12      | Port FET          | Route the STPD01 rail to the USB-C2 connector |
+| `C2_LAB_EN`   | PA11      | Lab FET           | Route the STPD01 rail to the Lab output (interlocked with `C2_PORT_EN`) |
+| `HP.EN_OTG`   | PB15      | BQ25713 EN_OTG    | Enable OTG (Reverse Power) on C1 — see the Primary USB-C section |
+| `STPD01_EN`   | PC11      | STPD01 Enable Pin | Enable the shared C2/Lab buck converter |
 
 #### Interrupts & Status Inputs
 
@@ -264,7 +269,9 @@ The CYPD3175 (Cypress EZ-PD CCG3PA) uses the **HPI (Host Processor Interface)** 
 
 ### I2C3
 
-#### TPS25750 Register Map @ 0x20 / 0x21 (to check)
+#### TPS25750 Register Map @ 0x20
+
+All access is length-prefixed (see `system/tps25750_io.c`): reads return `[len][data...]`, writes send `[reg][len][data...]`. The byte counts below are payload sizes, excluding the length prefix.
 
 | Register Name         | Addr (LSB/MSB) | Access | Bytes | Description                                                                                                                                     |
 | :-------------------- | :------------- | :----- | :---: | :---------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -328,7 +335,11 @@ The primary USB-C allows for both source and sink connections. This port is also
 - `NewContractAsCons` detects a new contract negotiated with our device acting as **sink** (consumer)
 - `NewContractAsProv` detects a new contract negotiated with our device acting as **source** (provider)
 
-If both `PlugInsertOrRemoval` and `PowerStatusUpdate` are set, the firmware reads the `POWER_STATUS` register and updates the port's connection state and, if connected, whether the powerbank is acting as source or sink.
+If both `PlugInsertOrRemoval` and `PowerStatusUpdate` are set, the firmware reads the `POWER_STATUS` register and updates the port's connection state and, if connected, whether the powerbank is acting as source or sink:
+
+- **Sink** (being charged): `EVT_CHARGER_CONNECTED` is pushed and the FSM enters CHARGING.
+- **Source** (OTG, powering a device): the firmware raises `EN_OTG` (PB15) via `enable_OTG()` — but only while the FSM is in IDLE or SLEEP, the same auto-enable gate used for the secondary port. Per the BQ25713 TRM, OTG output requires this pin HIGH **and** the `ChargeOption3.EN_OTG` I2C bit the TPS25750 sets on its private bus — an AND condition, so the MCU holding the pin low is an independent kill switch on C1 discharging the pack (protection-state `onEnter` handlers rely on exactly this).
+- **Unplug**: `disable_OTG()` runs before `EVT_CHARGER_DISCONNECTED` is pushed.
 
 If the port is connected and either `NewContractAsCons` or `NewContractAsProv` is set, the firmware reads the `ACTIVE_CONTRACT_PDO` register and checks the `PDO Type` field. If the contract is not Fixed-Voltage type, it is rejected; otherwise, the firmware extracts the `Voltage` and `Maximum Current` from the PDO, then reads the `ACTIVE_CONTRACT_RDO` in order to extract the `Operating Current`.
 
@@ -346,7 +357,9 @@ The function reads `INTR_REG` (0x0006) to confirm a port 0 interrupt (bit 1), th
 2. **OTP** (code 0xB6): USB-C2 and STPD01 are disabled, negotiation is cleared, and `EVT_FAULT_OT` is pushed.
 3. **Hard Reset** (code 0x8F): STPD01 and USB-C2 are disabled and negotiation is cleared; `isPlugged` stays true because the device is still physically present and the CYPD3175 re-advertises automatically.
 4. **Disconnect** (code 0x85): contract and connection state are cleared, both STPD01 and USB-C2 are disabled.
-5. **Contract complete** (code 0x86): `PORT0_CURRENT_PDO` (0x1010) and `PORT0_CURRENT_RDO` (0x1014) are read to extract the negotiated `Voltage`, `Maximum Current`, and `Operating Current` using the standard USB PD Fixed PDO/RDO bit mapping. These values are used to configure the `STPD01` via `setupSTPD01()`. The STPD01 is then enabled with a 10 ms stabilization delay, after which `checkSTPD01()` verifies no post-setup fault is active. If healthy, the USB-C2 output is enabled and the contract is marked as negotiated.
+5. **Contract complete** (code 0x86): `PORT0_CURRENT_PDO` (0x1010) and `PORT0_CURRENT_RDO` (0x1014) are read to extract the negotiated `Voltage`, `Maximum Current`, and `Operating Current` using the standard USB PD Fixed PDO/RDO bit mapping. The output is then applied through `secondaryUSBC_ApplyOutput()` — the single path shared with the ceiling setters, so a fresh contract and a live ceiling change can never diverge. It clamps the contract to the user ceiling (`min(ceiling, contract)` on both voltage and current — the CYPD3175 only negotiates; the STPD01 is what physically produces the rail, so the clamp is a real limit), configures the `STPD01` via `setupSTPD01()`, and enables it with a 10 ms stabilization delay, after which `checkSTPD01()` verifies no post-setup fault is active. If healthy, the USB-C2 output is enabled and the contract is marked as negotiated. A state gate applies before any of this: auto-enable only runs while the FSM is in IDLE or SLEEP — everywhere else the event is acked and the contract stored, but the output stays off (MANUAL is excluded too: there the STPD01 rail belongs to the Lab output).
+
+Changing the ceiling from the UI while a device is already connected and negotiated re-runs `secondaryUSBC_ApplyOutput()` immediately — the rail is reprogrammed live, no replug needed. Since the STPD01 offers no VOUT/ILIM readback and its rail carries no shunt (INA3221 ch3 is grounded), `setupSTPD01()` records the register-decoded setpoint, exposed via `getSTPD01_SetpointVoltage()/Current()` — the quantized value the rail actually holds, which telemetry and the UI use as the source of truth for that rail.
 
 ---
 

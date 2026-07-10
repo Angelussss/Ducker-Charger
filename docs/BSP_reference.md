@@ -67,8 +67,8 @@ The system uses two separate I2C buses to isolate High Power (PD) negotiation fr
 
 | Device | IC | Address (7-bit) | Firmware Role |
 | --- | --- | --- | --- |
-| **PD Controller** | **TPS25750** | **0x20** (or 0x21) | **Primary Target.** Query for PD Contracts & Status. |
-| **Charger** | **BQ25713** | **0x6B** | **Secondary.** Slave to TPS. Monitor only if direct charger access is needed. |
+| **PD Controller** | **TPS25750** | **0x20** | **Primary Target.** Query for PD Contracts & Status. Length-prefixed host interface — access via `system/tps25750_io.c` only. |
+| **Charger** | **BQ25713** | — | **Not on this bus.** Slaved to the TPS25750 on their private `I2C_EX`; unreachable from the MCU. Its MCU-visible signals are the analog IADPT/IBAT/PSYS pins (ADC1) and the CHRG_OK / EN_OTG GPIOs. |
 
 ### 3.2 Low Power Bus (I2C_LP) - "Control Mode"
 
@@ -76,20 +76,10 @@ The system uses two separate I2C buses to isolate High Power (PD) negotiation fr
 
 | Device | IC | Address (7-bit) | Function & Configuration |
 | --- | --- | --- | --- |
-| **Power Monitor** | **INA3221** | **0x40** | **USB-A & Aux Current.**<br>
-
-<br> *Init:* Enable CH1 (USB-A1), CH2 (USB-A2), CH3 (Aux). <br>
-
-<br> *Shunts:* All 10 mOhm. |
-| **Fuel Gauge** | **BQ34Z100-R2** | **0x55** | **Battery SoC.**<br>
-
-<br> Read `Voltage()`, `Current()`, `StateOfCharge()`. |
-| **Sec. USB-C** | **STUSB4710** | **0x28** | **Low Power Port.**<br>
-
-<br> Read attachment status. |
-| **Aux Reg.** | **STPD01PUR** | **0x54** (Verify) | **V_OUT_AUX Control.**<br>
-
-<br> Set voltage and monitor Faults. |
+| **Power Monitor** | **INA3221** | **0x40** | **USB-A Current.** *Init:* CH1 (USB-A1) + CH2 (USB-A2) enabled; CH3 is tied to GND on this board. *Shunts:* 10 mOhm. |
+| **Fuel Gauge** | **BQ34Z100-R2** | **0x55** | **Battery SoC.** Behind the ISO1540 isolator (battery side). Full register map below. |
+| **Sec. USB-C PD** | **CYPD3175** (EZ-PD CCG3PA) | **0x08** | **Secondary port PD controller.** HPI protocol, 16-bit register addresses. Negotiates autonomously; MCU reads events/contract. |
+| **Sec. USB-C Reg.** | **STPD01PUR** | **0x05** | **Programmable buck for the C2/Lab rail.** `ADD` pin grounded per netlist → 0x05. Set VOUT/ILIM, monitor faults. |
 
 ### 3.2.1 BQ34Z100-R2 Register Map (Fuel Gauge, I2C_LP @ 0x55)
 
@@ -126,7 +116,8 @@ must be multiplied by that scale to obtain real units.
 | High | OTC | OTD | BATHI | BATLOW | CHG_INH | XCHG | FC | CHG |
 | Low  | REST | RSVD | RSVD | CF | RSVD | SOC1 | SOCF | DSG |
 
-The firmware decodes all high-byte bits and `DSG` from the low byte.
+The firmware decodes all high-byte bits and the documented low-byte bits
+(`DSG`, `SOCF`, `SOC1`, `CF`, `REST`).
 
 ---
 
@@ -140,18 +131,23 @@ Signals used to enable power rails and modes.
 | --- | --- | --- | --- |
 | **USB_A1_CTRL** | **PC1** | Q10 (Load Switch) | Enable USB-A Port 1 Output (5V) |
 | **USB_A2_CTRL** | **PC2** | Q11 (Load Switch) | Enable USB-A Port 2 Output (5V) |
-| **HP.EN_OTG** | **PB15** | U1/U2 | Enable OTG (Reverse Power) on HP Port |
-| **LP_ST_EN** | **PC11** | U3 (Enable Pin) | Enable Aux Converter (V_OUT_AUX) |
+| **HP.EN_OTG** | **PB15** | BQ25713 EN_OTG | Enable OTG (Reverse Power) on C1. ANDed by the charger with the I2C bit the TPS25750 sets — the MCU holding this low is an independent kill switch on C1 sourcing. |
+| **STPD01_EN** | **PC11** | STPD01 Enable Pin | Enable the C2/Lab buck converter |
+| **C2_PORT_EN** | **PA12** | Port FET | Route the STPD01 rail to the USB-C2 connector |
+| **C2_LAB_EN** | **PA11** | Lab FET | Route the STPD01 rail to the Lab output (FSM MANUAL state; interlocked with C2_PORT_EN) |
+| **BCKL_CTRL** | **PB8** | JP402 → FET | Display backlight (polarity per jumper; drive via `ILI9341_Backlight()` only) |
 
 ### 4.2 Interrupts & Status Inputs
 
-Critical signals. Configure as EXTI (External Interrupt) or Polling.
+Critical signals, polled from `readCS()` each FSM tick (the encoder button
+on PC0/EXTI0 is the only line configured as a true interrupt).
 
 | Signal Name | STM32 Pin | Trigger | Action Required |
 | --- | --- | --- | --- |
 | **HP.PD_IRQ** | **PB14** | Falling Edge | Read TPS25750 Event Register (Plug/Unplug). |
-| **LP_ST_INT** | **PC12** | Level/Edge | Handle Aux Converter Fault (Overcurrent/Temp). |
-| **HP.CHRG_OK** | **PB13** | High Level | Adapter is valid. Safe to start charging logic. |
+| **C2_ST_INT** | **PC12** | Falling Edge | Read STPD01 fault register (overcurrent/temp). |
+| **C2_RDY** | **PC3** | Falling Edge | Read CYPD3175 HPI event register (PD event/fault). |
+| **HP.CHRG_OK** | **PB13** | High Level | Adapter is valid. Also the DEEP_SLEEP wake gate: a button wake is only honored while this pin is high. |
 
 ---
 
@@ -159,7 +155,7 @@ Critical signals. Configure as EXTI (External Interrupt) or Polling.
 
 1. **Boot & Safety Sequence:**
 * Check `HP.CHRG_OK` (PB13) before enabling high-current paths.
-* Enable `LP_ST_EN` (PC11) early to power internal peripherals if needed.
+* `STPD01_EN` (PC11) stays low at boot — `initialization.c` programs the STPD01 with safe defaults (5 V / 3 A, output disabled) and enabling remains the runtime logic's job.
 * Initialize `INA3221` (I2C_LP) immediately to provide OCP (Over Current Protection) for USB-A ports.
 
 
@@ -169,11 +165,5 @@ Critical signals. Configure as EXTI (External Interrupt) or Polling.
 
 
 3. **I2C Bus Separation:**
-* **I2C_PD (PB8/9)** is strictly for the High Power PD Controller (TPS) and Charger (BQ). Do not attempt to address the BMS or INA3221 on this bus.
-* **I2C_LP (PB6/7)** is for all other system telemetry (BMS, Aux, USB-A sensing).
-
-
-
-```
-
-```
+* **I2C_PD (I2C3: PA8 SCL / PC9 SDA)** is strictly for the TPS25750. Do not attempt to address battery-side or LP devices on this bus.
+* **I2C_LP (I2C1: PB6/PB7)** carries everything else: CYPD3175, STPD01, INA3221, and the BQ34Z100 behind the ISO1540 isolator.

@@ -31,6 +31,10 @@ not survive a power cycle, in this order:
    `firmware/TPS25750/TPS25750D_DuckerCharger.bin`) is streamed over
    I2C3 using the Patch Bundle Burst Mode protocol (`PBMs` → raw burst
    writes → `PBMc`), then the transition to `APP` mode is verified.
+   Register access goes through the shared `system/tps25750_io.c`
+   helpers (the host interface is length-prefixed on the wire); only
+   the raw burst writes bypass them, as the burst target is a separate
+   plain I2C address with no register framing.
    A warm reboot (device already in `APP`) skips the stream entirely.
    Without this step there is no PD on USB-C1 and no charging.
 2. **INA3221** — configuration register: channels 1–2 enabled (channel
@@ -111,16 +115,16 @@ All marked `CHECK:` in the sources (`grep -rn CHECK Core/Src/app`):
 
 | # | What | Where to verify |
 |---|---|---|
-| 1 | TPS25750 I2C address: 0x21 (netlist) vs 0x20 (charge-management branch) | TPS25750 TRM, address-selection table |
-| 2 | PBMs data layout and burst chunking | TPS25750 TRM, "Patch Bundle Burst Mode" |
-| 3 | STPD01 address (0x54) and VOUT/ILIM encodings | STPD01 datasheet |
-| 4 | BQ34Z100 subclass IDs / offsets (Design Capacity, Series Cells, Mfg Info A) | BQ34Z100-R2 TRM data-flash table |
-| 5 | Design capacity value (7800 mAh) vs final cell choice | pack BOM |
-| 6 | CYPD3175 status-LED pin (placeholder `GPIO_PORT_1_PIN_4`) | schematic, once the CCG3PA section exists |
+| 1 | PBMs data layout and burst chunking | TPS25750 TRM, "Patch Bundle Burst Mode" |
+| 2 | Burst target address (default 0x22 assumed; PBMs response reports the real one) | TPS25750 TRM |
+| 3 | BQ34Z100 subclass IDs / offsets (Design Capacity, Series Cells, Mfg Info A) | BQ34Z100-R2 TRM data-flash table |
+| 4 | Design capacity value (7800 mAh) vs final cell choice | pack BOM |
+| 5 | CYPD3175 status-LED pin (placeholder `GPIO_PORT_1_PIN_4`) | schematic, once the CCG3PA section exists |
 
-Point 1 also flags a merge task: `charge.h` defines its own copies of
-these I2C addresses. At integration time the addresses must live in a
-single shared header, and the 0x20/0x21 disagreement must be settled.
+**Resolved since:** all IC I2C addresses now live in the single shared
+header `system/defines.h` — TPS25750 settled at 0x20
+(`TPS25750_PD_CONTROLLER_ADDR`), STPD01 at 0x05 (`ADD` pin grounded per
+the schematic netlist, see `Charge_Management.md`).
 
 ## Maintenance notes
 

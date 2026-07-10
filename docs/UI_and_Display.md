@@ -24,8 +24,8 @@ user interface, including input handling and the state machine.
 ├─────────────────────────────────────────────────────────┤
 │  ili9341.c  — SPI driver (ILI9341 / ST7789V)            │
 ├─────────────────────────────────────────────────────────┤
-│  SPI1  PA5(SCK) PA7(MOSI)  +  PB0(CS) PB1(DC) PB2(RST) │
-│  Backlight: PB8 (BCKL_CTRL, TIM10_CH1)                  │
+│  SPI1  PA5(SCK) PB5(MOSI)  +  PB0(CS) PB1(DC) PB2(RST) │
+│  Backlight: PB8 (BCKL_CTRL, on/off via ILI9341_Backlight)│
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -55,9 +55,16 @@ DC low = command register, DC high = pixel data.
 little-endian.
 
 **Backlight** (`BCKL_CTRL` / PB8): jumper JP402 selects PMOS or NMOS FET.
-Current config assumes PMOS (active-low: `GPIO_PIN_RESET` = backlight on).
-`ILI9341_SetBrightness` is on/off only for now; true PWM dimming needs
-TIM10_CH1 on PB8 (marked TODO in the source).
+Current config assumes PMOS (active-low). Only this driver knows the
+polarity — everyone else (FSM sleep states included) goes through
+`ILI9341_Backlight(on)`, never a raw pin write. Dimming is real PWM on
+TIM10_CH1 at 20 kHz (above flicker and audibility), the jumper polarity
+folded into the timer's OC polarity; the pin is promoted to AF at runtime
+(no CubeMX regen, same pattern as encoder.c's PC0 EXTI). On backlight-off
+the pin is demoted back to plain GPIO at a definite level — mandatory
+before DEEP_SLEEP, where STOP mode freezes timer clocks and an AF pin
+would stick at an arbitrary PWM phase. If the timer bring-up fails, the
+driver degrades to plain on/off.
 
 ---
 
@@ -124,9 +131,10 @@ change with new telemetry data (called every 250 ms).
 │  SETTINGS overlay (long press to open, Exit to close)    │
 │     ├─ USB-A 1/2 toggles                                 │
 │     ├─ Lab OUTPUT page (STPD01 voltage + current limit)  │
-│     ├─ USB-C 2 OUTPUT page (PDO selection)               │
+│     ├─ USB-C 2 OUTPUT page (output ceiling)              │
 │     ├─ Lock all (confirm modal)                          │
-│     ├─ DISPLAY page (brightness, screen off, auto-sleep) │
+│     ├─ DISPLAY page (brightness, auto-sleep, screen off, │
+│     │                shutdown)                           │
 │     └─ TEST page (force warning scenarios)               │
 │                                                          │
 │  Modals: CONFIRM (yes/no), WARNING (temp / voltage)      │
@@ -137,16 +145,19 @@ change with new telemetry data (called every 250 ms).
 ### Screen descriptions
 
 **BOOT** — logo + title, shown 1.5 s at power-on; also shown briefly
-(1.2 s) when waking from light sleep.
+(1.2 s) when waking from DEEP_SLEEP (`UI_OnDeepSleepWake`).
 
 **MAIN** — battery shape (Widget_BatteryBar), giant SoC %, time-to-empty or
 time-to-full under it, pack voltage and current at 2× scale, 30-sample
 current graph.
 
 **DETAILS** — 2 × 3 grid of value labels (SoC, voltage, current, power,
-temperature, charge phase) + CELLS box (4 parallel-group voltages; note:
-the current PCB has no per-cell path to the MCU — values will show 0 until
-a multi-cell gauge is added).
+temperature, charge phase). There is no per-cell voltage row: the current
+PCB has no per-cell path to the MCU (the BQ7791500 protector is a fully
+analog part — no digital interface at all, see `Hardware_Architecture.md`),
+so a real reading is not possible without a different gauge; showing
+`pack_mv / 4` in its place would misrepresent balanced cells, so the row
+was removed rather than faked.
 
 **GRAPH** — full-screen current graph. Short press cycles the Y-axis full
 scale: 1 A → 5 A → 15 A → back to 1 A.
@@ -154,7 +165,12 @@ scale: 1 A → 5 A → 15 A → back to 1 A.
 **PORTS** — one graph area, up to 5 overlaid traces (USB-A1 cyan, USB-A2
 lime, USB-C1/OTG white, USB-C2 magenta, Lab yellow) + legend with live V/I
 per port. Port data comes from `port_stats[]` in telemetry; A1/A2 have real
-INA3221 shunts; C2/Lab are stubbed until dedicated sensing is added.
+INA3221 shunts; C2/Lab share the STPD01 rail (no shunt — INA3221 ch3 is
+grounded) and their current is derived from the total-system-power ADC
+channel minus the measured USB-A power, which works because the UI
+interlock keeps at most one of the two enabled. USB-C1/OTG has no sensing
+path at all (BQ25713 sits on the TPS25750 private bus): its trace stays at
+zero and only the contract voltage is shown.
 
 **STATS** — lifetime data from BQ34Z100 (cycle count, SoH, capacity) and
 per-boot session counters (charges, max temp/current, energy out, uptime).
@@ -162,14 +178,28 @@ per-boot session counters (charges, max temp/current, energy out, uptime).
 **SETTINGS** — overlay, 8 scrollable rows. USB-A1/A2 are plain GPIO toggles
 (PC1/PC2). Lab and USB-C2 open their own OUTPUT sub-page.
 
-**OUTPUT** — two channels sharing one STPD01 rail; hardware interlock
-(enabling one disables the other via GPIO PA11/PA12). Lab page: voltage
-3–20 V in 100 mV steps, current limit 100 mA–3 A in 100 mA steps. USB-C2
-page: PDO selection (5/9/12/15/20 V). Writing to STPD01 registers is marked
-TODO — the UI state is tracked but the I2C write is not yet wired.
+**OUTPUT** — two channels sharing one STPD01 rail; interlock (enabling one
+disables the other, PA11/PA12). Lab page: bench-PSU face with live V/A/W
+readout (current derived from the system-power ADC channel), voltage
+3–20 V in 100 mV steps, current limit 100 mA–3 A in 100 mA steps —
+confirming a value reprograms the STPD01 live through `setupSTPD01()`.
+USB-C2 page: a **ceiling** on the delivered output, not a PDO selection —
+the CYPD3175 negotiates the PD contract autonomously and the STPD01
+produces the rail, so confirming a value calls
+`setSecondaryUSBC_VoltageCeiling/CurrentCeiling()` and the charge layer
+delivers `min(ceiling, contract)`, reprogramming live if a device is
+already connected (only ever lowering, never above the negotiated
+contract). The Enable row and the SETTINGS summary read the **live** port
+state (`get_USBC2_Status()` + `getSTPD01_SetpointVoltage()`), not a cached
+UI flag — the connection interrupt enables this port autonomously, so a
+cached flag would lag behind reality.
 
-**DISPLAY** — brightness slider (10–100 %, maps to `ILI9341_SetBrightness`),
-screen-off toggle, auto-sleep timeout (Off / 1 / 5 / 15 min).
+**DISPLAY** — brightness (10–100 %, maps to `ILI9341_SetBrightness`),
+auto-sleep timeout (Off / 1 / 2 / 15 min, default 2 min to match the FSM's
+`INACTIVITY_TIMEOUT_MS`), screen off (UI-level sleep screen), and
+Shutdown — a confirm modal that pushes `EVT_BUTTON_LONG`, the same
+primitive as the physical 3 s hold, driving the FSM to DEEP_SLEEP subject
+to the same transition-table gate (only honored from IDLE/SLEEP).
 
 **TEST** — forces telemetry values for UI stress scenarios: low voltage,
 critical voltage, low temperature, high temperature, overcurrent, reset
@@ -185,7 +215,7 @@ critical voltage, low temperature, high temperature, overcurrent, reset
 | `TH_TEMP_CRIT` | 60 °C | WARNING modal (over-temp) |
 | `TH_TEMP_LOW` | 10 °C | WARNING modal (cold) |
 | `TH_VLOW` | ~13 V | VLOW warning |
-| `TH_VCRIT` | ~12 V | VCRIT warning → lock + light sleep |
+| `TH_VCRIT` | ~12 V | VCRIT warning modal (informational — the FSM enters EMERGENCY on its own) |
 
 Voltage band colours on MAIN: 14–17 V green, 13–14 V orange, 12–13 V red,
 < 12 V red blinking.
@@ -243,31 +273,37 @@ struct which all screens read directly.
 reachable from the STM32. `vbus_present` and `charge_phase` are derived
 from BQ34Z100 current sign and flags instead.
 
-`port_stats[]`, `cell_mv[]` and most of `sys_stats` are defined but
-currently zero/stubbed — they need INA3221 reads and a multi-cell gauge
-to be populated.
+`port_stats[]` and `sys_stats` are fully populated by `do_poll()` (which
+the main loop calls every 500 ms, including in SLEEP). `telemetry.charge_phase`
+only ever reports IDLE or CHARGING — PRE-charge and TAPER are real BQ25713
+phases, but that chip is unreachable from this MCU, so they are not
+representable and the field only carries the distinction this board can
+actually make.
 
 ---
 
 ## UI state machine (`ui_state.c`)
 
-`UI_Tick()` is called every main loop iteration. It runs in order:
+`UI_Tick()` is called every main loop iteration (skipped while the FSM is
+in SLEEP or DEEP_SLEEP — the backlight is off, drawing would be wasted
+work; telemetry keeps flowing because `Telemetry_Poll()` lives in the main
+loop, not here). It runs in order:
 
 1. **Boot timeout** — if on BOOT screen and 1.5 s elapsed → navigate to MAIN
-2. **Sleep wake** — if on SLEEP screen and button pressed → wake (with or without splash)
-3. **Auto-sleep** — if idle longer than the configured timeout → `UI_EnterSleep()`
-4. **Warning check** — every tick, check `telemetry.voltage_mV` and `telemetry.temp_celsius`
-   against thresholds; raise unacked warnings as a modal
-5. **Long-press detection** — button held ≥ 1000 ms → open SETTINGS overlay;
+2. **FAULT takeover** — if the FSM is in ERROR/EMERGENCY, force the FAULT screen
+3. **Sleep wake** — if on SLEEP screen and button pressed → return to the
+   pre-sleep screen
+4. **Auto-sleep** — if idle longer than the configured timeout → `UI_EnterSleep()`
+5. **Warning check** — check telemetry against thresholds; raise unacked
+   warnings as a modal
+6. **Long-press detection** — button held ≥ 1000 ms → open SETTINGS overlay;
    stores the origin screen to return to on Exit
-6. **Click arbiter** — single press is held pending for 400 ms (`UI_DOUBLE_CLICK_MS`);
+7. **Click arbiter** — single press is held pending for 400 ms (`UI_DOUBLE_CLICK_MS`);
    if a second press arrives → double-click (jump to SETTINGS); if the window
    expires → clean single click delivered to the screen handler;
    a long press cancels any pending click
-7. **Per-screen navigation** — encoder delta and clean click are dispatched
+8. **Per-screen navigation** — encoder delta and clean click are dispatched
    to the current screen handler
-8. **Telemetry poll** — `Telemetry_Poll()` returns immediately if < 500 ms
-   since last poll; otherwise reads I2C and updates the struct
 9. **Periodic redraw** — every 250 ms: `needs_full_redraw` flag → full `Draw()`;
    otherwise `Update()` for data-only regions + `Screen_Header_RefreshIcons()`
 
@@ -290,17 +326,27 @@ to be populated.
 
 ### Warning behaviour
 
-Three warning types (`WARN_TEMP`, `WARN_VLOW`, `WARN_VCRIT`), each shown at
-most once per boot. The modal auto-acks after 30 s with no input. VCRIT
-additionally locks all outputs and triggers light sleep before acking.
+Five warning types (`WARN_TEMP`, `WARN_VLOW`, `WARN_VCRIT`, `WARN_OVCH`,
+`WARN_CHGINH`). TEMP/VLOW/VCRIT are shown at most once per boot; OVCH and
+CHGINH re-arm when their condition clears (they describe recoverable
+episodes). The modal auto-acks after 30 s with no input. **Warnings only
+inform — they never actuate.** The FSM is the single authority on outputs:
+at the VCRIT threshold it enters EMERGENCY on its own (and the BQ7791500
+BMS backs it up in hardware), so the ack does nothing but dismiss the modal.
 
 ### Sleep modes
 
-- **Sleep** (`UI_EnterSleep`) — screen dark, only encoder press wakes it;
-  returns to the screen that was active before sleep
-- **Light sleep** (`UI_EnterSleepLight`) — same but wake shows a 1.2 s logo
-  splash before returning to the previous screen; used after VCRIT and
-  after "Light sleep" action in SETTINGS
+- **Screen off** (`UI_EnterSleep`) — UI-level only: dark screen page, any
+  encoder press returns to the screen that was active before. The FSM and
+  ports are untouched.
+- **FSM SLEEP** — entered by the FSM on inactivity; the main loop stops
+  calling `UI_Tick()` and the FSM turns the backlight off. Telemetry keeps
+  running (polled from the main loop).
+- **Shutdown / DEEP_SLEEP** — the DISPLAY page's Shutdown row (or a 3 s
+  physical hold) pushes `EVT_BUTTON_LONG`; the FSM enters STOP mode. Wake
+  requires an encoder press *while a charger is attached* (see `FSM.md`,
+  DEEP_SLEEP wake gate); `UI_OnDeepSleepWake()` then restarts the UI from
+  a 1.2 s splash.
 
 ---
 
@@ -308,21 +354,28 @@ additionally locks all outputs and triggers light sleep before acking.
 
 ```c
 /* After all MX_*_Init() calls: */
-System_Initialization();      /* TPS25750, INA3221, STPD01 */
-Provisioning_RunGauge();      /* BQ34Z100 data flash (one-time) */
-
 Encoder_Init(&htim3);
 Telemetry_Init(&hi2c1, &hi2c3);
 ILI9341_Init(&hspi1);
 UI_Init();                    /* shows boot screen */
+init();                       /* charge layer: TPS25750, INA3221, gauge */
+PB_FSM_Init(&fsm);
 
 while (1) {
-    UI_Tick();                /* input + telemetry + redraw */
+    readNCS();                /* refresh port status pins */
+    /* pop one event -> PB_FSM_FireEvent(); encoder-activity and
+       deep-sleep-hold timers; inactivity timer */
+    PB_FSM_Update(&fsm);      /* onExit / onEnter / onRun */
+    Telemetry_Poll();         /* here, NOT in UI_Tick: keeps uptime,
+                                 energy and port histories running
+                                 while the screen is dark in SLEEP */
+    if (fsm not in SLEEP/DEEP_SLEEP)
+        UI_Tick();            /* input + redraw */
 }
 ```
 
-`UI_Tick()` is non-blocking. It returns immediately if neither the
-250 ms display timer nor the 500 ms telemetry timer has expired.
+`UI_Tick()` is non-blocking; the redraw branch runs at most every 250 ms
+and `Telemetry_Poll()` rate-limits itself to 500 ms.
 
 ---
 
@@ -330,15 +383,17 @@ while (1) {
 
 | Action | Period | Where |
 |--------|--------|-------|
-| Telemetry I2C read | 500 ms | `Telemetry_Poll()` inside `UI_Tick()` |
+| Telemetry poll | 500 ms | `Telemetry_Poll()` in the main loop |
 | Display refresh | 250 ms | `UI_Tick()` periodic branch |
 | Header icon refresh | 250 ms | `Screen_Header_RefreshIcons()` |
 | Encoder delta read | every `UI_Tick()` call | `Encoder_GetDelta()` |
 | Click arbiter window | 400 ms | `UI_DOUBLE_CLICK_MS` |
 | Long press threshold | 1000 ms | `UI_LONG_PRESS_MS` |
+| Deep-sleep hold threshold | 3000 ms | `BUTTON_DEEPSLEEP_HOLD_MS` (main.c) |
+| FSM inactivity → SLEEP | 2 min | `INACTIVITY_TIMEOUT_MS` |
 | Warning auto-ack | 30 s | `UI_Tick()` warning branch |
 | Boot screen duration | 1500 ms | `BOOT_SCREEN_DURATION_MS` |
-| Light-sleep wake splash | 1200 ms | hardcoded in `UI_Tick()` |
+| Deep-sleep wake splash | 1200 ms | `UI_OnDeepSleepWake()` |
 
 ---
 

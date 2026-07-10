@@ -13,41 +13,44 @@ firmware/cubeMX/
 ├── Core/
 │   ├── Inc/
 │   │   ├── app/
-│   │   │   ├── encoder.h       # Rotary encoder API
-│   │   │   └── telemetry.h     # Sensor polling API + SystemTelemetry_t
+│   │   │   ├── encoder.h        # Rotary encoder API
+│   │   │   ├── initialization.h # Boot-time IC bring-up (TPS25750 patch…)
+│   │   │   ├── provisioning.h   # BQ34Z100 data-flash provisioning
+│   │   │   └── telemetry.h      # UI-facing data aggregation
 │   │   ├── display/
-│   │   │   ├── ili9341.h       # Low-level SPI display driver
-│   │   │   └── gfx.h           # Primitive drawing functions (text, lines…)
+│   │   │   ├── ili9341.h        # Low-level SPI display driver
+│   │   │   ├── gfx.h            # Primitive drawing (text, lines…)
+│   │   │   └── logo.h           # Boot logo bitmap
+│   │   ├── system/
+│   │   │   ├── charge.h         # Charge management: sensors + actuators
+│   │   │   ├── defines.h        # Pins, thresholds, IC addresses
+│   │   │   ├── event.h          # FSM event queue (ring buffer)
+│   │   │   ├── fsm.h            # Power-state FSM
+│   │   │   └── tps25750_io.h    # Length-prefixed TPS25750 register I/O
 │   │   └── ui/
-│   │       ├── ui_state.h      # UI state machine
-│   │       ├── screens.h       # Per-screen draw/update functions
-│   │       └── widgets.h       # Reusable graphical components
+│   │       ├── ui_state.h       # UI state machine
+│   │       ├── screens.h        # Per-screen draw/update functions
+│   │       └── widgets.h        # Reusable graphical components
 │   └── Src/
-│       ├── app/
-│       │   ├── encoder.c
-│       │   └── telemetry.c
-│       ├── display/
-│       │   ├── ili9341.c
-│       │   └── gfx.c
-│       ├── ui/
-│       │   ├── ui_state.c
-│       │   ├── screens.c
-│       │   └── widgets.c
-│       ├── main.c              # CubeMX-generated entry point
-│       └── main_patch.c        # Integration guide (NOT compiled)
-├── Drivers/                    # STM32 HAL + CMSIS (CubeMX-generated)
-└── cubeMX.ioc                  # CubeMX project file
+│       ├── app/        (encoder, initialization, provisioning,
+│       │                telemetry, tps25750_bundle)
+│       ├── display/    (ili9341, gfx)
+│       ├── system/     (charge, event, fsm, tps25750_io)
+│       ├── ui/         (ui_state, screens, widgets)
+│       └── main.c      # CubeMX-generated entry point + main loop
+├── Drivers/            # STM32 HAL + CMSIS (CubeMX-generated)
+└── cubeMX.ioc          # CubeMX project file
 ```
 
-The application code lives entirely in `Core/`. All CubeMX-generated HAL and
-peripheral initialisation code (`MX_*_Init()` functions) remains in `main.c`
-and is not modified.
+The application code lives entirely in `Core/`. CubeMX-generated peripheral
+initialisation (`MX_*_Init()`) stays in its generated files; application
+integration lives in `main.c`'s USER CODE sections.
 
 ---
 
 ## 2. Module Architecture
 
-The firmware is split into four independent layers that communicate in a
+The firmware is split into independent layers that communicate in a
 single direction (lower layers do not know about upper layers):
 
 ```
@@ -56,7 +59,11 @@ single direction (lower layers do not know about upper layers):
 │   ui_state.c  ·  screens.c  ·  widgets.c    │
 ├──────────────────────────────────────────────┤
 │           Application Layer                  │
-│       telemetry.c  ·  encoder.c             │
+│  telemetry.c · encoder.c · initialization.c │
+│  provisioning.c                              │
+├──────────────────────────────────────────────┤
+│         System Layer (FSM + charge)          │
+│   fsm.c · charge.c · event.c · tps25750_io  │
 ├──────────────────────────────────────────────┤
 │            Display Layer                     │
 │       ili9341.c  ·  gfx.c                   │
@@ -73,9 +80,14 @@ single direction (lower layers do not know about upper layers):
 | **UI** | `ui_state` | State machine: which screen is active, navigation transitions |
 | **UI** | `screens` | Full draw and partial update of each screen |
 | **UI** | `widgets` | Reusable graphical components (battery bar, graph, labels…) |
-| **App** | `telemetry` | Periodic I2C polling of BQ34Z100 and BQ25713; fills `SystemTelemetry_t` |
+| **App** | `telemetry` | Reshapes charge-layer getters into UI-facing structs (`telemetry`, `port_stats[]`, `sys_stats`); no I2C of its own |
 | **App** | `encoder` | Reads TIM3 counter delta and button debounce |
-| **Display** | `ili9341` | SPI commands/data to the ILI9341 controller; raw pixel operations |
+| **App** | `initialization` / `provisioning` | Boot-time IC bring-up (TPS25750 patch bundle, STPD01/INA3221 defaults) and one-time BQ34Z100 data-flash provisioning |
+| **System** | `fsm` | Power-state FSM: consumes events, drives port actuators via `onEnter`/`onExit` (see `FSM.md`) |
+| **System** | `charge` | All sensor reads (ADC + I2C) and all port actuation; pushes FSM events (see `Charge_Management.md`) |
+| **System** | `event` | 8-slot ring buffer decoupling event producers from the FSM |
+| **System** | `tps25750_io` | Length-prefixed register I/O helpers for the TPS25750 host interface |
+| **Display** | `ili9341` | SPI commands/data to the panel; raw pixel operations; backlight ownership |
 | **Display** | `gfx` | Text rendering, lines, rectangles built on top of `ili9341` |
 
 ---
@@ -83,43 +95,43 @@ single direction (lower layers do not know about upper layers):
 ## 3. Main Loop Integration
 
 The firmware uses a **cooperative, polling-based** approach: there is no RTOS.
-Everything is called from the `while(1)` loop in `main.c`.
-
-The integration instructions (with copy-paste snippets) are in
-`Core/Src/main_patch.c`. Summary:
+Everything is called from the `while(1)` loop in `main.c`:
 
 ```c
-/* USER CODE BEGIN Includes */
-#include "app/telemetry.h"
-#include "app/encoder.h"
-#include "display/ili9341.h"
-#include "ui/ui_state.h"
-/* USER CODE END Includes */
-
 /* USER CODE BEGIN 2  (after MX_*_Init calls) */
-ILI9341_Init(&hspi1);          // display reset + wake sequence
-Telemetry_Init(&hi2c1, &hi2c3);// I2C buses + first sensor poll
-Encoder_Init(&htim3);          // start TIM3 in encoder mode
+Encoder_Init(&htim3);
+Telemetry_Init(&hi2c1, &hi2c3);
+ILI9341_Init(&hspi1);
 UI_Init();                     // show boot screen
+init();                        // charge layer bring-up (initialization.c)
+PB_FSM_Init(&fsm);             // enters IDLE
 /* USER CODE END 2 */
 
 /* USER CODE BEGIN 3  (inside while(1)) */
-UI_Tick();       // all input + sensor + display update logic
-HAL_Delay(10);   // yield ~10 ms to HAL, avoids busy-loop at 84 MHz
+readNCS();                     // refresh port-status pins
+if (event_pop(&evt)) PB_FSM_FireEvent(&fsm, evt);
+/* encoder-activity, deep-sleep-hold and inactivity timers */
+PB_FSM_Update(&fsm);           // onExit / onEnter / onRun
+Telemetry_Poll();              // rate-limited; runs even in SLEEP so
+                               // uptime/energy/histories keep flowing
+if (state != SLEEP && state != DEEP_SLEEP)
+    UI_Tick();                 // input + redraw (skipped: backlight off)
 /* USER CODE END 3 */
 ```
 
-`UI_Tick()` is the single entry point for the entire application. It is
-non-blocking: it returns immediately when there is nothing to do, so the
-`HAL_Delay(10)` is the only real wait in the system.
+Sensor polling itself happens inside the FSM's `onRun` handlers (each
+active state calls `readCS()`/`readSensors()`/`readINA()` as appropriate),
+so what gets polled follows the power state automatically.
 
 ### Timing budget
 
 | Task | Interval | Controlled by |
 | --- | --- | --- |
-| Sensor poll (I2C) | 500 ms | `TELEMETRY_POLL_INTERVAL_MS` in `telemetry.h` |
+| Telemetry reshape | 500 ms | `TELEMETRY_POLL_INTERVAL_MS` in `telemetry.h` |
 | UI refresh | 250 ms (4 fps) | `UI_REFRESH_INTERVAL_MS` in `ui_state.h` |
 | Encoder read | Every `UI_Tick()` call | No timer, read-on-every-tick |
+| FSM inactivity → SLEEP | 2 min | `INACTIVITY_TIMEOUT_MS` in `defines.h` |
+| Deep-sleep hold | 3 s | `BUTTON_DEEPSLEEP_HOLD_MS` in `defines.h` |
 | Boot screen timeout | 1 500 ms | `BOOT_SCREEN_DURATION_MS` in `ui_state.c` |
 
 ---
@@ -128,8 +140,13 @@ non-blocking: it returns immediately when there is nothing to do, so the
 
 ### 4.1 Telemetry Module (`telemetry.h / telemetry.c`)
 
-The telemetry module aggregates all sensor readings into a single global
-struct that the entire UI can read without making I2C calls itself.
+The telemetry module makes **no I2C calls of its own**: the fuel gauge,
+INA3221 and PD contracts are already polled every FSM tick by the charge
+layer. `do_poll()` reads that layer's getters and reshapes the data into
+UI-facing structs — `telemetry` (battery snapshot), `port_stats[5]`
+(per-port V/I + 60-sample history ring for the PORTS screen), `sys_stats`
+(lifetime + session counters, including a discharge-energy integral with a
+sub-mWh remainder accumulator), and `tte_min`/`ttf_min`.
 
 **Global data structure:**
 
@@ -146,8 +163,8 @@ extern SystemTelemetry_t telemetry;
 | `is_full` | `uint8_t` | BQ34Z100 flags `FC` bit | 1 when battery fully charged |
 | `is_charging` | `uint8_t` | BQ34Z100 flags `CHG` bit | 1 when current > 0 |
 | `over_temp` | `uint8_t` | BQ34Z100 flags `OT` bit | 1 on over-temperature fault |
-| `vbus_present` | `uint8_t` | BQ25713 `CHGSTATUS0[7:5]` | 1 when USB-C supply is detected |
-| `charge_phase` | `uint8_t` | BQ25713 `CHGSTATUS1[2:0]` | 0=idle, 1=pre, 2=fast, 3=taper |
+| `vbus_present` | `uint8_t` | TPS25750 PD contract | 1 when the primary USB-C port is plugged and sinking |
+| `charge_phase` | `uint8_t` | BQ34Z100 `CHG` flag / current sign | 0=idle, 1=charging. The BQ25713 register that would distinguish pre-charge/fast/taper (`CHGSTATUS1`) sits on a private I2C bus this MCU can't reach — see `Charge_Management.md`. |
 | `power_mW` | `int32_t` | Computed | `voltage_mV × current_mA / 1000` |
 | `current_history[]` | `int16_t[60]` | Ring buffer | Last 60 current samples (30 s) |
 | `sensor_ok` | `uint8_t` | Internal | 1 if last poll succeeded on all chips |
@@ -161,16 +178,16 @@ uint8_t Telemetry_Poll(void);   // respects TELEMETRY_POLL_INTERVAL_MS
 void    Telemetry_ForcePoll(void);
 ```
 
-**I2C bus assignment:**
+**I2C bus assignment** (all access happens in the charge layer):
 
-| Bus | HAL handle | Device | Address (7-bit) |
+| Bus | HAL handle | Devices | Address (7-bit) |
 | --- | --- | --- | --- |
-| I2C1 | `hi2c1` | BQ25713 charger | `0x6B` |
-| I2C3 | `hi2c3` | BQ34Z100 fuel gauge (isolated via ISO1540) | `0x55` |
+| I2C1 | `hi2c1` | CYPD3175 · STPD01 · INA3221 · BQ34Z100 (via ISO1540) | `0x08` · `0x05` · `0x40` · `0x55` |
+| I2C3 | `hi2c3` | TPS25750 (length-prefixed host interface, `tps25750_io.c`) | `0x20` |
 
-> **Warning:** I2C3 (battery side) references `-BATT`, which floats relative
-> to `GND` when the protection FETs open. Never address battery-side devices
-> on I2C1, and vice versa.
+> **Note:** the BQ25713 charger is *not* on any MCU bus — it sits on the
+> TPS25750's private I2C_EX bus. Its only MCU-visible outputs are the
+> analog telemetry pins (IADPT/IBAT/PSYS on ADC1) and CHRG_OK/EN_OTG GPIOs.
 
 **Temperature conversion** (from raw register to °C):
 ```
@@ -194,14 +211,14 @@ mode, plus the push-button on PC0.
 
 | Signal | MCU pin | Notes |
 | --- | --- | --- |
-| Encoder A | TIM3 CH1 (PA6) | Handled automatically by TIM3 encoder mode |
-| Encoder B | TIM3 CH2 (PB5) | Handled automatically by TIM3 encoder mode |
-| Button | PC0 | Active-low, internal pull-up, debounce in software |
+| Encoder A | TIM3 CH1 (PC6) | Handled automatically by TIM3 encoder mode |
+| Encoder B | TIM3 CH2 (PC7) | Handled automatically by TIM3 encoder mode |
+| Button | PC0 | Active-low, external pull-up on board; EXTI0 both edges + 50 ms software debounce. Also the sole DEEP_SLEEP wake source. |
 
 **How TIM3 encoder mode works:** the timer hardware counts quadrature edges
-on channels A and B without using interrupts. Reading `TIM3->CNT` gives the
-accumulated position. The EC11 produces 4 edges per physical click, so the
-raw delta is divided by 4 to obtain user-visible clicks.
+on channels A and B without using interrupts (`TIM_ENCODERMODE_TI12`).
+Reading `TIM3->CNT` gives the accumulated position; the raw delta is
+divided by 2 (2 counts per detent in TI12) to obtain user-visible clicks.
 
 **API:**
 
@@ -232,10 +249,11 @@ command/data distinction via the DC pin, and raw pixel operations.
 | Signal | MCU pin |
 | --- | --- |
 | SPI1 SCK | PA5 |
-| SPI1 MOSI | PA7 |
+| SPI1 MOSI | PB5 |
 | CS | PB0 (`DISP_CS_Pin`) |
 | DC | PB1 (`DISP_DC_Pin`) — LOW = command, HIGH = data |
 | RST | PB2 (`DISP_RST_Pin`) |
+| Backlight | PB8 (`BCKL_CTRL_Pin`) — via `ILI9341_Backlight()`, polarity per JP402 |
 
 Display resolution: **240 × 320 pixels, portrait mode.**
 Pixel format: **RGB565** (5 bits red, 6 bits green, 5 bits blue, 2 bytes per pixel).
@@ -276,15 +294,17 @@ extern UIState_t ui_state;
           [BOOT]
             |  auto after 1 500 ms
             v
-[SETTINGS] <--> [MAIN] <--> [DETAIL] <--> [GRAPH]
-     ^                                        ^
-     |______ long press (1 s) anywhere ________|
+[MAIN] <--> [DETAIL] <--> [GRAPH] <--> [PORTS] <--> [STATS]   (carousel, wraps)
+
+  SETTINGS overlay: long press (1 s) or double click from anywhere;
+  its rows open the OUTPUT (Lab / USB-C2), DISPLAY and TEST sub-pages.
+  Modals: CONFIRM (Lock all / Shutdown), WARNING, FAULT (FSM takeover),
+  SLEEP (dark screen page).
 ```
 
-Encoder rotation navigates left/right between `MAIN → DETAIL → GRAPH →
-SETTINGS` (and wraps). Long-pressing the button from any screen returns to
-`MAIN`. Short press has no effect on `MAIN`, `DETAIL`, or `GRAPH`; on
-`SETTINGS` it toggles the selected output.
+Encoder rotation moves through the main carousel. Short press is
+screen-specific (GRAPH: cycle Y scale; SETTINGS: act on the selected row).
+The full per-screen behaviour is documented in `UI_and_Display.md`.
 
 **API:**
 
@@ -292,18 +312,11 @@ SETTINGS` (and wraps). Long-pressing the button from any screen returns to
 void       UI_Init(void);
 void       UI_Tick(void);                    // call in while(1)
 void       UI_NavigateTo(UIScreen_t screen);
-UIScreen_t UI_GetCurrentScreen(void);
 ```
 
-**`UIScreen_t` enum:**
-
-| Value | Description |
-| --- | --- |
-| `UI_SCREEN_BOOT` | Splash screen, not navigable |
-| `UI_SCREEN_MAIN` | Home: battery bar, voltage, current, graph |
-| `UI_SCREEN_DETAIL` | All telemetry values in a 2×3 grid |
-| `UI_SCREEN_GRAPH` | Full-screen current/power graph |
-| `UI_SCREEN_SETTINGS` | ON/OFF toggles for USB outputs |
+**`UIScreen_t` enum:** see `ui/ui_state.h` — BOOT, MAIN, DETAIL, GRAPH,
+PORTS, STATS, SETTINGS, OUTPUT, DISPLAYPG, TESTPG, CONFIRM, WARNING,
+SLEEP, FAULT.
 
 ### 6.2 Screens (`screens.h / screens.c`)
 
@@ -343,15 +356,19 @@ Y=320 └───────────────────────�
 └──────────────────────────┘
 ```
 
-**SETTINGS screen:** scrollable list of four ON/OFF rows, each controlling
-a GPIO output. The currently selected row is highlighted with `COLOR_ACCENT`.
+**SETTINGS screen:** scrollable overlay of 8 rows. The currently selected
+row is highlighted with `COLOR_ACCENT`.
 
-| Row | Signal | GPIO pin |
+| Row | Action | Backing signal / path |
 | --- | --- | --- |
-| 0 | USB-A Port 1 | `USB_A1_CTRL_Pin` (PC1) |
-| 1 | USB-A Port 2 | `USB_A2_CTRL_Pin` (PC2) |
-| 2 | Lab output | `LAB_ENABLER_Pin` |
-| 3 | USB-C Port 2 | `USB_C2_ENABLER_Pin` |
+| 0 | USB-A Port 1 toggle | `USB_A1_CTRL_Pin` (PC1) — row reads the live pin |
+| 1 | USB-A Port 2 toggle | `USB_A2_CTRL_Pin` (PC2) — row reads the live pin |
+| 2 | Lab output → OUTPUT page | `C2_LAB_EN_Pin` (PA11) via FSM MANUAL state |
+| 3 | USB-C Port 2 → OUTPUT page | `C2_PORT_EN_Pin` (PA12) — row reads the live pin (the port auto-enables on PD negotiation) |
+| 4 | Lock all (confirm modal) | `EVT_LOCK`/`EVT_UNLOCK` → FSM SAFETY_LOCK |
+| 5 | DISPLAY page | brightness, auto-sleep, screen off, shutdown |
+| 6 | TEST page | forced warning scenarios |
+| 7 | Exit | back to the screen SETTINGS was opened from |
 
 ### 6.3 Widgets (`widgets.h / widgets.c`)
 
