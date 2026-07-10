@@ -40,6 +40,7 @@ Core/Src/main.c \
 Core/Src/system/event.c \
 Core/Src/system/fsm.c \
 Core/Src/system/charge.c \
+Core/Src/system/tps25750_io.c \
 Core/Src/app/initialization.c \
 Core/Src/app/provisioning.c \
 Core/Src/app/tps25750_bundle.c \

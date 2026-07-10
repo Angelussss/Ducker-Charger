@@ -27,6 +27,7 @@
 #include "main.h"
 #include "i2c.h"        /* hi2c1 (I2C_LP), hi2c3 (I2C_PD) */
 #include "system/defines.h"
+#include "system/tps25750_io.h"
 
 #include <string.h>
 
@@ -79,47 +80,9 @@ extern const uint32_t tps25750_bundle_size;
 #define STPD01_VOUT_5V          ((uint8_t)((5000u - 3000u) / 20u))
 #define STPD01_ILIM_3A          ((uint8_t)((3000u - 100u) / 100u))
 
-/* ------------------------------------------------------------------ */
-/* TPS25750 register helpers                                           */
-/*                                                                     */
-/* The host interface uses length-prefixed payloads: a write is         */
-/* [reg][len][data...], a read returns [len][data...].                  */
-/* ------------------------------------------------------------------ */
-
-static HAL_StatusTypeDef tps_read(uint8_t reg, uint8_t *buf, uint8_t len)
-{
-    uint8_t raw[65];
-
-    if (len > sizeof(raw) - 1u)
-        return HAL_ERROR;
-
-    if (HAL_I2C_Master_Transmit(&hi2c3, TPS25750_PD_CONTROLLER_ADDR, &reg, 1u,
-                                I2C_TIMEOUT_MS) != HAL_OK)
-        return HAL_ERROR;
-    if (HAL_I2C_Master_Receive(&hi2c3, TPS25750_PD_CONTROLLER_ADDR, raw,
-                               (uint16_t)(len + 1u),
-                               I2C_TIMEOUT_MS) != HAL_OK)
-        return HAL_ERROR;
-
-    /* raw[0] = payload length as reported by the device */
-    memcpy(buf, &raw[1], len);
-    return HAL_OK;
-}
-
-static HAL_StatusTypeDef tps_write(uint8_t reg, const uint8_t *data,
-                                   uint8_t len)
-{
-    uint8_t raw[66];
-
-    if (len > sizeof(raw) - 2u)
-        return HAL_ERROR;
-
-    raw[0] = reg;
-    raw[1] = len;
-    memcpy(&raw[2], data, len);
-    return HAL_I2C_Master_Transmit(&hi2c3, TPS25750_PD_CONTROLLER_ADDR, raw,
-                                   (uint16_t)(len + 2u), I2C_TIMEOUT_MS);
-}
+/* TPS25750 register access goes through system/tps25750_io.c, which
+ * implements the host interface's length-prefixed payload framing:
+ * a write is [reg][len][data...], a read returns [len][data...]. */
 
 /** Send a 4CC command through CMD1 and poll until it completes. */
 static HAL_StatusTypeDef tps_cmd(uint32_t cmd, uint32_t timeout_ms)
@@ -127,12 +90,12 @@ static HAL_StatusTypeDef tps_cmd(uint32_t cmd, uint32_t timeout_ms)
     uint32_t t0 = HAL_GetTick();
     uint32_t readback = 0;
 
-    if (tps_write(TPS_REG_CMD1, (const uint8_t *)&cmd, 4u) != HAL_OK)
+    if (tps25750_write(TPS_REG_CMD1, (const uint8_t *)&cmd, 4u) != HAL_OK)
         return HAL_ERROR;
 
     /* CMD1 reads back 0 on success, '!CMD' on rejection. */
     do {
-        if (tps_read(TPS_REG_CMD1, (uint8_t *)&readback, 4u) != HAL_OK)
+        if (tps25750_read(TPS_REG_CMD1, (uint8_t *)&readback, 4u) != HAL_OK)
             return HAL_ERROR;
         if (readback == 0u)
             return HAL_OK;
@@ -146,7 +109,7 @@ static HAL_StatusTypeDef tps_cmd(uint32_t cmd, uint32_t timeout_ms)
 
 static HAL_StatusTypeDef tps_get_mode(uint32_t *mode)
 {
-    return tps_read(TPS_REG_MODE, (uint8_t *)mode, 4u);
+    return tps25750_read(TPS_REG_MODE, (uint8_t *)mode, 4u);
 }
 
 /* =========================================================
@@ -181,7 +144,7 @@ static InitStatus_t init_tps25750(void)
         d[4] = TPS_BURST_ADDR_DEFAULT;
         d[5] = (uint8_t)(TPS_PATCH_TIMEOUT_MS / 100u);
 
-        if (tps_write(TPS_REG_DATA1, d, sizeof(d)) != HAL_OK)
+        if (tps25750_write(TPS_REG_DATA1, d, sizeof(d)) != HAL_OK)
             return INIT_FAILED;
         if (tps_cmd(TPS_CMD_PBMs, 200u) != HAL_OK)
             return INIT_FAILED;
