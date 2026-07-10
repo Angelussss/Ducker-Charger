@@ -1,16 +1,11 @@
 /**
  * @file    telemetry.h
  * @brief   Real-time system data aggregation for the UI layer.
- *          Aggregazione dati di sistema in tempo reale per la UI.
  *
  * This module does NOT talk to I2C. The fuel gauge (BQ34Z100), INA3221
  * and PD contracts are already polled every FSM tick by the charge
  * management layer (system/charge.h/.c); this module reads that layer's
  * getters and reshapes the data into a single struct the UI can read.
- *
- * Questo modulo NON parla con l'I2C. Fuel gauge, INA3221 e contratti PD
- * sono gia' letti ad ogni tick della FSM dal charge management layer;
- * questo modulo legge i suoi getter e li riorganizza per la UI.
  *
  * NOTE: BQ25713 is not reachable from the STM32. Charge status is
  * derived from the BQ34Z100 CHG flag and the primary USB-C PD contract.

@@ -817,7 +817,7 @@ void Screen_Test_OnPress(void)
  * ========================================================= */
 
 static ConfirmAction_t _confirm_action = CONFIRM_LOCKALL;
-static uint8_t         _confirm_sel    = 1;   /* 0=OK 1=Cancel (default sicuro) */
+static uint8_t         _confirm_sel    = 1;   /* 0=OK 1=Cancel (safe default) */
 
 static const char *_confirm_title[] = {
     [CONFIRM_LOCKALL]  = "LOCK ALL PORTS?",

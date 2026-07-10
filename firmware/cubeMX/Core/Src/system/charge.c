@@ -27,7 +27,6 @@
         - (Optional) Read assigned V and I_max to STPD01
 
 */
-// 3 larghezza, 2 profondità e 2 altezza
 volatile I2C_ReadState currentlyReading;
 
 const int timeout = 10;         // In ms

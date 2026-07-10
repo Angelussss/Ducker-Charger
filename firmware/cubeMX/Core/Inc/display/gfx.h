@@ -151,22 +151,20 @@ void GFX_DrawRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color
 
 /**
  * @brief  Draw a rounded-corner rectangle outline.
- *         
- * @param  x, y   Top-left corner         / Angolo in alto a sinistra
- * @param  w, h   Width and height        / Larghezza e altezza
- * @param  r      Corner radius in pixels / Raggio degli angoli in pixel
- * @param  color  Border colour           / Colore del bordo
+ * @param  x, y   Top-left corner
+ * @param  w, h   Width and height
+ * @param  r      Corner radius in pixels
+ * @param  color  Border colour
  */
 void GFX_DrawRoundRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
                        uint16_t r, uint16_t color);
 
 /**
  * @brief  Draw a filled rounded-corner rectangle.
- *         Disegna un rettangolo riempito con angoli arrotondati.
- * @param  x, y   Top-left corner         
- * @param  w, h   Width and height        
- * @param  r      Corner radius in pixels 
- * @param  color  Fill colour             
+ * @param  x, y   Top-left corner
+ * @param  w, h   Width and height
+ * @param  r      Corner radius in pixels
+ * @param  color  Fill colour
  */
 void GFX_FillRoundRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
                        uint16_t r, uint16_t color);

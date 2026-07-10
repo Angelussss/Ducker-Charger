@@ -17,7 +17,6 @@
  *   - COMMAND: tells the chip what to do (e.g. "set the write window")
  *   - DATA:    the actual content (e.g. the pixels to draw)
  *
- *   Il pin DC distingue tra comandi e dati:
  *   LOW  = command
  *   HIGH = data
  *
@@ -135,8 +134,8 @@ void ILI9341_DrawPixel(uint16_t x, uint16_t y, uint16_t color);
  * @brief  Set the write window: the rectangle into which subsequent pixel
  *         data will be written sequentially.
  *
- *         Concetto importante: dopo aver impostato la window, tutti i pixel
- *         inviati verranno scritti automaticamente all'interno di quell'area.
+ *         Important: once the window is set, every pixel sent afterwards
+ *         is written automatically inside that area.
  *
  * @note   Low-level function used internally by FillRect etc. Exposed as
  *         public to allow direct pixel-buffer writes from outside
