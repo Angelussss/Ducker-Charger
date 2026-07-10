@@ -128,19 +128,9 @@ static void do_poll(void)
      * approximate today's capacity from design capacity and SoH. */
     sys_stats.full_cap_mAh     = (uint16_t)(sys_stats.design_cap_mAh * fg.stateOfHealth / 100u);
 
-    /* ---- Per-port monitor ----
-     * Sensing available on this PCB:
-     *   A1/A2  real shunts on INA3221 ch1/ch2, feeding a fixed 5 V rail.
-     *   C1     no shunt. The OTG current lives on the TPS25750/BQ25713
-     *          private I2C_EX bus, unreachable from the MCU — only the
-     *          negotiated contract voltage is known.
-     *   C2/Lab share the STPD01 rail and INA3221 ch3 is tied to GND, so
-     *          neither has a shunt either. What the rail draws is recovered
-     *          from the total-system-power ADC channel by subtracting the
-     *          measured USB-A power. The UI interlock guarantees at most one
-     *          of the two channels is enabled, so the remainder belongs
-     *          entirely to whichever one is on.
-     */
+    /* Per-port monitor: A1/A2 have real INA3221 shunts. C1/C2/Lab don't
+     * (C1's OTG current is on a private bus; C2/Lab share STPD01 with
+     * INA3221 ch3 grounded), so their current is derived below. */
     int16_t a1_mA = (int16_t)ina.current_channel1;
     int16_t a2_mA = (int16_t)ina.current_channel2;
 
@@ -159,9 +149,25 @@ static void do_poll(void)
     uint8_t lab_on  = (get_LAB_Status()   && stpd_on) ? 1u : 0u;
     uint8_t c2_on   = (get_USBC2_Status() && stpd_on) ? 1u : 0u;
 
+    /* C1 current: sink reads IADPT directly. Source (OTG) has no MCU
+     * sense, so isolate it by subtracting the known A1/A2 + C2/Lab power
+     * from total pack discharge (gauge current x voltage), then convert
+     * the remainder to current at C1's own contract voltage. Crosses a
+     * domain boundary (skips the other channels' own conversion loss),
+     * so it runs a bit high — sizing, not calibration. */
+    int16_t c1_mA = 0;
+    if (primary.isSink) {
+        c1_mA = (int16_t)sd.usbCInputCurrent;
+    } else if (get_OTG_Status() && fg.current < 0.0f && primary.voltage > 0.0f) {
+        int32_t pack_out_mW = (int32_t)((-fg.current) * fg.voltage / 1000.0f);
+        int32_t c1_mW = pack_out_mW - p_usba_mW - p_rail_mW;
+        if (c1_mW < 0) c1_mW = 0;
+        c1_mA = (int16_t)(c1_mW * 1000 / (int32_t)primary.voltage);
+    }
+
     port_push(0, 5000u, a1_mA, get_USBA1_Status() ? 1u : 0u);
     port_push(1, 5000u, a2_mA, get_USBA2_Status() ? 1u : 0u);
-    port_push(2, (uint16_t)primary.voltage, 0, get_OTG_Status() ? 1u : 0u);
+    port_push(2, (uint16_t)primary.voltage, c1_mA, primary.isPlugged ? 1u : 0u);
     /* rail_mv, not the raw negotiated secondary.voltage: with a user
      * ceiling below the contract, STPD01's setpoint is what's actually
      * delivered (see setSecondaryUSBC_VoltageCeiling in charge.c). */

@@ -168,9 +168,21 @@ per port. Port data comes from `port_stats[]` in telemetry; A1/A2 have real
 INA3221 shunts; C2/Lab share the STPD01 rail (no shunt — INA3221 ch3 is
 grounded) and their current is derived from the total-system-power ADC
 channel minus the measured USB-A power, which works because the UI
-interlock keeps at most one of the two enabled. USB-C1/OTG has no sensing
-path at all (BQ25713 sits on the TPS25750 private bus): its trace stays at
-zero and only the contract voltage is shown.
+interlock keeps at most one of the two enabled. C1 is active whenever the
+port is plugged, sink or source — the BQ25713 sits on the TPS25750
+private bus, so neither direction has a dedicated MCU sense on the C1
+side, but current is still shown: charging (sink) reads IADPT
+(`sensor_data.usbCInputCurrent`, the one analog telemetry pin exposed for
+that direction); OTG (source) is isolated from A1/A2 (INA3221) and the
+C2/Lab rail (PSYS-derived) by subtracting their power from total pack
+discharge (fuel gauge current × voltage) and converting the remainder to
+current at C1's own contract voltage — so it stays accurate to C1's own
+share even while other outputs draw at the same time, not just when C1
+is the only thing active. The subtraction crosses a domain boundary
+(battery-side power vs. already-converted output-side power for the
+other channels), skipping each of their regulators' own conversion loss,
+so the reading runs a little high — good enough to size the draw, not a
+calibrated measurement.
 
 **STATS** — lifetime data from BQ34Z100 (cycle count, SoH, capacity) and
 per-boot session counters (charges, max temp/current, energy out, uptime).
