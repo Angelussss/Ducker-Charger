@@ -22,6 +22,9 @@ typedef enum {
     EVT_BUTTON_LONG,
     EVT_MANUAL_ENTER,    // UI: enter LAB mode
     EVT_MANUAL_EXIT,     // UI: exit LAB mode
+    EVT_LOCK,            // UI "Lock all": user asks SAFETY_LOCK (sets userLock)
+    EVT_UNLOCK,          // UI "Lock all" off: leave SAFETY_LOCK — honored only
+                         // if the lock was user-initiated (userLock guard)
     EVT_NUMBER
 } Event_t;
 

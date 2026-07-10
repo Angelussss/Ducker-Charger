@@ -79,6 +79,7 @@ typedef enum {
     UI_SCREEN_CONFIRM,    /**< are-you-sure modal for big actions */
     UI_SCREEN_WARNING,    /**< warning modal (temp / voltage), ack once per boot */
     UI_SCREEN_SLEEP,      /**< screen dark; encoder press wake it */
+    UI_SCREEN_FAULT,      /**< FSM in ERROR/EMERGENCY: state + cause, OK = ack */
     UI_SCREEN_COUNT,      /**< Used internally for wrap-around navigation */
 } UIScreen_t;
 
@@ -132,14 +133,19 @@ void UI_CloseSettings(void);
 /** turn screen dark; encoder press wake it */
 void UI_EnterSleep(void);
 
-/** like UI_EnterSleep but wake show short logo splash */
-void UI_EnterSleepLight(void);
-
 /** open confirm modal, remember way home */
 void UI_OpenConfirm(void);
 
 /** re-arm warnings (test scenarios use this) */
 void UI_RearmWarning(void);
+
+/**
+ * @brief  Restart the UI after a DEEP_SLEEP (STOP mode) wake.
+ * @note   Call from the main loop when the FSM leaves STATE_DEEP_SLEEP.
+ *         Consumes the wake press (it must not act on whatever screen was
+ *         frozen when the MCU stopped) and restarts from the boot splash.
+ */
+void UI_OnDeepSleepWake(void);
 
 /**
  * @brief  Return the currently displayed screen.

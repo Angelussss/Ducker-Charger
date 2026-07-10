@@ -69,10 +69,21 @@ typedef struct {
     uint8_t  is_full;       /**< 1 if the FC flag from the fuel gauge is set */
     uint8_t  is_charging;   /**< 1 if current > 0 (battery charging) */
     uint8_t  over_temp;     /**< 1 if the fuel gauge signals over-temperature */
+    uint8_t  over_volt;     /**< 1 while the fuel gauge BATHI flag is set (overcharge) */
+    uint8_t  charge_inhibited; /**< 1 while the gauge CHG_INH/XCHG flags say the pack
+                                    must not be charged (temperature outside the charge
+                                    window). The firmware cannot stop the C1 charger —
+                                    the UI warns the user to unplug. */
 
-    /* --- Charger data from BQ25713 via I2C1 */
+    /* --- Charger data. The BQ25713 that actually runs the charge phases
+     * (pre-charge/fast/taper) sits on a private I2C bus this MCU can't
+     * reach (see charge.c) — vbus_present comes from the TPS25750 PD
+     * contract instead, and charge_phase is a coarse guess from the
+     * BQ34Z100 CHG flag / current sign, not a real phase readback. */
     uint8_t  vbus_present;  /**< 1 if a USB-C power supply is connected */
-    uint8_t  charge_phase;  /**< Charge phase: 0=idle, 1=pre-charge, 2=fast, 3=taper */
+    uint8_t  charge_phase;  /**< 0 = idle, 1 = charging. That's the only
+                                  distinction available; PRE/TAPER are not
+                                  observable from this MCU. */
 
     /* --- Locally computed values */
     int32_t  power_mW;      /**< Instantaneous power = voltage_mV * current_mA / 1000  */
@@ -96,9 +107,11 @@ typedef struct {
 /** Global struct readable by the entire application */
 extern SystemTelemetry_t telemetry;
 
-/* ---- SIM EXTENSION: per-port monitor data ----
- * hardware truth: A1/A2 have real shunts (INA3221 ch1/ch2);
- * C2/Lab current need extra sensing on STPD01 rail. not there yet. */
+/* ---- per-port monitor data ----
+ * hardware truth: A1/A2 have real shunts (INA3221 ch1/ch2). The STPD01
+ * rail (C2 and Lab, interlocked) carries no shunt, so its current is
+ * derived from the total-system-power ADC channel; C1 (OTG) has no
+ * sensing path at all. See do_poll() in telemetry.c. */
 typedef struct {
     uint16_t voltage_mv;
     int16_t  current_mA;
@@ -107,11 +120,6 @@ typedef struct {
     uint8_t  active;
 } PortStats_t;
 extern PortStats_t port_stats[5];   /* 0=USB-A1 1=USB-A2 2=USB-C1(OTG) 3=USB-C2 4=LAB */
-
-/* voltages of 4 parallel groups (4S). HW truth: today board has NO
- * per-cell path to MCU (BQ77915 mute, BQ34Z100 only whole pack):
- * need dedicated sensing or multi-cell gauge. */
-extern uint16_t cell_mv[4];
 
 /* fuel gauge guesses (BQ34Z100 reg 0x18/0x1A, already mapped in
  * charge-management): minutes to empty / full. 0 = no data. */

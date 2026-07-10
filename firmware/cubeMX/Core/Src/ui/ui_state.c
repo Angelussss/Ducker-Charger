@@ -7,6 +7,8 @@
 #include "ui/screens.h"
 #include "app/encoder.h"
 #include "app/telemetry.h"
+#include "system/fsm.h"     /* PB_FSM_ActiveState: FAULT screen takeover */
+#include "system/event.h"   /* event_push: FAULT ack -> EVT_BUTTON_SHORT */
 
 uint8_t temp_out_of_range_pub(int16_t temp_c);
 uint8_t volt_alarm_pub(uint16_t mv);
@@ -42,7 +44,11 @@ static UIScreen_t _confirm_return = UI_SCREEN_SETTINGS;
 
 /** screen to bring back when sleep end */
 static UIScreen_t _sleep_return = UI_SCREEN_MAIN;
-static uint8_t    _sleep_light  = 0;    /* 1 = light sleep: wake show splash */
+
+/** screen to go back to when the FSM leaves ERROR (FAULT screen closes) */
+static UIScreen_t _fault_return = UI_SCREEN_MAIN;
+/** FSM state the FAULT screen was last drawn for (redraw on escalation) */
+static State_ID_t _fault_drawn_state = STATE_NUMBER;
 
 /** where boot screen go and how long (reused as wake splash) */
 static UIScreen_t _boot_dest     = UI_SCREEN_MAIN;
@@ -71,6 +77,11 @@ void UI_Tick(void)
 {
     uint32_t now = HAL_GetTick();
 
+    /* Telemetry is polled by the main loop, before this tick runs: UI_Tick
+     * is skipped in SLEEP/DEEP_SLEEP, and polling from here froze uptime,
+     * the energy integral and every port history for the whole sleep —
+     * which is precisely when a powerbank is feeding a device. */
+
     /* -------- Boot screen auto-transition -------- */
     if (ui_state.current_screen == UI_SCREEN_BOOT)
     {
@@ -86,6 +97,39 @@ void UI_Tick(void)
         return;
     }
 
+    /* -------- FSM fault takeover --------
+     * ERROR/EMERGENCY must be visible whatever the UI was doing: open the
+     * FAULT screen (even over UI sleep), leave it when the FSM recovers.
+     * Placed before the sleep branch so a fault wakes the display. */
+    {
+        State_ID_t fsm_st = PB_FSM_ActiveState();
+        if (fsm_st == STATE_ERROR || fsm_st == STATE_EMERGENCY)
+        {
+            if (ui_state.current_screen != UI_SCREEN_FAULT)
+            {
+                /* return somewhere sensible, never to a modal/dark screen */
+                _fault_return =
+                    (ui_state.current_screen == UI_SCREEN_MAIN     ||
+                     ui_state.current_screen == UI_SCREEN_DETAIL   ||
+                     ui_state.current_screen == UI_SCREEN_GRAPH    ||
+                     ui_state.current_screen == UI_SCREEN_PORTS    ||
+                     ui_state.current_screen == UI_SCREEN_STATS)
+                    ? ui_state.current_screen : UI_SCREEN_MAIN;
+                UI_NavigateTo(UI_SCREEN_FAULT);
+            }
+            else if (fsm_st != _fault_drawn_state)
+            {
+                /* escalation while shown (ERROR -> EMERGENCY): redraw */
+                ui_state.needs_full_redraw = 1;
+            }
+        }
+        else if (ui_state.current_screen == UI_SCREEN_FAULT)
+        {
+            /* FSM recovered (ack processed, charger plugged, ...) */
+            UI_NavigateTo(_fault_return);
+        }
+    }
+
     /* -------- Read encoder input -------- */
 
     int8_t  enc_delta   = Encoder_GetDelta();
@@ -94,20 +138,17 @@ void UI_Tick(void)
     /* -------- sleep: any press wake up, everything else ignored -------- */
     if (ui_state.current_screen == UI_SCREEN_SLEEP)
     {
-        if (btn_pressed)
+        /* draw once on entry: this early return never reaches the periodic
+         * refresh switch below, so without this the panel kept showing the
+         * last frame frozen instead of blanking */
+        if (ui_state.needs_full_redraw)
         {
-            if (_sleep_light)
-            {
-                /* light sleep wake = little power-on: short logo splash */
-                _sleep_light   = 0;
-                _boot_dest     = _sleep_return;
-                _boot_duration = 1200;
-                _boot_start_tick = now;
-                UI_NavigateTo(UI_SCREEN_BOOT);
-            }
-            else
-                UI_NavigateTo(_sleep_return);
+            ui_state.needs_full_redraw = 0;
+            Screen_Sleep_Draw();
         }
+
+        if (btn_pressed)
+            UI_NavigateTo(_sleep_return);
         return;                     /* skip arbiter: wake press make no click */
     }
 
@@ -119,7 +160,8 @@ void UI_Tick(void)
         if (as > 0 && (now - _last_activity) >= as &&
             ui_state.current_screen != UI_SCREEN_BOOT &&
             ui_state.current_screen != UI_SCREEN_WARNING &&
-            ui_state.current_screen != UI_SCREEN_CONFIRM)
+            ui_state.current_screen != UI_SCREEN_CONFIRM &&
+            ui_state.current_screen != UI_SCREEN_FAULT)
         {
             _last_activity = now;
             UI_EnterSleep();
@@ -127,14 +169,28 @@ void UI_Tick(void)
         }
     }
 
-    /* -------- warnings (order: V critical > V low > temperature) -------- */
+    /* -------- warnings (order: V critical > overcharge > V low > temp) --
+     * sensor_ok gate: before the first successful poll telemetry is all
+     * zeros, and 0 mV would read as a critical-voltage alarm. */
     if (ui_state.current_screen != UI_SCREEN_BOOT &&
-        ui_state.current_screen != UI_SCREEN_WARNING)
+        ui_state.current_screen != UI_SCREEN_WARNING &&
+        ui_state.current_screen != UI_SCREEN_FAULT &&
+        telemetry.sensor_ok)
     {
         uint8_t va = volt_alarm_pub(telemetry.voltage_mV);
         WarnType_t t = WARN_COUNT;
 
+        /* episode conditions can recover and come back (unlike "once per
+         * boot" ones): re-arm their ack whenever the condition clears */
+        if (!telemetry.over_volt) _warn_acked[WARN_OVCH] = 0;
+        if (!(telemetry.charge_inhibited && telemetry.vbus_present))
+            _warn_acked[WARN_CHGINH] = 0;
+
         if      (va == 2 && !_warn_acked[WARN_VCRIT]) t = WARN_VCRIT;
+        else if (telemetry.over_volt &&
+                 !_warn_acked[WARN_OVCH])             t = WARN_OVCH;
+        else if (telemetry.charge_inhibited && telemetry.vbus_present &&
+                 !_warn_acked[WARN_CHGINH])           t = WARN_CHGINH;
         else if (va == 1 && !_warn_acked[WARN_VLOW])  t = WARN_VLOW;
         else if (!_warn_acked[WARN_TEMP] &&
                  temp_out_of_range_pub(telemetry.temp_celsius)) t = WARN_TEMP;
@@ -338,21 +394,42 @@ void UI_Tick(void)
                 uint8_t r = Screen_Confirm_OnPress();
                 if (r == 1)   /* user said yes */
                 {
-                    if (Screen_Confirm_GetAction() == CONFIRM_LOCKALL)
+                    ConfirmAction_t action = Screen_Confirm_GetAction();
+                    if (action == CONFIRM_LOCKALL)
                     {
                         Screen_Settings_LockAll(1);
                         UI_NavigateTo(_confirm_return);
                     }
-                    else      /* CONFIRM_LIGHTSLEEP */
+                    else      /* CONFIRM_SHUTDOWN */
                     {
+                        /* Same primitive a real long-press produces
+                         * (main.c). The transition table only honors it
+                         * from IDLE/SLEEP (fsm.c) — same gate hardware is
+                         * subject to — so this can't force DEEP_SLEEP out
+                         * of CHARGING or a protection state; it just asks,
+                         * same as holding the button would. Navigate back
+                         * regardless, same as the LOCKALL branch above: if
+                         * the event is honored, DeepSleep_Enter blocks in
+                         * STOP mode right after and UI_Tick() never runs
+                         * again until UI_OnDeepSleepWake() resets the
+                         * screen anyway; if it wasn't (wrong state), this
+                         * is what keeps the confirm dialog from being
+                         * stuck open with nothing left to do. */
+                        event_push(EVT_BUTTON_LONG);
                         UI_NavigateTo(_confirm_return);
-                        Screen_Settings_LockAll(1);
-                        UI_EnterSleepLight();
                     }
                 }
                 else          /* user said no */
                     UI_NavigateTo(_confirm_return);
             }
+            break;
+
+        case UI_SCREEN_FAULT:
+            /* OK on ERROR pushes the acknowledge event the transition
+             * matrix has always expected (ERROR + BUTTON_SHORT -> IDLE) —
+             * this screen IS the producer. EMERGENCY has no ack. */
+            if (click && PB_FSM_ActiveState() == STATE_ERROR)
+                event_push(EVT_BUTTON_SHORT);
             break;
 
         case UI_SCREEN_WARNING:
@@ -362,20 +439,13 @@ void UI_Tick(void)
                 click = 1;
             if (click)                          /* OK: acked for this boot */
             {
+                /* warnings only inform — they never actuate. The FSM is
+                 * the single authority on outputs: at 12 V it goes to
+                 * EMERGENCY on its own (and the BQ77915 BMS backs it up
+                 * in hardware). The old VCRIT ack used to LockAll + light
+                 * sleep here, racing the FSM at the same threshold. */
                 _warn_acked[_warn_active] = 1;
-                if (_warn_active == WARN_VCRIT)
-                {
-                    /* critical: close all outputs, protect cells.
-                     * real cut is BQ77915 job in hardware; we just lower
-                     * hunger (light sleep) before he wake up angry.
-                     * go back to old screen FIRST so sleep return point
-                     * is not the warning itself. */
-                    UI_NavigateTo(_warn_return);
-                    Screen_Settings_LockAll(1);
-                    UI_EnterSleepLight();
-                }
-                else
-                    UI_NavigateTo(_warn_return);
+                UI_NavigateTo(_warn_return);
             }
             break;
 
@@ -383,10 +453,11 @@ void UI_Tick(void)
             break;
     }
 
-    /* -------- telemetry polling -------- */
-
-    /* Telemetry_Poll() check interval itself, return fast if too early */
-    Telemetry_Poll();
+    /* screen handlers above can enter SLEEP (warning ack, confirm modal):
+     * stop here so the refresh block below can't consume needs_full_redraw
+     * before the sleep branch draws the blank frame on the next tick */
+    if (ui_state.current_screen == UI_SCREEN_SLEEP)
+        return;
 
     /* -------- periodic UI refresh -------- */
 
@@ -413,7 +484,12 @@ void UI_Tick(void)
                 case UI_SCREEN_TESTPG:    Screen_Test_Draw();      break;
                 case UI_SCREEN_CONFIRM:  Screen_Confirm_Draw();    break;
                 case UI_SCREEN_WARNING:  Screen_Warning_Draw();    break;
-                case UI_SCREEN_SLEEP:    Screen_Sleep_Draw();      break;
+                case UI_SCREEN_FAULT:
+                    Screen_Fault_Draw();
+                    _fault_drawn_state = PB_FSM_ActiveState();
+                    break;
+                /* UI_SCREEN_SLEEP: drawn in the sleep branch above,
+                 * its early return never reaches this switch */
                 default: break;
             }
         }
@@ -424,7 +500,8 @@ void UI_Tick(void)
             if (ui_state.current_screen != UI_SCREEN_BOOT &&
                 ui_state.current_screen != UI_SCREEN_SLEEP &&
                 ui_state.current_screen != UI_SCREEN_WARNING &&
-                ui_state.current_screen != UI_SCREEN_CONFIRM)
+                ui_state.current_screen != UI_SCREEN_CONFIRM &&
+                ui_state.current_screen != UI_SCREEN_FAULT)
                 Screen_Header_RefreshIcons();
 
             /* later renders: only redraw moving parts */
@@ -454,11 +531,8 @@ void UI_NavigateTo(UIScreen_t screen)
     ui_state.needs_full_redraw = 1;  /* next tick redraw everything */
 }
 
-void UI_EnterSleepLight(void);   /* sleep flavour with wake splash */
-
 void UI_EnterSleep(void)
 {
-    _sleep_light = 0;
     _sleep_return = (ui_state.current_screen == UI_SCREEN_SETTINGS ||
                      ui_state.current_screen == UI_SCREEN_OUTPUT ||
                      ui_state.current_screen == UI_SCREEN_DISPLAYPG ||
@@ -466,12 +540,6 @@ void UI_EnterSleep(void)
                      ui_state.current_screen == UI_SCREEN_CONFIRM)
                     ? _settings_return : ui_state.current_screen;
     UI_NavigateTo(UI_SCREEN_SLEEP);
-}
-
-void UI_EnterSleepLight(void)
-{
-    UI_EnterSleep();
-    _sleep_light = 1;
 }
 
 void UI_OpenConfirm(void)   /* pages call this: remember way home */
@@ -488,6 +556,22 @@ void UI_CloseSettings(void)
 void UI_RearmWarning(void)
 {
     for (uint8_t i = 0; i < WARN_COUNT; i++) _warn_acked[i] = 0;
+}
+
+void UI_OnDeepSleepWake(void)
+{
+    /* swallow the wake press and any rotation queued while stopped */
+    (void)Encoder_GetDelta();
+    (void)Encoder_IsPressed();
+    ui_state.btn_press_tick = 0;
+    ui_state.btn_was_held   = 0;
+
+    /* restart from the splash, like the light-sleep wake path */
+    _boot_dest       = UI_SCREEN_MAIN;
+    _boot_duration   = 1200;
+    _boot_start_tick = HAL_GetTick();
+    _last_activity   = HAL_GetTick();
+    UI_NavigateTo(UI_SCREEN_BOOT);
 }
 
 UIScreen_t UI_GetCurrentScreen(void)

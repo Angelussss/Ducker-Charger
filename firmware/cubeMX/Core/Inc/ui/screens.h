@@ -156,10 +156,14 @@ typedef enum {
     WARN_TEMP = 0,   /* temp outside comfort cave */
     WARN_VLOW,       /* 12-13 V: heads-up */
     WARN_VCRIT,      /* <12 V: very bad, go light sleep */
+    WARN_OVCH,       /* BATHI set: pack overcharged, unplug the charger
+                        (firmware cannot stop the autonomous C1 charge path) */
+    WARN_CHGINH,     /* gauge CHG_INH/XCHG with a charger attached: pack outside
+                        its charge-temperature window, unplug the charger */
     WARN_COUNT
 } WarnType_t;
 
-typedef enum { CONFIRM_LOCKALL = 0, CONFIRM_LIGHTSLEEP } ConfirmAction_t;
+typedef enum { CONFIRM_LOCKALL = 0, CONFIRM_SHUTDOWN } ConfirmAction_t;
 void Screen_Confirm_Open(ConfirmAction_t action);
 void Screen_Confirm_Draw(void);
 void Screen_Confirm_OnRotate(int8_t d);
@@ -172,6 +176,10 @@ uint32_t Screen_Display_GetAutoSleepMs(void);   /* 0 = off */
 void Screen_Warning_Open(WarnType_t type);
 void Screen_Warning_Draw(void);
 void Screen_Sleep_Draw(void);
+
+/* FSM fault takeover screen: shows ERROR/EMERGENCY + the cause read from
+ * the charge-layer getters. Redraw is cheap enough to run on state change. */
+void Screen_Fault_Draw(void);
 void Screen_Display_Open(void);
 void Screen_Display_Draw(void);
 void Screen_Display_OnRotate(int8_t d);

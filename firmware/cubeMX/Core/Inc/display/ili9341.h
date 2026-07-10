@@ -101,6 +101,14 @@ void ILI9341_SetBrightness(uint8_t pct);
 uint8_t ILI9341_GetBrightness(void);
 
 /**
+ * @brief  Backlight on/off, preserving the stored brightness.
+ * @note   Only this driver knows the BCKL_CTRL polarity (JP402 jumper,
+ *         see DISP_BCKL_ACTIVE_LOW) — never write the pin directly.
+ * @param  on 0 = backlight off, nonzero = backlight on
+ */
+void ILI9341_Backlight(uint8_t on);
+
+/**
  * @brief  Fill the entire screen with a solid colour.
  * @note   Slow operation (~40 ms without DMA). Use only for a full clear.
  * @param  color RGB565 colour

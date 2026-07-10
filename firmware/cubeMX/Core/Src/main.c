@@ -145,12 +145,26 @@ int main(void) {
 
     /* Real knob/button activity also counts against the global inactivity
      * timer -- otherwise SLEEP/DEEP_SLEEP would still fire on schedule
-     * while the user is actively turning the encoder, since nothing else
-     * currently pushes EVT_BUTTON_SHORT/LONG from the encoder. */
+     * while the user is actively turning the encoder. */
     uint32_t encoderActivityTick = Encoder_LastActivityTick();
     if (encoderActivityTick != lastEncoderActivityTick) {
       lastEncoderActivityTick = encoderActivityTick;
       lastActivityTick = HAL_GetTick();
+    }
+
+    /* Deep-sleep entry: encoder button held >= BUTTON_DEEPSLEEP_HOLD_MS,
+     * then released, pushes EVT_BUTTON_LONG (IDLE/SLEEP -> DEEP_SLEEP).
+     * On release and not while held: STOP mode wakes on both EXTI0 edges,
+     * so sleeping with the button still down would wake immediately. */
+    static uint32_t holdStartTick = 0;
+    if (Encoder_IsHeld()) {
+      if (holdStartTick == 0)
+        holdStartTick = HAL_GetTick();
+    } else {
+      if (holdStartTick != 0 &&
+          HAL_GetTick() - holdStartTick >= BUTTON_DEEPSLEEP_HOLD_MS)
+        event_push(EVT_BUTTON_LONG);
+      holdStartTick = 0;
     }
 
     if (HAL_GetTick() - lastActivityTick > INACTIVITY_TIMEOUT_MS) {
@@ -158,12 +172,36 @@ int main(void) {
       lastActivityTick = HAL_GetTick();
     }
 
+    State_ID_t stateBeforeUpdate = PB_FSM_GetState(&fsm);
     PB_FSM_Update(&fsm);
 
+    /* Leaving DEEP_SLEEP: the UI was frozen mid-screen when the MCU
+     * stopped; restart it from the splash and swallow the wake press. */
+    if (stateBeforeUpdate == STATE_DEEP_SLEEP &&
+        PB_FSM_GetState(&fsm) != STATE_DEEP_SLEEP) {
+      UI_OnDeepSleepWake();
+    }
+
+    /* Reshape the charge layer's fresh readings for the UI. Must run here
+     * and not inside UI_Tick(): the FSM keeps polling sensors in SLEEP
+     * (Sleep_Run) but UI_Tick() is skipped below, and the uptime counter,
+     * the energy integral and the per-port histories have to keep running
+     * while the screen is dark. Telemetry_Poll() rate-limits itself. */
+    Telemetry_Poll();
+
     /* Skip UI work while the FSM has the backlight physically off --
-     * avoids pointless SPI/CPU churn into a dark screen. */
-    if (PB_FSM_GetState(&fsm) != STATE_SLEEP) {
+     * avoids pointless SPI/CPU churn into a dark screen. In DEEP_SLEEP
+     * this also keeps the wake press latched in the encoder layer until
+     * UI_OnDeepSleepWake() consumes it. */
+    State_ID_t st = PB_FSM_GetState(&fsm);
+    if (st != STATE_SLEEP && st != STATE_DEEP_SLEEP) {
       UI_Tick();
+    } else if (st == STATE_SLEEP && Encoder_IsPressed()) {
+      /* UI_Tick() is the only consumer of button presses, and it is not
+       * running here: turn the raw press into the wake event ourselves,
+       * or SLEEP -> IDLE could never fire on a button. Consuming the
+       * press also keeps it from navigating the UI after the wake. */
+      event_push(EVT_BUTTON_SHORT);
     }
   }
   /* USER CODE END 3 */

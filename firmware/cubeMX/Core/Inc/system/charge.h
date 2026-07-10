@@ -135,6 +135,21 @@ void enable_USBC2();
 
 void disable_USBC2();
 
+/** EN_OTG (PB15): gates whether the BQ25713 is allowed into OTG mode
+ *  (C1 sourcing power out, i.e. discharging the pack). See charge.c for
+ *  why this pin is a real kill switch, not just a status readback. */
+void enable_OTG();
+void disable_OTG();
+
+/** User ceiling on the C2 output (UI OUTPUT page). CYPD3175 only negotiates
+ *  the PD contract; STPD01 is what actually drives the rail (shared with
+ *  the Lab output), so this is a real clamp applied on top of whatever PD
+ *  negotiated — it can only lower the delivered voltage/current, never
+ *  raise it above the contract. Takes effect immediately if C2 is already
+ *  connected and negotiated; otherwise it's stored for the next contract. */
+void setSecondaryUSBC_VoltageCeiling(float mv);
+void setSecondaryUSBC_CurrentCeiling(float ma);
+
 // Get data functions
 SensorData getSensorData();
 
@@ -157,5 +172,29 @@ int get_USBC2_Status();
 int get_OTG_Status();
 
 int get_STPD01_Enabled();
+
+/** C2_LAB_EN (PA11): 1 while the STPD01 rail is routed to the lab output.
+ *  Mutually exclusive with get_USBC2_Status() — the UI enforces the
+ *  interlock, this is the physical readback. */
+int get_LAB_Status();
+
+/** Voltage / current limit the STPD01 was last programmed to by
+ *  setupSTPD01(), decoded back from the register encoding (so it is the
+ *  quantized value the rail actually holds, not the requested one).
+ *  The converter has no readback and its rail has no shunt, so this is
+ *  the firmware's only knowledge of that rail's voltage. 0 before the
+ *  first successful setupSTPD01(). */
+float getSTPD01_SetpointVoltage();
+float getSTPD01_SetpointCurrent();
+
+/** Last CYPD3175 fault event (CYPD3175_EVT_OVP/OCP/OTP, 0 = none).
+ *  Cleared when a new PD contract completes. The UI fault screen uses it
+ *  to name the cause — FSM events don't carry one by design. */
+uint8_t getCYPD_LastFaultEvent();
+
+/** true while the fuel-gauge I2C reads succeed. false means the values in
+ *  FuelGaugeSensors are STALE (last good read): telemetry propagates this
+ *  as sensor_ok and the UI must flag the data as not live. */
+bool getFuelGaugeReadOK();
 
 #endif

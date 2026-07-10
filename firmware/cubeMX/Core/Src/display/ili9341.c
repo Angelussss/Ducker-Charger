@@ -200,16 +200,20 @@ uint16_t ILI9341_RGB(uint8_t r, uint8_t g, uint8_t b)
 
 static uint8_t _brightness = 100u;
 
+void ILI9341_Backlight(uint8_t on)
+{
+    GPIO_PinState lvl_on  = DISP_BCKL_ACTIVE_LOW ? GPIO_PIN_RESET : GPIO_PIN_SET;
+    GPIO_PinState lvl_off = DISP_BCKL_ACTIVE_LOW ? GPIO_PIN_SET   : GPIO_PIN_RESET;
+
+    HAL_GPIO_WritePin(BCKL_CTRL_GPIO_Port, BCKL_CTRL_Pin,
+                      on ? lvl_on : lvl_off);
+}
+
 void ILI9341_SetBrightness(uint8_t pct)
 {
     if (pct > 100u) pct = 100u;
     _brightness = pct;
-
-    GPIO_PinState on  = DISP_BCKL_ACTIVE_LOW ? GPIO_PIN_RESET : GPIO_PIN_SET;
-    GPIO_PinState off = DISP_BCKL_ACTIVE_LOW ? GPIO_PIN_SET   : GPIO_PIN_RESET;
-
-    HAL_GPIO_WritePin(BCKL_CTRL_GPIO_Port, BCKL_CTRL_Pin,
-                      (pct > 0u) ? on : off);
+    ILI9341_Backlight(pct > 0u);
 }
 
 uint8_t ILI9341_GetBrightness(void)

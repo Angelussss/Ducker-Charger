@@ -8,7 +8,20 @@
 #include "app/telemetry.h"
 #include "main.h"       /* GPIO pin definitions */
 #include "ui/ui_state.h"
+#include "system/fsm.h"    /* PB_FSM_ActiveState: gates + fault screen */
+#include "system/charge.h" /* fault-cause getters for the FAULT screen */
 #include <stdio.h>      /* snprintf */
+
+/* Manual output enables (SETTINGS toggles, OUTPUT page) are honored only
+ * while the FSM is in a state where outputs are allowed. In CHARGING and
+ * in the protection states (SAFETY_LOCK / LOW_V / EMERGENCY / ERROR) the
+ * FSM just closed every output on purpose — a menu click must not reopen
+ * them behind its back. Turning an output OFF is always allowed. */
+static uint8_t fsm_allows_manual_enable(void)
+{
+    State_ID_t st = PB_FSM_ActiveState();
+    return st == STATE_IDLE || st == STATE_SLEEP || st == STATE_MANUAL;
+}
 
 /* =========================================================
  * LAYOUT CONSTANTS
@@ -58,6 +71,14 @@ void Screen_Header_RefreshIcons(void)
 {
     ILI9341_FillRect(150, HEADER_Y + 4, 88, HEADER_H - 10, COLOR_HEADER);
 
+    /* gauge unreachable: every battery number on screen is the last good
+     * read, not live. Say so instead of drawing icons from stale data. */
+    if (!telemetry.sensor_ok) {
+        GFX_DrawString(152, HEADER_Y + 11, "NO SENSOR",
+                       &GFX_FontSmall, COLOR_DANGER, COLOR_HEADER);
+        return;
+    }
+
     /* thermometer: red when hot, cyan when cold. no icon = temp good */
     if (telemetry.temp_celsius >= 45)
         Widget_StatusIcon_Draw(170, HEADER_Y + 10, ICON_TEMP_WARN, "", 1);
@@ -80,6 +101,11 @@ void Screen_Header_RefreshIcons(void)
         Widget_StatusIcon_Draw(185, HEADER_Y + 10, ICON_CHARGING, "", 1);
     else if (telemetry.current_mA < 0)
         Widget_StatusIcon_Draw(185, HEADER_Y + 10, ICON_DISCHARGING, "", 1);
+
+    /* gauge says the pack must not be charged (temperature window) */
+    if (telemetry.charge_inhibited)
+        GFX_DrawString(216, HEADER_Y + 11, "INH",
+                       &GFX_FontSmall, COLOR_ORANGE, COLOR_HEADER);
 }
 
 static void draw_footer(uint8_t active_dot)
@@ -109,11 +135,19 @@ static uint16_t current_color(int16_t current_mA)
 #define TH_SOC_ORANGE      15     /* below this % -> orange */
 #define TH_SOC_RED          5     /* below this % -> red  */
 #define TH_TEMP_ORANGE     45     /* C */
-#define TH_TEMP_RED        60     /* C */
+/* Thermal ladder, coordinated with the rest of the system:
+ * 45 C header icon -> 50 C UI warning (here) -> 55 C gauge OT = FSM ERROR
+ * (fault screen). The warning must come BEFORE the fault, not after. */
+#define TH_TEMP_RED        50     /* C */
 #define TH_TEMP_COLD       10     /* below this C -> cyan + warning */
 #define TH_VOLT_GREEN_MV   14000  /* 14-17 V: green, all good */
 #define TH_VOLT_ORANGE_MV  13000  /* 13-14 V: orange, keep eye on it */
-#define TH_VOLT_RED_MV     12000  /* 12-13 V red; below: red that blinks */
+#define TH_VOLT_RED_MV     12000  /* red + blink; FSM EMERGENCY fires here */
+/* UI critical-battery warning: fires ABOVE the hard limits so it is a real
+ * heads-up — the gauge raises BATLOW around 12.2 V and the FSM goes
+ * EMERGENCY (terminal, fault screen) at 12.0 V. The UI only warns;
+ * the FSM is the one that acts. */
+#define TH_VOLT_CRIT_MV    12500
 
 uint16_t battery_color_pub(uint8_t pct)
 {
@@ -136,16 +170,6 @@ uint8_t temp_out_of_range_pub(int16_t temp_c)
     return (temp_c > TH_TEMP_RED) || (temp_c < TH_TEMP_COLD);
 }
 
-#define TH_CELL_ORANGE_MV  3250   /* per single parallel group */
-#define TH_CELL_RED_MV     3050
-
-static uint16_t cell_color(uint16_t mv)
-{
-    if (mv < TH_CELL_RED_MV)    return COLOR_DANGER;
-    if (mv < TH_CELL_ORANGE_MV) return COLOR_ORANGE;
-    return COLOR_WHITE;
-}
-
 uint16_t volt_color_pub(uint16_t mv)
 {
     if (mv < TH_VOLT_RED_MV)          /* critico: rosso lampeggiante */
@@ -155,10 +179,10 @@ uint16_t volt_color_pub(uint16_t mv)
     return COLOR_GREEN;
 }
 
-/* 0 = fine, 1 = warn (12-13 V), 2 = very bad (<12 V) */
+/* 0 = fine, 1 = warn (12.5-13 V), 2 = critical (<12.5 V, EMERGENCY at 12 V) */
 uint8_t volt_alarm_pub(uint16_t mv)
 {
-    if (mv < TH_VOLT_RED_MV)    return 2;
+    if (mv < TH_VOLT_CRIT_MV)   return 2;
     if (mv < TH_VOLT_ORANGE_MV) return 1;
     return 0;
 }
@@ -185,9 +209,6 @@ void Screen_Boot_Draw(void)
     GFX_DrawStringScaled(24, 160, "DUCKER",  &GFX_FontSmall, 3, COLOR_ACCENT, COLOR_TRANSPARENT_MAGIC);
     GFX_DrawStringScaled(73, 195, "CHARGER", &GFX_FontSmall, 3, COLOR_DARKGRAY, COLOR_TRANSPARENT_MAGIC);
     GFX_DrawStringScaled(70, 192, "CHARGER", &GFX_FontSmall, 3, COLOR_WHITE, COLOR_TRANSPARENT_MAGIC);
-
-    /* small words under big name */
-    GFX_DrawString(78, 232, "Smart UPS 4S3P", &GFX_FontSmall, COLOR_GRAY, COLOR_BG);
 
     /* decoration lines, stairs like words */
     GFX_DrawHLine(24, 152, 128, COLOR_ACCENT);
@@ -314,7 +335,6 @@ void Screen_Main_Update(void)
 
 #define DETAIL_COL_A   10
 #define DETAIL_COL_B   125
-#define DETAIL_CELLS_Y 242
 #define DETAIL_ROW_1   (CONTENT_Y + 10)
 #define DETAIL_ROW_2   (DETAIL_ROW_1 + 75)
 #define DETAIL_ROW_3   (DETAIL_ROW_2 + 75)
@@ -332,15 +352,10 @@ void Screen_Detail_Draw(void)
     GFX_DrawString(DETAIL_COL_A, DETAIL_ROW_3, "TEMP",        &GFX_FontSmall, COLOR_LIGHTGRAY, COLOR_BG);
     GFX_DrawString(DETAIL_COL_B, DETAIL_ROW_3, "CHARGER",     &GFX_FontSmall, COLOR_LIGHTGRAY, COLOR_BG);
 
-    /* grid lines (vline stop above cells box) */
+    /* grid lines */
     GFX_DrawVLine(120, CONTENT_Y + 5, 200, COLOR_DARKGRAY);
     GFX_DrawHLine(10,  DETAIL_ROW_2 - 5, 220, COLOR_DARKGRAY);
     GFX_DrawHLine(10,  DETAIL_ROW_3 - 5, 220, COLOR_DARKGRAY);
-
-    /* box for 4 parallel-group voltages */
-    GFX_DrawRect(10, DETAIL_CELLS_Y, 220, 40, COLOR_DARKGRAY);
-    GFX_DrawString(18, DETAIL_CELLS_Y - 4, " CELLS ",
-                   &GFX_FontSmall, COLOR_LIGHTGRAY, COLOR_BG);
 
     draw_footer(1); /* dot 1 = DETAIL */
     Screen_Detail_Update();
@@ -385,23 +400,11 @@ void Screen_Detail_Update(void)
     detail_value(DETAIL_COL_A, DETAIL_ROW_3 + val_y,
                  buf, temp_color_pub(telemetry.temp_celsius));
 
-    /* one voltage per group, colour from per-cell thresholds */
-    for (uint8_t i = 0; i < 4; i++)
-    {
-        uint16_t cx = 16 + i * 54;
-        snprintf(buf, sizeof(buf), "%u.%02u", cell_mv[i] / 1000,
-                 (cell_mv[i] % 1000) / 10);
-        GFX_DrawString(cx, DETAIL_CELLS_Y + 8, (const char[]){ '1' + i, 0 },
-                       &GFX_FontSmall, COLOR_GRAY, COLOR_BG);
-        ILI9341_FillRect(cx, DETAIL_CELLS_Y + 22, 30, GFX_FONT_SMALL_H, COLOR_BG);
-        GFX_DrawString(cx, DETAIL_CELLS_Y + 22, buf,
-                       &GFX_FontSmall, cell_color(cell_mv[i]), COLOR_BG);
-    }
-
-    /* Charger state */
-    const char *phase_str[] = {"IDLE", "PRE", "FAST", "TAPER"};
+    /* Charger state: charge_phase is only ever IDLE/FAST — the BQ25713 knows
+     * PRE/TAPER but sits on a private I2C bus this MCU can't reach. */
+    const char *phase_str[] = {"IDLE", "FAST"};
     const char *state_str   = telemetry.vbus_present
-                              ? phase_str[telemetry.charge_phase & 0x03]
+                              ? phase_str[telemetry.charge_phase & 0x01]
                               : "NO INPUT";
     detail_value(DETAIL_COL_B, DETAIL_ROW_3 + val_y,
                  state_str,
@@ -482,7 +485,7 @@ void Screen_Graph_Update(void)
 #define PORTS_GRAPH_H    130
 #define PORTS_LEG_Y      (PORTS_GRAPH_Y + PORTS_GRAPH_H + 12)
 #define PORTS_LEG_ROW_H  19
-#define PORTS_I_MAX      3000
+#define PORTS_I_MAX      5000   /* C1 OTG can reach 5 A, the widest of the five */
 
 static const struct { const char *name; uint16_t color; } _port_meta[5] = {
     { "USB-A 1",  COLOR_PORT_A1 },
@@ -541,8 +544,12 @@ void Screen_Ports_Draw(void)
     draw_header("PORT MONITOR");
 
     /* axes: full scale and time window */
-    GFX_DrawString(PORTS_GRAPH_X, PORTS_GRAPH_Y - 10, "3A",
-                   &GFX_FontSmall, COLOR_GRAY, COLOR_BG);
+    {
+        char buf[8];
+        snprintf(buf, sizeof(buf), "%uA", PORTS_I_MAX / 1000u);
+        GFX_DrawString(PORTS_GRAPH_X, PORTS_GRAPH_Y - 10, buf,
+                       &GFX_FontSmall, COLOR_GRAY, COLOR_BG);
+    }
     GFX_DrawString(160, PORTS_GRAPH_Y + PORTS_GRAPH_H + 2, "< 30 s >",
                    &GFX_FontSmall, COLOR_GRAY, COLOR_BG);
 
@@ -647,9 +654,11 @@ void Screen_Stats_Draw(void)
 static uint8_t _disp_row  = 0;   /* 0=Lum 1=AutoSleep 2=Screen off 3=Light sleep 4=Back */
 static uint8_t _disp_edit = 0;
 
-/* auto-sleep: index into {Off, 1, 5, 15 min} */
-static const uint16_t _asleep_min[] = { 0, 1, 5, 15 };
-static uint8_t _asleep_idx = 2;   /* default 5 min */
+/* auto-sleep: index into {Off, 1, 2, 15 min}. Default matches
+ * INACTIVITY_TIMEOUT_MS (defines.h) so the FSM's own inactivity sleep
+ * doesn't pre-empt this setting before it ever gets a chance to fire. */
+static const uint16_t _asleep_min[] = { 0, 1, 2, 15 };
+static uint8_t _asleep_idx = 2;   /* default 2 min */
 uint32_t Screen_Display_GetAutoSleepMs(void)
 { return (uint32_t)_asleep_min[_asleep_idx] * 60000u; }
 
@@ -670,7 +679,7 @@ static void disp_draw_rows(void)
     Widget_MenuRow_Draw(10, SET_LIST_START + 42,  220, 36, buf, (_disp_row == 1));
 
     Widget_MenuRow_Draw(10, SET_LIST_START + 84,  220, 36, "Screen off",  (_disp_row == 2));
-    Widget_MenuRow_Draw(10, SET_LIST_START + 126, 220, 36, "Light sleep", (_disp_row == 3));
+    Widget_MenuRow_Draw(10, SET_LIST_START + 126, 220, 36, "Shutdown",    (_disp_row == 3));
     Widget_MenuRow_Draw(10, SET_LIST_START + 168, 220, 36, "< Back",      (_disp_row == 4));
 
     ILI9341_FillRect(0, FOOTER_Y, ILI9341_WIDTH, FOOTER_H, COLOR_HEADER);
@@ -709,7 +718,7 @@ void Screen_Display_OnPress(void)
         case 0:
         case 1: _disp_edit = 1; disp_draw_rows(); break;
         case 2: UI_EnterSleep(); break;
-        case 3: Screen_Confirm_Open(CONFIRM_LIGHTSLEEP);
+        case 3: Screen_Confirm_Open(CONFIRM_SHUTDOWN);
                 UI_OpenConfirm(); break;
         case 4: UI_NavigateTo(UI_SCREEN_SETTINGS); break;
     }
@@ -729,7 +738,6 @@ static void t_lowv(void)
 {
     telemetry.voltage_mV = 12500; telemetry.soc_percent = 12;
     telemetry.current_mA = -900;
-    for (int i = 0; i < 4; i++) cell_mv[i] = 3125;
     telemetry.is_charging = 0;
     UI_RearmWarning();
 }
@@ -737,7 +745,6 @@ static void t_vcrit(void)
 {
     telemetry.voltage_mV = 11800; telemetry.soc_percent = 3;
     telemetry.current_mA = -1200;
-    for (int i = 0; i < 4; i++) cell_mv[i] = 2950;
     telemetry.is_charging = 0;
     UI_RearmWarning();
 }
@@ -813,8 +820,8 @@ static ConfirmAction_t _confirm_action = CONFIRM_LOCKALL;
 static uint8_t         _confirm_sel    = 1;   /* 0=OK 1=Cancel (default sicuro) */
 
 static const char *_confirm_title[] = {
-    [CONFIRM_LOCKALL]    = "LOCK ALL PORTS?",
-    [CONFIRM_LIGHTSLEEP] = "LIGHT SLEEP?",
+    [CONFIRM_LOCKALL]  = "LOCK ALL PORTS?",
+    [CONFIRM_SHUTDOWN] = "SHUTDOWN?",
 };
 void Screen_Confirm_Open(ConfirmAction_t action)
 {
@@ -839,14 +846,14 @@ void Screen_Confirm_Draw(void)
                          &GFX_FontSmall, 2, COLOR_ACCENT, COLOR_BG);
 
     if (_confirm_action == CONFIRM_LOCKALL)
-        GFX_DrawString(30, 140, "All outputs except USB-C1",
+        GFX_DrawString(45, 140, "All outputs closed.",
                        &GFX_FontSmall, COLOR_WHITE, COLOR_BG),
-        GFX_DrawString(75, 152, "will be closed.",
+        GFX_DrawString(35, 152, "USB-C1 keeps charging in.",
                        &GFX_FontSmall, COLOR_WHITE, COLOR_BG);
-    else
-        GFX_DrawString(27, 140, "Ports locked and screen off",
+    else /* CONFIRM_SHUTDOWN */
+        GFX_DrawString(35, 140, "Everything off. Press the",
                        &GFX_FontSmall, COLOR_WHITE, COLOR_BG),
-        GFX_DrawString(48, 152, "until encoder press.",
+        GFX_DrawString(30, 152, "encoder to power back on.",
                        &GFX_FontSmall, COLOR_WHITE, COLOR_BG);
 
     confirm_draw_buttons();
@@ -885,8 +892,14 @@ static const WarnText_t _warn_text[WARN_COUNT] = {
     [WARN_VLOW]  = { "LOW VOLTAGE",
         { "Battery voltage is low:", "recharge soon.", "" } },
     [WARN_VCRIT] = { "CRITICAL BATTERY",
-        { "Critically low battery.", "Going into light sleep",
-          "to avoid cell damage." } },
+        { "Battery almost empty:", "below 12 V the system",
+          "shuts down. Recharge now." } },
+    [WARN_OVCH]  = { "BATTERY FULL",
+        { "Battery is overcharged:", "unplug the charger and",
+          "discharge to recover." } },
+    [WARN_CHGINH] = { "CHARGE INHIBITED",
+        { "Battery outside its charge", "temperature window:",
+          "unplug the charger." } },
 };
 
 void Screen_Warning_Draw(void)
@@ -917,7 +930,7 @@ void Screen_Warning_Draw(void)
                            &GFX_FontSmall, COLOR_WHITE, COLOR_BG);
 
     /* the number that matters */
-    if (_warn_type == WARN_TEMP) {
+    if (_warn_type == WARN_TEMP || _warn_type == WARN_CHGINH) {
         snprintf(buf, sizeof(buf), "%d C", telemetry.temp_celsius);
         GFX_DrawStringScaled(96, 240, buf, &GFX_FontSmall, 2,
                              temp_color_pub(telemetry.temp_celsius), COLOR_BG);
@@ -941,6 +954,73 @@ void Screen_Sleep_Draw(void)
     /* on real board: send DISPOFF (0x28) + kill backlight PB8 here,
      * on wake DISPON (0x29) + backlight on. in sim: just black. */
     ILI9341_FillScreen(COLOR_BLACK);
+}
+
+/* =========================================================
+ * SCREEN: FAULT — FSM in ERROR/EMERGENCY, cause from charge layer
+ * ========================================================= */
+
+/* The event does not carry the fault cause (by design, see FSM.md):
+ * read whichever charge-layer flag is still set, most severe first. */
+static const char *fault_cause(void)
+{
+    STPD01_Status    s  = getSTPD01_Status();
+    FuelGaugeSensors fg = getFuelGaugeData();
+    INA3221_Sensors  in = getINA3221_Sensors();
+
+    switch (getCYPD_LastFaultEvent()) {
+        case CYPD3175_EVT_OVP: return "USB-C2 overvoltage";
+        case CYPD3175_EVT_OCP: return "USB-C2 overcurrent";
+        case CYPD3175_EVT_OTP: return "USB-C2 overtemperature";
+        default: break;
+    }
+    if (s.shortCircuitProtection)          return "STPD01 short circuit";
+    if (s.overVoltageProtection)           return "STPD01 overvoltage";
+    if (s.inductorPeakCurrentProtection)   return "STPD01 current peak";
+    if (s.overTemperatureProtection)       return "STPD01 overtemperature";
+    if (fg.flags.OTC || fg.flags.OTD)      return "Battery overtemperature";
+    if (fg.flags.BATLOW)                   return "Battery undervoltage";
+    if (in.critical_alert_channel1)        return "Overcurrent on USB-A1";
+    if (in.critical_alert_channel2)        return "Overcurrent on USB-A2";
+    if (fg.flags.CF)                       return "Gauge needs calibration";
+    return "Sensor / I2C fault";
+}
+
+void Screen_Fault_Draw(void)
+{
+    char buf[24];
+    uint8_t emergency = (PB_FSM_ActiveState() == STATE_EMERGENCY);
+    const char *title = emergency ? "EMERGENCY" : "SYSTEM ERROR";
+    const char *cause = fault_cause();
+
+    ILI9341_FillScreen(COLOR_BG);
+
+    /* same triangle as the warning screen, always danger-red */
+    for (uint8_t t = 0; t < 3; t++) {
+        GFX_DrawLine(120, 52 + t, 68 + t, 148 - t, COLOR_DANGER);
+        GFX_DrawLine(120, 52 + t, 172 - t, 148 - t, COLOR_DANGER);
+        GFX_DrawLine(70, 146 + t, 170, 146 + t, COLOR_DANGER);
+    }
+    GFX_DrawStringScaled(109, 90, "!", &GFX_FontSmall, 5, COLOR_DANGER, COLOR_BG);
+
+    GFX_DrawStringScaled((uint16_t)((240 - strlen(title) * 14) / 2), 168,
+                         title, &GFX_FontSmall, 2, COLOR_DANGER, COLOR_BG);
+    GFX_DrawString((uint16_t)((240 - strlen(cause) * 6) / 2), 200,
+                   cause, &GFX_FontSmall, COLOR_WHITE, COLOR_BG);
+
+    /* the numbers that matter: pack voltage and temperature */
+    snprintf(buf, sizeof(buf), "%u.%02u V   %d C",
+             telemetry.voltage_mV / 1000, (telemetry.voltage_mV % 1000) / 10,
+             telemetry.temp_celsius);
+    GFX_DrawString((uint16_t)((240 - strlen(buf) * 6) / 2), 224, buf,
+                   &GFX_FontSmall, COLOR_LIGHTGRAY, COLOR_BG);
+
+    if (emergency)
+        /* terminal state: nothing to acknowledge */
+        GFX_DrawString(37, 252, "Disconnect loads, power off.",
+                       &GFX_FontSmall, COLOR_DANGER, COLOR_BG);
+    else
+        Widget_Button_Draw(80, 272, 80, 30, "OK", 1);
 }
 
 /* =========================================================
@@ -1012,15 +1092,42 @@ static uint8_t _out_edit = 0;   /* 1 = encoder edits the selected value */
 
 static void out_apply_enable(uint8_t ch)
 {
-    /* interlock: two loads share one STPD01 rail, never both on */
-    if (_out_ch[ch].enabled) {
-        _out_ch[!ch].enabled = 0;
-        HAL_GPIO_WritePin(_out_ch[!ch].gpio_port, _out_ch[!ch].gpio_pin, GPIO_PIN_RESET);
+    /* enabling is refused while the FSM has outputs locked
+     * (CHARGING / protection states); disabling always goes through */
+    if (_out_ch[ch].enabled && !fsm_allows_manual_enable()) {
+        _out_ch[ch].enabled = 0;
+        return;
     }
-    HAL_GPIO_WritePin(_out_ch[ch].gpio_port, _out_ch[ch].gpio_pin,
-                      _out_ch[ch].enabled ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    /* TODO hardware: call charge-management module here
-     * (talk PD via STPD01 / STUSB4710), not naked GPIO poke. */
+
+    /* interlock: two loads share one STPD01 rail, never both on */
+    if (_out_ch[ch].enabled && _out_ch[!ch].enabled) {
+        _out_ch[!ch].enabled = 0;
+        if (ch == 1)
+            event_push(EVT_MANUAL_EXIT);   /* lab goes down through the FSM */
+        else
+            HAL_GPIO_WritePin(_out_ch[1].gpio_port, _out_ch[1].gpio_pin,
+                              GPIO_PIN_RESET);
+    }
+
+    if (ch == 0) {
+        /* LAB channel = FSM MANUAL state. EVT_MANUAL_ENTER: Manual_Enter
+         * raises C2_LAB_EN; EVT_MANUAL_EXIT: Manual_Exit tears down
+         * STPD01 + C2 + the LAB pin. The STPD01 itself is programmed
+         * through the charge layer (see FSM.md: in MANUAL the UI drives
+         * setupSTPD01/enable_STPD01, never naked GPIO pokes). */
+        if (_out_ch[0].enabled) {
+            event_push(EVT_MANUAL_ENTER);
+            if (setupSTPD01(_out_ch[0].voltage_mv, _out_ch[0].ilim_ma))
+                enable_STPD01();
+            else
+                event_push(EVT_ERROR);
+        } else {
+            event_push(EVT_MANUAL_EXIT);
+        }
+    } else {
+        HAL_GPIO_WritePin(_out_ch[1].gpio_port, _out_ch[1].gpio_pin,
+                          _out_ch[1].enabled ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    }
 }
 
 static void out_fmt_volt(char *buf, size_t n, uint16_t mv)
@@ -1032,6 +1139,16 @@ const char *Screen_Output_RowStatus(uint8_t channel)
 {
     static char st[2][16];
     char v[8];
+    if (channel == 1) {
+        /* C2: live pin + what STPD01 is actually programmed to (never the
+         * cached ceiling — the connection interrupt enables this
+         * autonomously, so a cached flag would lag behind reality). */
+        uint8_t on = get_USBC2_Status() ? 1u : 0u;
+        out_fmt_volt(v, sizeof(v), on ? (uint16_t)getSTPD01_SetpointVoltage()
+                                      : _out_ch[1].voltage_mv);
+        snprintf(st[1], sizeof(st[1]), "%s %s", on ? "ON " : "OFF", v);
+        return st[1];
+    }
     out_fmt_volt(v, sizeof(v), _out_ch[channel].voltage_mv);
     snprintf(st[channel], sizeof(st[channel]), "%s %s",
              _out_ch[channel].enabled ? "ON " : "OFF", v);
@@ -1056,7 +1173,7 @@ static void lab_bench_render(void)
     OutputChannel_t *ch = &_out_ch[0];
     char buf[24];
 
-    /* fake load from port monitor (0 when port idle in config) */
+    /* live draw from the port monitor (derived from the system-power ADC) */
     int32_t i_load = port_stats[4].current_mA;
     if (i_load < 0) i_load = 0;
 
@@ -1149,8 +1266,12 @@ static void out_draw_rows(void)
     OutputChannel_t *ch = &_out_ch[_out_cur];
     char buf[32], v[8];
 
-    /* Row 0: enable */
-    snprintf(buf, sizeof(buf), "%-12s [%s]", "Enable", ch->enabled ? "ON " : "OFF");
+    /* Row 0: enable — live pin (get_USBC2_Status), not the cached flag:
+     * this only ever runs for C2 (Lab returns above), and the connection
+     * interrupt can enable this port autonomously — see
+     * Screen_Output_RowStatus for the same reasoning. */
+    snprintf(buf, sizeof(buf), "%-12s [%s]", "Enable",
+             get_USBC2_Status() ? "ON " : "OFF");
     Widget_MenuRow_Draw(10, SETTINGS_ROW_START, 220, SETTINGS_ROW_H - 4,
                         buf, (_out_row == 0));
 
@@ -1191,7 +1312,7 @@ void Screen_Output_Draw(void)
     draw_header(_out_ch[_out_cur].title);
 
     if (_out_cur != 0)
-        GFX_DrawString(10, CONTENT_Y - 8, "PD source ceiling - STUSB4710",
+        GFX_DrawString(10, CONTENT_Y - 8, "PD source ceiling - CYPD3175",
                        &GFX_FontSmall, COLOR_GRAY, COLOR_BG);
 
     out_draw_rows();
@@ -1242,9 +1363,20 @@ void Screen_Output_OnPress(void)
 
     if (_out_edit) {                 /* confirm value */
         _out_edit = 0;
-        /* TODO hardware: Charge_SetLabVoltage(ch->voltage_mv) /
-         *                Charge_SetC2MaxPDO(ch->pdo_idx) /
-         *                Charge_SetIlim(ch->ilim_ma) -> STPD01 reg ILIM 0x01 */
+        /* lab channel live: reprogram the STPD01 through the charge layer
+         * (setupSTPD01 disables the converter first, then we re-enable) */
+        if (_out_cur == 0 && _out_ch[0].enabled) {
+            if (setupSTPD01(_out_ch[0].voltage_mv, _out_ch[0].ilim_ma))
+                enable_STPD01();
+            else
+                event_push(EVT_ERROR);
+        } else if (_out_cur == 1) {
+            /* C2 ceiling: never above what PD negotiated, only below it —
+             * the charge layer clamps and, if a device is already
+             * connected, re-applies immediately (see charge.c). */
+            setSecondaryUSBC_VoltageCeiling(_out_ch[1].voltage_mv);
+            setSecondaryUSBC_CurrentCeiling(_out_ch[1].ilim_ma);
+        }
         out_draw_rows();
         return;
     }
@@ -1273,22 +1405,21 @@ static uint8_t _lock_all = 0;
 
 void Screen_Settings_LockAll(uint8_t on)
 {
+    /* The FSM owns the outputs: "Lock all" is a SAFETY_LOCK injector, not
+     * a pile of GPIO pokes. SafetyLock_Enter closes every port; EVT_UNLOCK
+     * brings back IDLE — but only for a user-initiated lock (the userLock
+     * guard in the FSM: a low-SoC SAFETY_LOCK cannot be dismissed here). */
     _lock_all = on;
-    if (!on) return;
-    /* close every output except primary USB-C (C1). C1 sacred. */
-    for (uint8_t i = 0; i < 2; i++) {           /* A1, A2 */
-        _settings_rows[i].state = 0;
-        HAL_GPIO_WritePin(_settings_rows[i].gpio_port,
-                          _settings_rows[i].gpio_pin, GPIO_PIN_RESET);
-    }
-    for (uint8_t c = 0; c < 2; c++) {           /* Lab, C2 */
-        _out_ch[c].enabled = 0;
-        HAL_GPIO_WritePin(_out_ch[c].gpio_port, _out_ch[c].gpio_pin,
-                          GPIO_PIN_RESET);
-    }
+    if (on) _out_ch[0].enabled = _out_ch[1].enabled = 0;  /* menu mirrors */
+    event_push(on ? EVT_LOCK : EVT_UNLOCK);
 }
 
-uint8_t Screen_Settings_GetLockAll(void) { return _lock_all; }
+uint8_t Screen_Settings_GetLockAll(void)
+{
+    /* live truth: the menu reflects the FSM, whatever path locked it */
+    _lock_all = (PB_FSM_ActiveState() == STATE_SAFETY_LOCK) ? 1u : 0u;
+    return _lock_all;
+}
 
 void Screen_Settings_Draw(uint8_t selected_row)
 {
@@ -1324,14 +1455,18 @@ void Screen_Settings_Update(uint8_t selected_row)
         uint16_t row_y = SET_LIST_START + i * SET_LIST_ROW_H;
 
         if (i < 2) {
-            /* plain on/off toggles for USB-A */
+            /* plain on/off toggles for USB-A. Drawing must never actuate:
+             * the FSM and the charge layer also drive these pins, so the
+             * menu reads the live pin state instead of pushing its own
+             * (previously opening SETTINGS force-wrote stale row states,
+             * silently shutting A1/A2 off). The pin is written in
+             * Screen_Settings_Toggle only, on an explicit user click. */
+            _settings_rows[i].state =
+                (HAL_GPIO_ReadPin(_settings_rows[i].gpio_port,
+                                  _settings_rows[i].gpio_pin) == GPIO_PIN_SET);
             snprintf(buf, sizeof(buf), "%-12s [%s]",
                      _settings_rows[i].name,
                      _settings_rows[i].state ? "ON " : "OFF");
-            HAL_GPIO_WritePin(_settings_rows[i].gpio_port,
-                              _settings_rows[i].gpio_pin,
-                              _settings_rows[i].state ? GPIO_PIN_SET
-                                                      : GPIO_PIN_RESET);
         }
         else if (i < 4) {
             /* channel pages Lab / USB-C2 */
@@ -1340,7 +1475,7 @@ void Screen_Settings_Update(uint8_t selected_row)
         }
         else if (i == 4) {
             snprintf(buf, sizeof(buf), "%-12s [%s]", "Lock all",
-                     _lock_all ? "ON " : "OFF");
+                     Screen_Settings_GetLockAll() ? "ON " : "OFF");
         }
         else if (i == 5) {
             snprintf(buf, sizeof(buf), "%-12s %3u%% >", "Display",
@@ -1359,7 +1494,16 @@ void Screen_Settings_Toggle(uint8_t row)
 {
     if (row >= SETTINGS_NUM_ROWS) return;
 
+    /* enabling is refused while the FSM has outputs locked
+     * (CHARGING / protection states); disabling always goes through */
+    if (!_settings_rows[row].state && !fsm_allows_manual_enable())
+        return;
+
     _settings_rows[row].state ^= 1;
+    HAL_GPIO_WritePin(_settings_rows[row].gpio_port,
+                      _settings_rows[row].gpio_pin,
+                      _settings_rows[row].state ? GPIO_PIN_SET
+                                                : GPIO_PIN_RESET);
 
     /* user turn port back on by hand -> lock mode over */
     if (_settings_rows[row].state) _lock_all = 0;

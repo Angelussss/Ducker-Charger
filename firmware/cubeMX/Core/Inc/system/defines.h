@@ -15,7 +15,24 @@
   16400.0f // mV pack — 4100 mV/cell × 4S, mirrors BQ34Z100 BATHI data flash
            // threshold
 
-#define INACTIVITY_TIMEOUT_MS 30000 // ms — IDLE/CHARGING/LOW_V → SLEEP
+// ms — IDLE/CHARGING/LOW_V -> SLEEP. Matches the UI DISPLAY page's default
+// "Auto sleep" setting (screens.c _asleep_min[]) so the two inactivity
+// timers agree instead of the FSM silently pre-empting the UI's own option.
+#define INACTIVITY_TIMEOUT_MS 120000
+
+// CHRG_OK falling while a charger contract is active is an adapter failure
+// only if the contract is STILL active once this grace expires: on a plain
+// unplug the BQ25713 drops CHRG_OK microseconds after VBUS dies, while the
+// TPS25750 plug-removal interrupt follows milliseconds later — without the
+// grace every unplug would be reported as an error.
+#define CHRGOK_GRACE_MS 100
+
+// Encoder button held at least this long, then released → EVT_BUTTON_LONG
+// (IDLE/SLEEP → DEEP_SLEEP). Fired on release, not while held: EXTI0 wakes
+// STOP mode on both edges, so entering STOP with the button still down
+// would wake right back up on release. Must be well above the UI's 1 s
+// long-press (SETTINGS overlay), which still triggers on the way.
+#define BUTTON_DEEPSLEEP_HOLD_MS 3000
 
 // ---- BQ34Z100-R2 Fuel Gauge @ I2C1 ----
 #define FUEL_GAUGE_ADDR ((uint16_t)(0x55 << 1))
@@ -88,5 +105,7 @@
 #define USB_STPD01_EN_CTRL_GPIO_Port GPIOC
 #define USB_C2_EN_Pin GPIO_PIN_12
 #define USB_C2_EN_GPIO_Port GPIOA
+#define USB_LAB_EN_Pin GPIO_PIN_11
+#define USB_LAB_EN_GPIO_Port GPIOA
 
 #endif // SYSTEM_DEFINES_H

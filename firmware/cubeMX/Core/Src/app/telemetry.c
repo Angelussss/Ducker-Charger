@@ -24,8 +24,7 @@
  * ----------------------------------------------------------------------- */
 
 SystemTelemetry_t telemetry;
-PortStats_t       port_stats[5];   /* A1/A2/C1(OTG)/C2/Lab — stubbed for now */
-uint16_t          cell_mv[4];      /* per-cell not routed to MCU on this PCB */
+PortStats_t       port_stats[5];   /* A1/A2/C1(OTG)/C2/Lab — see do_poll() */
 uint16_t          tte_min;
 uint16_t          ttf_min;
 SystemStats_t     sys_stats;
@@ -36,6 +35,23 @@ SystemStats_t     sys_stats;
 
 static uint8_t _was_charging; /* detect charge-session starts */
 
+/* Sub-mWh remainder of the discharge-energy integral, so that repeated
+ * short polls don't each truncate to zero and lose the whole total. */
+static uint32_t _energy_mW_ms;
+
+/* Commit one sample to a port row and advance its ring buffer. The PORTS
+ * screen reads history[]/idx directly, so every poll must push — including
+ * a zero for an idle port, otherwise its trace freezes on stale samples. */
+static void port_push(uint8_t i, uint16_t mv, int16_t ma, uint8_t active)
+{
+    PortStats_t *p = &port_stats[i];
+    p->voltage_mv = mv;
+    p->current_mA = ma;
+    p->active     = active;
+    p->history[p->idx] = ma;
+    p->idx = (uint8_t)((p->idx + 1u) % TELEMETRY_HISTORY_SIZE);
+}
+
 /* -----------------------------------------------------------------------
  * Core poll
  * ----------------------------------------------------------------------- */
@@ -45,7 +61,7 @@ static void do_poll(void)
     FuelGaugeSensors fg  = getFuelGaugeData();
     INA3221_Sensors  ina = getINA3221_Sensors();
     PDContract primary   = getPrimaryUSBC_Contract();
-    PDContract secondary = getSecondaryUSBC_Contract();
+    SensorData  sd       = getSensorData();
 
     telemetry.soc_percent   = (uint8_t)fg.SoC;
     telemetry.voltage_mV    = (uint16_t)fg.voltage;
@@ -55,16 +71,34 @@ static void do_poll(void)
     telemetry.temp_celsius  = (int16_t)fg.externalTemperature;
     telemetry.is_full       = fg.flags.FC  ? 1u : 0u;
     telemetry.over_temp     = (fg.flags.OTC || fg.flags.OTD) ? 1u : 0u;
+    telemetry.over_volt     = fg.flags.BATHI ? 1u : 0u;
+    telemetry.charge_inhibited = (fg.flags.CHG_INH || fg.flags.XCHG) ? 1u : 0u;
 
     /* CHG flag can lag; trust current sign too */
     telemetry.is_charging = (fg.flags.CHG || telemetry.current_mA > 0) ? 1u : 0u;
 
     /* vbus_present: primary USB-C is plugged in acting as sink (being charged) */
     telemetry.vbus_present = (primary.isPlugged && primary.isSink) ? 1u : 0u;
-    telemetry.charge_phase = telemetry.is_charging ? 2u : 0u;   /* 2 = fast */
+    telemetry.charge_phase = telemetry.is_charging ? 1u : 0u;
 
     /* Power [mW] */
     telemetry.power_mW = (int32_t)telemetry.voltage_mV * telemetry.current_mA / 1000;
+
+    /* Integrate energy drawn out of the pack (STATS "Energy out" row).
+     * last_poll_tick == 0 is the very first poll: no interval to integrate
+     * over yet. The clamp keeps a long gap (DEEP_SLEEP stops this loop for
+     * minutes) from both overflowing the accumulator and booking energy
+     * that was never delivered at the last known rate. */
+    uint32_t now_tick = HAL_GetTick();
+    if (telemetry.last_poll_tick != 0u && telemetry.power_mW < 0)
+    {
+        uint32_t dt_ms = now_tick - telemetry.last_poll_tick;
+        if (dt_ms > 4u * TELEMETRY_POLL_INTERVAL_MS)
+            dt_ms = TELEMETRY_POLL_INTERVAL_MS;
+        _energy_mW_ms += (uint32_t)(-telemetry.power_mW) * dt_ms;
+        sys_stats.energy_out_mWh += _energy_mW_ms / 3600000u;
+        _energy_mW_ms            %= 3600000u;
+    }
 
     tte_min = (uint16_t)fg.avgTimeToEmpty;
     ttf_min = (uint16_t)fg.avgTimeToFull;
@@ -94,21 +128,51 @@ static void do_poll(void)
      * approximate today's capacity from design capacity and SoH. */
     sys_stats.full_cap_mAh     = (uint16_t)(sys_stats.design_cap_mAh * fg.stateOfHealth / 100u);
 
-    /* Per-port monitor data: only A1/A2 have real shunts (INA3221 ch1/ch2). */
-    port_stats[0].current_mA = (int16_t)ina.current_channel1;
-    port_stats[0].active     = (uint8_t)get_USBA1_Status();
-    port_stats[1].current_mA = (int16_t)ina.current_channel2;
-    port_stats[1].active     = (uint8_t)get_USBA2_Status();
-    port_stats[2].active     = (uint8_t)get_OTG_Status();
-    port_stats[3].active     = (uint8_t)get_USBC2_Status();
-    port_stats[3].voltage_mv = (uint16_t)secondary.voltage;
-    port_stats[3].current_mA = (int16_t)secondary.operatingCurrent;
+    /* ---- Per-port monitor ----
+     * Sensing available on this PCB:
+     *   A1/A2  real shunts on INA3221 ch1/ch2, feeding a fixed 5 V rail.
+     *   C1     no shunt. The OTG current lives on the TPS25750/BQ25713
+     *          private I2C_EX bus, unreachable from the MCU — only the
+     *          negotiated contract voltage is known.
+     *   C2/Lab share the STPD01 rail and INA3221 ch3 is tied to GND, so
+     *          neither has a shunt either. What the rail draws is recovered
+     *          from the total-system-power ADC channel by subtracting the
+     *          measured USB-A power. The UI interlock guarantees at most one
+     *          of the two channels is enabled, so the remainder belongs
+     *          entirely to whichever one is on.
+     */
+    int16_t a1_mA = (int16_t)ina.current_channel1;
+    int16_t a2_mA = (int16_t)ina.current_channel2;
 
-    telemetry.last_poll_tick = HAL_GetTick();
-    /* Charge layer doesn't report per-read I2C success/failure via its
-     * getters (data may be stale if a read failed silently upstream) —
-     * best-effort until it does. */
-    telemetry.sensor_ok = 1u;
+    int32_t p_sys_mW  = (int32_t)(sd.power_sys_W * 1000.0f);
+    int32_t p_usba_mW = 5 * ((int32_t)a1_mA + (int32_t)a2_mA); /* 5000 mV * mA / 1000 */
+    int32_t p_rail_mW = p_sys_mW - p_usba_mW;
+    if (p_rail_mW < 0)
+        p_rail_mW = 0;   /* ADC noise around zero load */
+
+    uint16_t rail_mv = (uint16_t)getSTPD01_SetpointVoltage();
+    int16_t  rail_mA = (rail_mv > 0u)
+                     ? (int16_t)(p_rail_mW * 1000 / (int32_t)rail_mv)
+                     : 0;
+
+    uint8_t stpd_on = get_STPD01_Enabled() ? 1u : 0u;
+    uint8_t lab_on  = (get_LAB_Status()   && stpd_on) ? 1u : 0u;
+    uint8_t c2_on   = (get_USBC2_Status() && stpd_on) ? 1u : 0u;
+
+    port_push(0, 5000u, a1_mA, get_USBA1_Status() ? 1u : 0u);
+    port_push(1, 5000u, a2_mA, get_USBA2_Status() ? 1u : 0u);
+    port_push(2, (uint16_t)primary.voltage, 0, get_OTG_Status() ? 1u : 0u);
+    /* rail_mv, not the raw negotiated secondary.voltage: with a user
+     * ceiling below the contract, STPD01's setpoint is what's actually
+     * delivered (see setSecondaryUSBC_VoltageCeiling in charge.c). */
+    port_push(3, c2_on ? rail_mv : 0u, c2_on ? rail_mA : 0, c2_on);
+    port_push(4, lab_on ? rail_mv : 0u, lab_on ? rail_mA : 0, lab_on);
+
+    telemetry.last_poll_tick = now_tick;
+    /* Honest freshness: charge.c tracks the gauge I2C status per cycle.
+     * 0 means every battery number above is the LAST GOOD read, not live —
+     * the UI flags it and the warning arbiter stays quiet. */
+    telemetry.sensor_ok = getFuelGaugeReadOK() ? 1u : 0u;
 }
 
 /* -----------------------------------------------------------------------
@@ -121,9 +185,9 @@ void Telemetry_Init(I2C_HandleTypeDef *hi2c1_ptr, I2C_HandleTypeDef *hi2c3_ptr)
     (void)hi2c1_ptr;
     (void)hi2c3_ptr;
     _was_charging = 0u;
+    _energy_mW_ms = 0u;
     memset(&telemetry, 0, sizeof(telemetry));
     memset(port_stats, 0, sizeof(port_stats));
-    memset(cell_mv,    0, sizeof(cell_mv));
     memset(&sys_stats, 0, sizeof(sys_stats));
     tte_min = 0u;
     ttf_min = 0u;
