@@ -14,8 +14,10 @@
  *     cleared through INT_CLEAR1.
  *
  * cfg.tps_strict_len = 0 relaxes the length prefix on the HAL_I2C_Mem_*
- * path only, as a workaround to keep testing past the known charge.c
- * framing bug (it reads INT_EVENT1 without skipping the length byte).
+ * path only. It was a workaround for a charge.c framing bug (INT_EVENT1
+ * read without skipping the length byte), fixed since: all firmware
+ * register access now goes through system/tps25750_io.c, which frames
+ * correctly. Keep = 1.
  */
 #include "sim.h"
 

@@ -29,6 +29,9 @@ static float vout_mv(void)
 
 float stpd_vout_mv(void) { return vout_mv(); }
 
+/* programmed current limit, same encoding the firmware writes to ILIM */
+float stpd_ilim_ma(void) { return 100.0f + st.ilim * 100.0f; }
+
 static uint8_t int_stat(void)
 {
     uint8_t v = st.fault_bits;

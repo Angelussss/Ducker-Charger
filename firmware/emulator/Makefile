@@ -4,6 +4,7 @@ FWINC = ../cubeMX/Core/Inc
 # real firmware sources, compiled unmodified against the fake HAL
 FW  = $(FWSRC)/system/fsm.c \
       $(FWSRC)/system/charge.c \
+      $(FWSRC)/system/tps25750_io.c \
       $(FWSRC)/system/event.c \
       $(FWSRC)/app/initialization.c \
       $(FWSRC)/app/provisioning.c \
@@ -35,11 +36,18 @@ SDL    = $(shell pkg-config --cflags --libs sdl2)
 emulator: $(FW) $(EMU) fw_main.o
 	gcc -o $@ $(FW) $(EMU) fw_main.o $(CFLAGS) $(SDL) -lm
 
-# firmware main() renamed so the emulator owns the process entry point
+# firmware main() renamed so the emulator owns the process entry point.
+# Unlike $(FW)/$(EMU) above (recompiled from source on every `make emulator`
+# run, so header edits are always picked up) this IS a cached object, so it
+# needs real prerequisite tracking or a header-only change (e.g. a timeout
+# constant in defines.h) silently links a stale main.c against fresh
+# everything-else.
 fw_main.o: $(FWSRC)/main.c
-	gcc -c -o $@ $< $(CFLAGS) -Dmain=fw_main
+	gcc -c -o $@ $< $(CFLAGS) -Dmain=fw_main -MMD -MP -MF fw_main.d
+
+-include fw_main.d
 
 clean:
-	rm -f emulator fw_main.o screen.ppm
+	rm -f emulator fw_main.o fw_main.d screen.ppm
 
 .PHONY: clean

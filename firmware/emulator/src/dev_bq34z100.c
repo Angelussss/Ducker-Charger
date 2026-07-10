@@ -45,6 +45,9 @@ typedef struct {
     uint8_t  df[DF_CLASSES][DF_BLOCKS][32];
     /* injected fault flags */
     int inj_ot, inj_bathi, inj_batlow, inj_cf;
+    int inj_bus_fail;       /* 1 = NACK every transaction (bus fault) */
+    int bathi_latch;        /* BATHI hysteresis: set >=16.4 V, clear <16.0 V */
+    int chginh_latch;       /* CHG_INH/XCHG: set <0 C or >45 C, 3 C hysteresis */
     int sealed;             /* accepted unseal keys clear it */
     int unseal_step;
 } Bq34;
@@ -62,8 +65,20 @@ static uint16_t flags_word(void)
 
     if (ot && chg)             hi |= 1u << 7;                 /* OTC   */
     if (ot && !chg)            hi |= 1u << 6;                 /* OTD   */
-    if (gg.inj_bathi || board.pack_mv >= 16400.0f) hi |= 1u << 5; /* BATHI */
+    /* BATHI with hysteresis, like the real gauge's data-flash set/clear
+     * thresholds: set at >=16.4 V (4.10 V/cell), clear below 16.0 V
+     * (4.00 V/cell). Without it the flag flapped on the IR-drop step at
+     * plug/unplug and never cleared near full. */
+    if (board.pack_mv >= 16400.0f)      gg.bathi_latch = 1;
+    else if (board.pack_mv < 16000.0f)  gg.bathi_latch = 0;
+    if (gg.inj_bathi || gg.bathi_latch) hi |= 1u << 5;        /* BATHI */
     if (gg.inj_batlow || board.pack_mv <= 12200.0f) hi |= 1u << 4; /* BATLOW */
+    /* charge-inhibit window (JEITA-style data flash: charge only 0..45 C),
+     * 3 C hysteresis on re-entry like the real gauge */
+    if (board.temp_c < 0.0f || board.temp_c > 45.0f)      gg.chginh_latch = 1;
+    else if (board.temp_c > 3.0f && board.temp_c < 42.0f) gg.chginh_latch = 0;
+    if (gg.chginh_latch) { hi |= 1u << 3;                     /* CHG_INH */
+                           hi |= 1u << 2; }                   /* XCHG    */
     if (board.soc >= 99.5f)    hi |= 1u << 1;                 /* FC    */
     if (chg)                   hi |= 1u << 0;                 /* CHG   */
 
@@ -179,6 +194,7 @@ static int gg_mem_read(SimI2CDev *d, uint16_t mem, uint16_t ms,
                        uint8_t *buf, uint16_t n)
 {
     (void)d; (void)ms;
+    if (gg.inj_bus_fail) return -1;     /* NACK -> HAL_ERROR */
     for (uint16_t i = 0; i < n; i++)
         buf[i] = reg_read_byte((uint8_t)(mem + i));
     gg.reg_ptr = (uint8_t)(mem + n);
@@ -189,6 +205,7 @@ static int gg_mem_write(SimI2CDev *d, uint16_t mem, uint16_t ms,
                         const uint8_t *buf, uint16_t n)
 {
     (void)d; (void)ms;
+    if (gg.inj_bus_fail) return -1;     /* NACK -> HAL_ERROR */
     for (uint16_t i = 0; i < n; i++)
         reg_write_byte((uint8_t)(mem + i), buf[i]);
     return 0;
@@ -232,3 +249,4 @@ void bq34_inject_ot(int on)     { gg.inj_ot = on;     sim_log("[GG  ] inject OT=
 void bq34_inject_bathi(int on)  { gg.inj_bathi = on;  sim_log("[GG  ] inject BATHI=%d", on); }
 void bq34_inject_batlow(int on) { gg.inj_batlow = on; sim_log("[GG  ] inject BATLOW=%d", on); }
 void bq34_inject_cf(int on)     { gg.inj_cf = on;     sim_log("[GG  ] inject CF=%d", on); }
+void bq34_inject_bus_fail(int on){ gg.inj_bus_fail = on; sim_log("[GG  ] inject BUS_FAIL=%d", on); }

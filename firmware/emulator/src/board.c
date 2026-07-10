@@ -51,15 +51,41 @@ void board_tick(uint32_t wall_dms)
     int a2_en   = sim_gpio_get(2, 2);    /* PC2                  */
     int stpd_en = sim_gpio_get(2, 11);   /* PC11                 */
     int c2_en   = sim_gpio_get(0, 12);   /* PA12                 */
+    int lab_en  = sim_gpio_get(0, 11);   /* PA11                 */
 
     board.a1_ma = (a1_en && board.a1_load_attached) ? cfg.a1_load_ma : 0.0f;
     board.a2_ma = (a2_en && board.a2_load_attached) ? cfg.a2_load_ma : 0.0f;
-    board.c2_ma = (stpd_en && c2_en && board.c2_sink_attached)
-                  ? (float)cfg.c2_ma : 0.0f;
-    /* C1 sourcing: TPS25750 + BQ25713 run the OTG boost autonomously on
-     * their private I2C once the provider contract is in place — no MCU
-     * enable is required (EN_OTG/PB15 is only read back by readNCS) */
-    board.c1_out_ma = board.c1_device_attached ? (float)cfg.c1src_ma : 0.0f;
+    /* C2: the sink draws its negotiated RDO current, same as Lab clamped at
+     * whatever ILIM the firmware last programmed (STPD01 is a shared,
+     * current-limiting converter — see the Lab comment right below; a user
+     * ceiling lower than the negotiated current, or a lower voltage ceiling
+     * pushing more current at constant power, both end up here). */
+    if (stpd_en && c2_en && board.c2_sink_attached) {
+        float ilim = stpd_ilim_ma();
+        board.c2_ma = ((float)cfg.c2_ma > ilim) ? ilim : (float)cfg.c2_ma;
+    } else {
+        board.c2_ma = 0.0f;
+    }
+    /* Lab output: the same STPD01 rail behind the other FET (PA11), so the
+     * two channels are mutually exclusive (the UI enforces the interlock).
+     * A bench load is resistive, not a PD sink: it draws Vout/R, and the
+     * converter clamps at the programmed ILIM (CC mode). */
+    if (stpd_en && lab_en && board.lab_load_attached && cfg.lab_load_ohm > 0.0f) {
+        float i_ma = stpd_vout_mv() / cfg.lab_load_ohm;
+        float ilim = stpd_ilim_ma();
+        board.lab_ma = (i_ma > ilim) ? ilim : i_ma;
+    } else {
+        board.lab_ma = 0.0f;
+    }
+    /* C1 sourcing: OTG mode needs BOTH the provider contract on the private
+     * I2C_EX bus AND EN_OTG (PB15) driven HIGH by the MCU (BQ25713 TRM,
+     * ChargeOption3.EN_OTG: "Enable device in OTG mode when EN_OTG pin is
+     * HIGH" — an AND condition, not an either/or). The FSM holds this pin
+     * low in every protection state, so C1 can't discharge the pack there
+     * even with a sink device still plugged in. */
+    int otg_en = sim_gpio_get(1, 15);        /* PB15                 */
+    board.c1_out_ma = (otg_en && board.c1_device_attached)
+                     ? (float)cfg.c1src_ma : 0.0f;
 
     /* ---- input side: CC charge with taper near full ---- */
     if (board.charger_attached && board.soc < 100.0f) {
@@ -73,7 +99,8 @@ void board_tick(uint32_t wall_dms)
     /* 5 V rails come from the pack through the bucks: reflect port power
      * back to pack current (assume ~92 % efficiency) */
     float out_pack_ma = (board.a1_ma + board.a2_ma) * (5000.0f / board.pack_mv) / 0.92f
-                      + board.c2_ma * (stpd_vout_mv() / board.pack_mv) / 0.92f
+                      + (board.c2_ma + board.lab_ma)
+                        * (stpd_vout_mv() / board.pack_mv) / 0.92f
                       + board.c1_out_ma * ((float)cfg.c1src_mv / board.pack_mv) / 0.92f
                       + cfg.quiescent_ma;
 
@@ -129,7 +156,8 @@ uint16_t board_adc_sample(int rank)
         return mv_to_raw(fabsf(board.i_batt_ma) * 0.2f);
     case 7: { /* system power: fw computes (V/1000)*60 W */
         float p_w = (board.a1_ma * 5.0f + board.a2_ma * 5.0f
-                     + board.c2_ma * stpd_vout_mv() / 1000.0f) / 1000.0f;
+                     + (board.c2_ma + board.lab_ma) * stpd_vout_mv() / 1000.0f)
+                    / 1000.0f;
         return mv_to_raw(p_w / 60.0f * 1000.0f);
     }
     default:

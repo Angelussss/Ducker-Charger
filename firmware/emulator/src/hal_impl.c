@@ -5,6 +5,7 @@
  */
 #include "stm32f4xx_hal.h"
 #include "sim.h"
+#include "system/fsm.h"     /* PB_FSM_ActiveState: FSM column in the log */
 
 #include <pthread.h>
 #include <stdarg.h>
@@ -39,14 +40,80 @@ uint32_t sim_now_ms(void)
                       + (ts.tv_nsec - t0.tv_nsec) / 1000000);
 }
 
+static const char *state_name(State_ID_t st)
+{
+    static const char *names[STATE_NUMBER] = {
+        [STATE_DEEP_SLEEP] = "DEEP_SLEEP", [STATE_SLEEP] = "SLEEP",
+        [STATE_IDLE] = "IDLE", [STATE_SAFETY_LOCK] = "SAFETY_LOCK",
+        [STATE_LOW_V] = "LOW_V", [STATE_EMERGENCY] = "EMERGENCY",
+        [STATE_CHARGING] = "CHARGING", [STATE_MANUAL] = "MANUAL",
+        [STATE_ERROR] = "ERROR",
+    };
+    return (st < STATE_NUMBER && names[st]) ? names[st] : "?";
+}
+
+const char *sim_fsm_name(void)
+{
+    return state_name(PB_FSM_ActiveState());
+}
+
+static const char *event_name(Event_t evt)
+{
+    static const char *names[EVT_NUMBER] = {
+        [EVT_CHARGER_CONNECTED]    = "CHARGER_CONNECTED",
+        [EVT_CHARGER_DISCONNECTED] = "CHARGER_DISCONNECTED",
+        [EVT_SOC_SAFETY]           = "SOC_SAFETY",
+        [EVT_SOC_LOWV]             = "SOC_LOWV",
+        [EVT_SOC_UNDERV]           = "SOC_UNDERV",
+        [EVT_SOC_OK]               = "SOC_OK",
+        [EVT_SOC_OVCH]             = "SOC_OVCH",
+        [EVT_FAULT_OT]             = "FAULT_OT",
+        [EVT_FAULT_CRITICAL]       = "FAULT_CRITICAL",
+        [EVT_FAULT_OCC]            = "FAULT_OCC",
+        [EVT_ERROR]                = "ERROR",
+        [EVT_ERROR_CLEAR]          = "ERROR_CLEAR",
+        [EVT_INACTIVITY]           = "INACTIVITY",
+        [EVT_BUTTON_SHORT]         = "BUTTON_SHORT",
+        [EVT_BUTTON_LONG]          = "BUTTON_LONG",
+        [EVT_MANUAL_ENTER]         = "MANUAL_ENTER",
+        [EVT_MANUAL_EXIT]          = "MANUAL_EXIT",
+        [EVT_LOCK]                 = "LOCK",
+        [EVT_UNLOCK]               = "UNLOCK",
+    };
+    return (evt < EVT_NUMBER && names[evt]) ? names[evt] : "?";
+}
+
+/* overrides the weak no-op in fsm.c: every event fired into the FSM ends
+ * up in the log, with the transition it caused (or didn't) */
+void PB_FSM_TraceEvent(State_ID_t from, Event_t event, State_ID_t to,
+                       bool blocked)
+{
+    if (blocked)
+        sim_log("[FSM ] %s: %s -> %s BLOCKED by guard",
+                event_name(event), state_name(from), state_name(to));
+    else if (to == STATE_NUMBER)
+        sim_log("[FSM ] %s ignored in %s",
+                event_name(event), state_name(from));
+    else
+        sim_log("[FSM ] %s: %s -> %s",
+                event_name(event), state_name(from), state_name(to));
+}
+
 void sim_log(const char *fmt, ...)
 {
+    /* one buffered fputs per line: the firmware thread and the scenario
+     * thread both log, split fprintf calls interleave mid-line */
+    char line[256];
+    int n = snprintf(line, sizeof(line) - 2, "[%8u] [%-11s] ",
+                     sim_now_ms(), sim_fsm_name());
     va_list ap;
-    fprintf(stderr, "[%8u] ", sim_now_ms());
     va_start(ap, fmt);
-    vfprintf(stderr, fmt, ap);
+    n += vsnprintf(line + n, sizeof(line) - 2 - (size_t)n, fmt, ap);
     va_end(ap);
-    fputc('\n', stderr);
+    if (n > (int)sizeof(line) - 2) n = (int)sizeof(line) - 2;
+    line[n] = '\n';
+    line[n + 1] = '\0';
+    fputs(line, stderr);
 }
 
 HAL_StatusTypeDef HAL_Init(void) { (void)sim_now_ms(); return HAL_OK; }

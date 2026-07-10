@@ -16,6 +16,7 @@ static void set_defaults(void)
     cfg.charge_ma        = 3000.0f;
     cfg.a1_load_ma       = 1200.0f;
     cfg.a2_load_ma       = 800.0f;
+    cfg.lab_load_ohm     = 5.0f;     /* 1 A @ 5 V, 4 A @ 20 V (ILIM caps) */
     cfg.quiescent_ma     = 30.0f;
     cfg.c1_mv            = 20000; cfg.c1_ma = 3000;
     cfg.c1src_mv         = 5000;  cfg.c1src_ma = 3000;
@@ -53,6 +54,7 @@ void EmuConfig_Load(const char *path)
         else if (!strcmp(key, "charge_ma"))         cfg.charge_ma = val;
         else if (!strcmp(key, "a1_load_ma"))        cfg.a1_load_ma = val;
         else if (!strcmp(key, "a2_load_ma"))        cfg.a2_load_ma = val;
+        else if (!strcmp(key, "lab_load_ohm"))      cfg.lab_load_ohm = val;
         else if (!strcmp(key, "quiescent_ma"))      cfg.quiescent_ma = val;
         else if (!strcmp(key, "c1_mv"))             cfg.c1_mv = (int)val;
         else if (!strcmp(key, "c1_ma"))             cfg.c1_ma = (int)val;

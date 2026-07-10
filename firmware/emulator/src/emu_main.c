@@ -10,12 +10,15 @@
  *   c                plug / unplug the C1 charger
  *   v                attach / detach a C2 PD sink
  *   1 / 2            attach / detach a load on USB-A1 / A2
+ *   l                attach / detach a resistive load on the lab output
  *   o                INA3221 critical alert on A1 (overcurrent)
  *   t/h/u/f          gauge faults: overtemp / BATHI / BATLOW / CF
+ *   b                gauge I2C bus failure (NACK everything)
  *   x / z / r        CYPD3175: OVP / OCP / hard reset
  *   g                STPD01 short-circuit fault
  *   k                toggle CHRG_OK line
  *   w                wake from STOP mode
+ *   q                shutdown (long-press) -> DEEP_SLEEP (from IDLE/SLEEP)
  *   i                print board/firmware status
  *   s                dump screen to screen.ppm
  *   ESC              quit
@@ -27,6 +30,9 @@
 #include "sim.h"
 
 #include "system/charge.h"      /* status getters (real firmware code) */
+#include "system/event.h"       /* event_push, EVT_BUTTON_LONG */
+#include "system/fsm.h"         /* PB_FSM_ActiveState */
+#include "app/telemetry.h"      /* port_stats: what the UI actually shows */
 
 #include <pthread.h>
 #include <stdio.h>
@@ -46,7 +52,8 @@ static void *fw_thread(void *arg)
 
 /* ---------------- scenario toggles ---------------- */
 
-static int tog_a1_oc, tog_ot, tog_bathi, tog_batlow, tog_cf, tog_stpd;
+static int tog_a1_oc, tog_ot, tog_bathi, tog_batlow, tog_cf, tog_stpd,
+           tog_gg_bus;
 
 static void set_charger(bool on)
 {
@@ -64,13 +71,16 @@ static void print_status(void)
     INA3221_Sensors ina = getINA3221_Sensors();
     fprintf(stderr,
         "---------------- STATUS ----------------\n"
+        "fsm:    %s\n"
         "board:  SoC %.1f%%  V %.0f mV  I %+.0f mA  T %.1f C\n"
         "gauge:  SoC %.0f%%  V %.0f mV  I %.0f mA  flags[CHG=%d DSG=%d BATHI=%d BATLOW=%d OT=%d]\n"
         "C1:     plugged=%d sink=%d nego=%d  %.0f mV / %.0f mA\n"
         "C2:     plugged=%d nego=%d  %.0f mV / %.0f mA\n"
         "ports:  A1=%d A2=%d C2=%d OTG=%d STPD_EN=%d  INA[%.0f %.0f]\n"
+        "lab:    EN=%d load=%d  %.0f mA @ %.0f mV (ILIM %.0f mA)\n"
         "pins:   PD_IRQ=%d STPD_INT=%d CYPD_INT=%d CHRG_OK=%d BCKL=%d\n"
         "-----------------------------------------\n",
+        sim_fsm_name(),
         board.soc, board.pack_mv, board.i_batt_ma, board.temp_c,
         fg.SoC, fg.voltage, fg.current,
         fg.flags.CHG, fg.flags.DSG, fg.flags.BATHI, fg.flags.BATLOW,
@@ -80,8 +90,28 @@ static void print_status(void)
         get_USBA1_Status(), get_USBA2_Status(), get_USBC2_Status(),
         get_OTG_Status(), get_STPD01_Enabled(),
         ina.current_channel1, ina.current_channel2,
+        sim_gpio_get(0, 11), board.lab_load_attached,
+        board.lab_ma, stpd_vout_mv(), stpd_ilim_ma(),
         sim_gpio_get(1, 14), sim_gpio_get(2, 12), sim_gpio_get(2, 3),
         sim_gpio_get(1, 13), sim_gpio_get(1, 8));
+
+    fprintf(stderr, "stats:  energy_out %lu mWh  uptime %lu s  P %ld mW\n",
+            (unsigned long)sys_stats.energy_out_mWh,
+            (unsigned long)sys_stats.uptime_s, (long)telemetry.power_mW);
+
+    /* what the PORTS page / lab bench page read out of telemetry */
+    static const char *pname[5] = { "A1", "A2", "C1", "C2", "LAB" };
+    for (int i = 0; i < 5; i++) {
+        int nz = 0;
+        for (int k = 0; k < TELEMETRY_HISTORY_SIZE; k++)
+            if (port_stats[i].history[k]) nz++;
+        fprintf(stderr,
+                "portmon: %-3s active=%d  %5u mV  %5d mA  hist[idx=%2u nonzero=%2d]\n",
+                pname[i], port_stats[i].active,
+                port_stats[i].voltage_mv, port_stats[i].current_mA,
+                port_stats[i].idx, nz);
+    }
+    fprintf(stderr, "-----------------------------------------\n");
     sim_unlock();
 }
 
@@ -106,11 +136,16 @@ static int handle_key(char k)
     case '2': board.a2_load_attached = !board.a2_load_attached;
               sim_log("[LOAD] A2 load %s", board.a2_load_attached ? "on" : "off");
               break;
+    case 'l': board.lab_load_attached = !board.lab_load_attached;
+              sim_log("[LOAD] lab load %s (%.1f ohm)",
+                      board.lab_load_attached ? "on" : "off", cfg.lab_load_ohm);
+              break;
     case 'o': tog_a1_oc = !tog_a1_oc; ina_inject_alert(1, tog_a1_oc); break;
     case 't': tog_ot = !tog_ot;         bq34_inject_ot(tog_ot);       break;
     case 'h': tog_bathi = !tog_bathi;   bq34_inject_bathi(tog_bathi); break;
     case 'u': tog_batlow = !tog_batlow; bq34_inject_batlow(tog_batlow); break;
     case 'f': tog_cf = !tog_cf;         bq34_inject_cf(tog_cf);       break;
+    case 'b': tog_gg_bus = !tog_gg_bus; bq34_inject_bus_fail(tog_gg_bus); break;
     case 'x': cypd_inject(0x83); break;                 /* OVP        */
     case 'z': cypd_inject(0x82); break;                 /* OCP        */
     case 'r': cypd_inject(0x8F); break;                 /* hard reset */
@@ -124,6 +159,15 @@ static int handle_key(char k)
     case '-': sim_encoder_step(-1); break;
     case 'p': sim_gpio_drive_input(2, 0, 0); break;     /* btn down */
     case 'P': sim_gpio_drive_input(2, 0, 1); break;     /* btn up   */
+    case 'q':
+        /* shutdown: push the long-press event straight in, instead of
+         * scripting a 3 s hold + release through 'p'/'P'. Real firmware
+         * only wires this transition from IDLE/SLEEP (fsm.c transition
+         * table) — same gate main.c's actual hold-timer is subject to, so
+         * this is a shortcut to the event, not a bypass of the FSM rule. */
+        sim_log("[EMU ] shutdown key: pushing EVT_BUTTON_LONG");
+        event_push(EVT_BUTTON_LONG);
+        break;
     default: return 0;
     }
     return 1;

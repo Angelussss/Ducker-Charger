@@ -15,6 +15,8 @@ void     sim_lock(void);
 void     sim_unlock(void);
 uint32_t sim_now_ms(void);
 void     sim_log(const char *fmt, ...);
+/* current firmware FSM state as a short name (log column, status print) */
+const char *sim_fsm_name(void);
 
 /* firmware thread wake (STOP-mode exit) */
 void sim_wake_signal(void);
@@ -62,8 +64,9 @@ typedef struct {
     bool  c2_sink_attached;   /* C2 sink device present         */
     bool  a1_load_attached;
     bool  a2_load_attached;
+    bool  lab_load_attached;  /* resistive load on the lab output */
     /* live per-port currents (mA, out of the pack) */
-    float a1_ma, a2_ma, c1_out_ma, c2_ma;
+    float a1_ma, a2_ma, c1_out_ma, c2_ma, lab_ma;
     float charge_in_ma;
 } BoardState;
 
@@ -80,6 +83,7 @@ typedef struct {
     float ambient_c;
     float charge_ma;        /* CC charge current from C1       */
     float a1_load_ma, a2_load_ma;
+    float lab_load_ohm;     /* bench load on the lab output    */
     float quiescent_ma;
     int   c1_mv, c1_ma;     /* C1 charger PD contract (sink)   */
     int   c1src_mv, c1src_ma; /* C1 source/OTG contract        */
@@ -101,6 +105,7 @@ void bq34_inject_ot(int on);        /* OTC/OTD                        */
 void bq34_inject_bathi(int on);
 void bq34_inject_batlow(int on);
 void bq34_inject_cf(int on);
+void bq34_inject_bus_fail(int on);   /* gauge NACKs everything */
 
 void tps_attach(void);
 void tps_plug_charger(bool plugged);    /* C1 as sink, drives PB14    */
@@ -113,6 +118,7 @@ void cypd_inject(uint8_t hpi_event);    /* OVP/OCP/OTP/HARD_RESET     */
 void stpd_attach(void);
 void stpd_inject_fault(uint8_t int_stat_bits);
 float stpd_vout_mv(void);
+float stpd_ilim_ma(void);
 
 /* rotate the TIM3 encoder counter by n detents (2 counts each) */
 void sim_encoder_step(int detents);
