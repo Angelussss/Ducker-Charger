@@ -28,6 +28,9 @@ int            stub_i2c_write_count = 0;
 // ---- ADC ----
 uint32_t stub_adc_value = 0;
 
+// ---- Tick ----
+uint32_t stub_tick = 0;
+
 // ---- I2C response queue ----
 #define STUB_I2C_QUEUE_SIZE 64
 
@@ -57,6 +60,7 @@ void stub_reset(void) {
     stub_i2c_write_count = 0;
     memset(stub_i2c_write_log, 0, sizeof(stub_i2c_write_log));
     stub_adc_value = 0;
+    stub_tick = 0;
     i2c_head = i2c_tail = i2c_count = 0;
     i2c_model_reset_all();
 }
@@ -135,13 +139,49 @@ HAL_StatusTypeDef HAL_I2C_Mem_Write(I2C_HandleTypeDef *hi2c, uint16_t DevAddress
     return HAL_OK;
 }
 
+HAL_StatusTypeDef HAL_I2C_Master_Transmit(I2C_HandleTypeDef *hi2c, uint16_t DevAddress,
+                                          uint8_t *pData, uint16_t Size, uint32_t Timeout) {
+    (void)hi2c; (void)Timeout;
+    if (stub_i2c_write_count < I2C_WRITE_LOG_SIZE) {
+        I2cWriteEntry *w = &stub_i2c_write_log[stub_i2c_write_count++];
+        w->dev_addr = DevAddress;
+        w->mem_addr = (Size > 0) ? pData[0] : 0;
+        w->len      = (Size > 1) ? ((Size - 1 < 8) ? Size - 1 : 8) : 0;
+        if (w->len) memcpy(w->data, pData + 1, w->len);
+    }
+    return HAL_OK;
+}
+
+HAL_StatusTypeDef HAL_I2C_Master_Receive(I2C_HandleTypeDef *hi2c, uint16_t DevAddress,
+                                         uint8_t *pData, uint16_t Size, uint32_t Timeout) {
+    (void)hi2c; (void)DevAddress; (void)Timeout;
+    if (i2c_count == 0) {
+        memset(pData, 0, Size);
+        return HAL_OK;
+    }
+    StubI2CResponse *r = &i2c_queue[i2c_tail];
+    i2c_tail  = (i2c_tail + 1) % STUB_I2C_QUEUE_SIZE;
+    i2c_count--;
+    uint16_t clen = (r->len < Size) ? r->len : Size;
+    memcpy(pData, r->data, clen);
+    if (clen < Size) memset(pData + clen, 0, Size - clen);
+    return r->status;
+}
+
 // ---- ADC ----
 HAL_StatusTypeDef HAL_ADC_Start(ADC_HandleTypeDef *h)                         { (void)h; return HAL_OK; }
 HAL_StatusTypeDef HAL_ADC_Stop(ADC_HandleTypeDef *h)                          { (void)h; return HAL_OK; }
 HAL_StatusTypeDef HAL_ADC_PollForConversion(ADC_HandleTypeDef *h, uint32_t t) { (void)h; (void)t; return HAL_OK; }
 uint32_t          HAL_ADC_GetValue(ADC_HandleTypeDef *h)                       { (void)h; return stub_adc_value; }
 
+// ---- Display backlight (fsm.c calls it; real impl in ili9341.c, which the
+// tests don't link). Mirrors the real polarity: active-low, JP402 PMOS. ----
+void ILI9341_Backlight(uint8_t on) {
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, on ? GPIO_PIN_RESET : GPIO_PIN_SET);
+}
+
 // ---- Misc ----
+uint32_t HAL_GetTick(void)                                           { return stub_tick; }
 void HAL_SuspendTick(void)                                           {}
 void HAL_ResumeTick(void)                                            {}
 void HAL_Delay(uint32_t d)                                           { (void)d; }

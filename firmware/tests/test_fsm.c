@@ -40,11 +40,27 @@ int main(void) {
     PB_FSM_FireEvent(&fsm, EVT_SOC_SAFETY);
     ASSERT(fsm.nextState == STATE_SAFETY_LOCK);
 
-    // IDLE + SOC_OVCH → SAFETY_LOCK and sets ovchargeBlock
+    // IDLE + SOC_OVCH → NO transition, ovchargeBlock set (informational)
     setup(); set_state(STATE_IDLE);
     fsm.ovchargeBlock = false;
     PB_FSM_FireEvent(&fsm, EVT_SOC_OVCH);
-    ASSERT(fsm.nextState == STATE_SAFETY_LOCK);
+    ASSERT(fsm.nextState == STATE_IDLE);
+    ASSERT(fsm.ovchargeBlock == true);
+
+    // IDLE + CHARGER_CONNECTED while ovchargeBlock → CHARGING anyway:
+    // charger attached always means CHARGING (outputs off, no passthrough);
+    // the flag only drives the UI warning
+    setup(); set_state(STATE_IDLE);
+    fsm.ovchargeBlock = true;
+    PB_FSM_FireEvent(&fsm, EVT_CHARGER_CONNECTED);
+    ASSERT(fsm.nextState == STATE_CHARGING);
+
+    // CHARGING + SOC_OVCH → NO transition: stay in CHARGING, outputs stay
+    // off. Recovery is unplug (→ IDLE) then discharge until BATHI clears.
+    setup(); set_state(STATE_CHARGING);
+    fsm.ovchargeBlock = false;
+    PB_FSM_FireEvent(&fsm, EVT_SOC_OVCH);
+    ASSERT(fsm.nextState == STATE_CHARGING);
     ASSERT(fsm.ovchargeBlock == true);
 
     // IDLE + INACTIVITY → SLEEP
@@ -77,17 +93,18 @@ int main(void) {
     PB_FSM_FireEvent(&fsm, EVT_FAULT_OCC);
     ASSERT(fsm.nextState == STATE_SAFETY_LOCK);
 
-    // SAFETY_LOCK + CHARGER_CONNECTED (no ovchargeBlock) → CHARGING
+    // SAFETY_LOCK + CHARGER_CONNECTED → CHARGING regardless of
+    // ovchargeBlock (the flag is informational, never a transition guard:
+    // charger attached always means CHARGING, outputs off)
     setup(); set_state(STATE_SAFETY_LOCK);
     fsm.ovchargeBlock = false;
     PB_FSM_FireEvent(&fsm, EVT_CHARGER_CONNECTED);
     ASSERT(fsm.nextState == STATE_CHARGING);
 
-    // SAFETY_LOCK + CHARGER_CONNECTED (ovchargeBlock=true) → no transition
     setup(); set_state(STATE_SAFETY_LOCK);
     fsm.ovchargeBlock = true;
     PB_FSM_FireEvent(&fsm, EVT_CHARGER_CONNECTED);
-    ASSERT(fsm.nextState == STATE_SAFETY_LOCK);
+    ASSERT(fsm.nextState == STATE_CHARGING);
 
     // SOC_OK clears ovchargeBlock and returns SAFETY_LOCK → IDLE
     setup(); set_state(STATE_SAFETY_LOCK);
@@ -96,14 +113,29 @@ int main(void) {
     ASSERT(fsm.ovchargeBlock == false);
     ASSERT(fsm.nextState == STATE_IDLE);
 
-    // After ovchargeBlock is cleared, CHARGER_CONNECTED works again
+    // User lock: IDLE + EVT_LOCK → SAFETY_LOCK, userLock set
+    setup(); set_state(STATE_IDLE);
+    fsm.userLock = false;
+    PB_FSM_FireEvent(&fsm, EVT_LOCK);
+    ASSERT(fsm.nextState == STATE_SAFETY_LOCK);
+    ASSERT(fsm.userLock == true);
+
+    // EVT_UNLOCK honored only for a user lock → IDLE
     setup(); set_state(STATE_SAFETY_LOCK);
-    fsm.ovchargeBlock = true;
-    PB_FSM_FireEvent(&fsm, EVT_SOC_OK);
-    set_state(STATE_SAFETY_LOCK); // stay in lock after SOC_OK (for this sub-test)
-    fsm.ovchargeBlock = false;    // ovchargeBlock was just cleared
-    PB_FSM_FireEvent(&fsm, EVT_CHARGER_CONNECTED);
-    ASSERT(fsm.nextState == STATE_CHARGING);
+    fsm.userLock = true;
+    PB_FSM_FireEvent(&fsm, EVT_UNLOCK);
+    ASSERT(fsm.nextState == STATE_IDLE);
+
+    // EVT_UNLOCK on a low-SoC SAFETY_LOCK (userLock=false) → blocked
+    setup(); set_state(STATE_SAFETY_LOCK);
+    fsm.userLock = false;
+    PB_FSM_FireEvent(&fsm, EVT_UNLOCK);
+    ASSERT(fsm.nextState == STATE_SAFETY_LOCK);
+
+    // MANUAL + EVT_LOCK → SAFETY_LOCK (lab mode can be locked too)
+    setup(); set_state(STATE_MANUAL);
+    PB_FSM_FireEvent(&fsm, EVT_LOCK);
+    ASSERT(fsm.nextState == STATE_SAFETY_LOCK);
 
     // ERROR + BUTTON_SHORT → IDLE
     setup(); set_state(STATE_ERROR);

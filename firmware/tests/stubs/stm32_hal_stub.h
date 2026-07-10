@@ -53,6 +53,9 @@ typedef struct { uint8_t dummy; } I2C_HandleTypeDef;
 // ---- ADC ----
 typedef struct { uint8_t dummy; } ADC_HandleTypeDef;
 
+// ---- SPI (display driver header pulls this in via fsm.c) ----
+typedef struct { uint8_t dummy; } SPI_HandleTypeDef;
+
 // ---- PWR ----
 #define PWR_LOWPOWERREGULATOR_ON 0x00000001U
 #define PWR_STOPENTRY_WFI        0x01U
@@ -68,6 +71,14 @@ HAL_StatusTypeDef HAL_I2C_Mem_Write(I2C_HandleTypeDef *hi2c, uint16_t DevAddress
                                      uint16_t MemAddress, uint16_t MemAddSize,
                                      uint8_t *pData, uint16_t Size, uint32_t Timeout);
 
+// Raw transactions (used by the TPS25750 length-prefixed host interface).
+// Transmit is logged like Mem_Write with mem_addr = pData[0]; Receive pops
+// the same response queue as Mem_Read (zeros + HAL_OK when empty).
+HAL_StatusTypeDef HAL_I2C_Master_Transmit(I2C_HandleTypeDef *hi2c, uint16_t DevAddress,
+                                          uint8_t *pData, uint16_t Size, uint32_t Timeout);
+HAL_StatusTypeDef HAL_I2C_Master_Receive(I2C_HandleTypeDef *hi2c, uint16_t DevAddress,
+                                         uint8_t *pData, uint16_t Size, uint32_t Timeout);
+
 HAL_StatusTypeDef HAL_ADC_Start(ADC_HandleTypeDef *hadc);
 HAL_StatusTypeDef HAL_ADC_Stop(ADC_HandleTypeDef *hadc);
 HAL_StatusTypeDef HAL_ADC_PollForConversion(ADC_HandleTypeDef *hadc, uint32_t Timeout);
@@ -77,6 +88,11 @@ void HAL_SuspendTick(void);
 void HAL_ResumeTick(void);
 void HAL_Delay(uint32_t Delay);
 void HAL_PWR_EnterSTOPMode(uint32_t Regulator, uint8_t STOPEntry);
+uint32_t HAL_GetTick(void);
+
+// Simulated tick counter returned by HAL_GetTick; tests advance it by hand
+// (e.g. to step past debounce/grace windows). Reset to 0 by stub_reset().
+extern uint32_t stub_tick;
 
 // ---- Stub control API ----
 

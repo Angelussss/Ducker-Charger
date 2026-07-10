@@ -3,6 +3,9 @@
 #include "stubs/stm32_hal_stub.h"
 #include "framework.h"
 
+// charge.c global: the primary-port PD contract (no extern in charge.h)
+extern PDContract primaryUSBC_Contract;
+
 // ---- I2C response helpers ----
 
 // Queue all 13 responses consumed by one readSensors() call.
@@ -121,12 +124,52 @@ int main(void) {
     ASSERT(pop_eq(EVT_SOC_OK));
     ASSERT(!event_pop(&e));
 
+    // Gauge I2C failure: one EVT_ERROR (edge), NO SoC/flag events from the
+    // garbage buffers, last-good values preserved, freshness getter false
+    test_setup();
+    for (int i = 0; i < 13; i++) {
+        static const uint8_t z[2] = {0, 0};
+        stub_i2c_queue(z, 2, HAL_ERROR);
+    }
+    readSensors();
+    ASSERT(!getFuelGaugeReadOK());
+    ASSERT(pop_eq(EVT_ERROR));
+    ASSERT(!event_pop(&e));                       // no SOC_LOWV/UNDERV from garbage
+    ASSERT(getFuelGaugeData().SoC == 100.0f);     // last good read kept
+    ASSERT(getFuelGaugeData().voltage == 15000.0f);
+
+    // still failing → no repeat event
+    for (int i = 0; i < 13; i++) {
+        static const uint8_t z[2] = {0, 0};
+        stub_i2c_queue(z, 2, HAL_ERROR);
+    }
+    readSensors();
+    ASSERT(!event_pop(&e));
+
+    // bus recovers → fresh data, no spurious events
+    queue_sensor_read(100, 0x00, 0x00, 15000);
+    readSensors();
+    ASSERT(getFuelGaugeReadOK());
+    ASSERT(!event_pop(&e));
+
     // BATHI flag set → EVT_SOC_OVCH
     // BATHI is bit5 of the FLAGS high byte: 0x20
     test_setup();
     queue_sensor_read(100, 0x20, 0x00, 15000);
     readSensors();
     ASSERT(pop_eq(EVT_SOC_OVCH));
+    ASSERT(!event_pop(&e));
+
+    // BATHI stays set → no repeat event
+    queue_sensor_read(100, 0x20, 0x00, 15000);
+    readSensors();
+    ASSERT(!event_pop(&e));
+
+    // BATHI clears (falling edge) → EVT_SOC_OK: overcharge recovery,
+    // unlocks SAFETY_LOCK and clears the FSM ovchargeBlock
+    queue_sensor_read(100, 0x00, 0x00, 15000);
+    readSensors();
+    ASSERT(pop_eq(EVT_SOC_OK));
     ASSERT(!event_pop(&e));
 
     // OTC flag set → EVT_FAULT_OT
@@ -173,16 +216,45 @@ int main(void) {
     ASSERT(stub_gpio_write_log[0].pin   == USB_A2_CTRL_Pin);
     ASSERT(stub_gpio_write_log[0].state == GPIO_PIN_RESET);
 
-    // CHRG_OK falling edge → EVT_ERROR
+    // CHRG_OK falling edge with no charger contract → NOT an error
+    // (battery-powered operation: CHRG_OK is low whenever no adapter is present)
     test_setup();
     stub_gpio_set(GPIOB, USB_CHRG_OK_CTRL_Pin, GPIO_PIN_RESET); // CHRG_OK goes LOW
     readCS();
-    ASSERT(pop_eq(EVT_ERROR));
+    ASSERT(!event_pop(&e));
+
+    // CHRG_OK falling edge while a charger contract is active → EVT_ERROR,
+    // but only after CHRGOK_GRACE_MS (the fall precedes the TPS25750 unplug
+    // interrupt by milliseconds on a plain unplug)
+    test_setup();
+    primaryUSBC_Contract.isPlugged = true;
+    primaryUSBC_Contract.isSink    = true;
+    stub_gpio_set(GPIOB, USB_CHRG_OK_CTRL_Pin, GPIO_PIN_RESET); // adapter collapsed
+    readCS();
+    ASSERT(!event_pop(&e));                    // within grace: no error yet
+    stub_tick += CHRGOK_GRACE_MS;
+    readCS();
+    ASSERT(pop_eq(EVT_ERROR));                 // grace expired, contract still active
     ASSERT(!event_pop(&e));
 
     // CHRG_OK stays low → no repeat event
+    stub_tick += CHRGOK_GRACE_MS;
     readCS();
     ASSERT(!event_pop(&e));
+
+    // Unplug in flight: CHRG_OK falls, then the PD plug-removal interrupt
+    // clears the contract before the grace expires → no error
+    test_setup();
+    primaryUSBC_Contract.isPlugged = true;
+    primaryUSBC_Contract.isSink    = true;
+    stub_gpio_set(GPIOB, USB_CHRG_OK_CTRL_Pin, GPIO_PIN_RESET);
+    readCS();
+    ASSERT(!event_pop(&e));
+    primaryUSBC_Contract.isPlugged = false;    // unplug interrupt processed
+    stub_tick += CHRGOK_GRACE_MS;
+    readCS();
+    ASSERT(!event_pop(&e));
+    primaryUSBC_Contract.isSink = false;
 
     TEST_RESULT();
 }

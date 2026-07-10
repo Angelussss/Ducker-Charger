@@ -1,5 +1,6 @@
 #include "system/charge.h"
 #include "system/event.h"
+#include "system/fsm.h"
 #include "stubs/stm32_hal_stub.h"
 #include "framework.h"
 #include <math.h>
@@ -362,6 +363,46 @@ int main(void) {
     ASSERT(stub_i2c_write_log[0].dev_addr == CYPD3175_PD_CONTROLLER_ADDR);
     ASSERT(stub_i2c_write_log[0].mem_addr == CYPD3175_INTR_REG);
     ASSERT(stub_i2c_write_log[0].data[0]  == 0x00);
+
+    // ---- FSM gate on the auto-enable path ----
+
+    // 20. CONTRACT_COMPLETE while the FSM is in SAFETY_LOCK: the event is
+    //     acked and the contract stored, but STPD01/USB-C2 must NOT be
+    //     re-enabled — the state just shut every output to protect the pack.
+    test_setup();
+    {
+        FSM fsm;
+        PB_FSM_Init(&fsm);                       // IDLE
+        PB_FSM_FireEvent(&fsm, EVT_SOC_SAFETY);  // → SAFETY_LOCK
+        PB_FSM_Update(&fsm);
+        drain();
+        stub_gpio_write_count = 0;
+        stub_i2c_write_count  = 0;
+
+        queue_cypd_event(CYPD3175_EVT_CONTRACT_COMPLETE);
+        stub_i2c_queue(PDO_20V_5A, 4, HAL_OK);
+        stub_i2c_queue(RDO_3A,     4, HAL_OK);
+        secondaryUSBC_ConnectionINT();
+        ASSERT(!event_pop(&e));
+        ASSERT(getSecondaryUSBC_Contract().isPlugged);        // contract remembered
+        ASSERT(!getSecondaryUSBC_Contract().isNegotiationDone); // but output not opened
+        // INTR ack only — no STPD01 VOUT/ILIM writes, no GPIO enables
+        ASSERT(stub_i2c_write_count == 1);
+        ASSERT(stub_i2c_write_log[0].mem_addr == CYPD3175_INTR_REG);
+        for (int i = 0; i < stub_gpio_write_count; i++)
+            ASSERT(stub_gpio_write_log[i].state == GPIO_PIN_RESET);
+
+        // 21. Same event with the FSM back in IDLE → output opens normally.
+        PB_FSM_FireEvent(&fsm, EVT_SOC_OK);      // SAFETY_LOCK → IDLE
+        PB_FSM_Update(&fsm);
+        drain();
+        stub_gpio_write_count = 0;
+        stub_i2c_write_count  = 0;
+        queue_contract_complete(0x08);
+        secondaryUSBC_ConnectionINT();
+        ASSERT(!event_pop(&e));
+        ASSERT(getSecondaryUSBC_Contract().isNegotiationDone);
+    }
 
     TEST_RESULT();
 }
