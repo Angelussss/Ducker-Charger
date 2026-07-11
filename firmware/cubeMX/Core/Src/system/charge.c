@@ -1,11 +1,13 @@
-#include "charge.h"
+#include "system/charge.h"
+#include "system/tps25750_io.h"
+#include "system/fsm.h"
 #include "math.h"
 #include "stm32f4xx_hal.h"
 #include "adc.h"
 #include "i2c.h"
 
-// Ports: USB-A1; USB-A2; USB-C (primary, via TPS25750); USB-C (secondary, via STUSB4710A)
-// I2C1 -> STUSB4710 STPD01PUR INA3221 BQ34Z100
+// Ports: USB-A1; USB-A2; USB-C (primary, via TPS25750); USB-C (secondary, via CYPD3175)
+// I2C1 -> CYPD3175 STPD01PUR INA3221 BQ34Z100
 // I2C3 -> TPS25750
 
 /*
@@ -13,7 +15,6 @@
 
         --- Hardware checks ---
         - Check constants for temperature sensors
-        - Check STPD01_PD_ADDR if it's actually 0x54 (needs to be verified according to GitHub repo)
         - Check TPS25750_PD_CONTROLLER_ADDR if it's 0x20 or 0x21 (currently using 0x20)
         - Check whether STPD01 EN (PC11) needs to be asserted early in init() to power internal peripherals, or only after
           PD negotiation for USB-C2 output. Current behavior: enabled after negotiation
@@ -26,7 +27,6 @@
         - (Optional) Read assigned V and I_max to STPD01
 
 */
-// 3 larghezza, 2 profondità e 2 altezza
 volatile I2C_ReadState currentlyReading;
 
 const int timeout = 10;         // In ms
@@ -44,8 +44,8 @@ const float BETA = 3950.0;      // To check in thermistor's datasheet
 // Critical Signals
 int PD_IRQ = GPIO_PIN_RESET;
 int PD_IRQ_PREV = GPIO_PIN_SET;           // For checking previous state of PD_IRQ after its update; Normal: IRQ is set to HIGH
-int ST_INT = GPIO_PIN_SET;
-int C2_RDY = GPIO_PIN_SET;
+int STPD01_INT = GPIO_PIN_SET;
+int CYPD3175_INT = GPIO_PIN_SET;
 int CHRG_OK = GPIO_PIN_SET;
 
 // NON-Critical Signals
@@ -54,6 +54,20 @@ int USBA2_STATUS = GPIO_PIN_RESET;
 int EN_OTG_STATUS = GPIO_PIN_RESET;
 int STPD01_EN_STATUS = GPIO_PIN_RESET;
 int USBC2_STATUS = GPIO_PIN_RESET;
+int LAB_EN_STATUS = GPIO_PIN_RESET;
+
+// Values the STPD01 rail actually settles on after the last setupSTPD01().
+// The converter offers no readback for VOUT/ILIM and its rail carries no
+// shunt (INA3221 ch3 is grounded), so the quantized setpoint IS the best
+// knowledge the firmware has of that rail's voltage.
+static float stpd01_setpoint_mV = 0.0f;
+static float stpd01_setpoint_mA = 0.0f;
+
+// User ceiling on the C2 output (UI OUTPUT page): STPD01 produces the rail,
+// so this clamps what PD negotiated, never raises it. Defaults to STPD01's
+// max, so the clamp is a no-op until lowered.
+static float secondaryUSBC_voltageCeiling_mV = 20000.0f;
+static float secondaryUSBC_currentCeiling_mA = 3000.0f;
 
 SensorData sensor_data;
 FuelGaugeSensors fuelGaugeSensors;
@@ -61,6 +75,12 @@ PDContract primaryUSBC_Contract;
 PDContract secondaryUSBC_PDContract;
 STPD01_Status stpd01_status;
 INA3221_Sensors ina3221_sensors;
+// Last CYPD3175 fault event (OVP/OCP/OTP HPI code, 0 = none). The FSM
+// event doesn't carry the cause, the UI fault screen reads it from here.
+// Cleared when a new contract completes (fresh session).
+uint8_t cypd_lastFaultEvent = 0;
+// true while the fuel-gauge I2C reads succeed; false = telemetry is stale
+bool fuelGaugeReadOK = true;
 // secondaryUSBC_PDContract.isSink = false;
 HAL_StatusTypeDef status;
 
@@ -151,23 +171,28 @@ void readSensors() {
     // --- FUEL GAUGE SENSORS ---
     uint8_t buffer[2];      // Buffer of 2 for storing both MSB and LSB if necessary (each one in a 8-bit register, so, for example, using size = 2 I'll read both 0x2a and 0x2B)
     uint16_t rawI2C;
+    bool ok = true;         // accumulated status of this cycle's gauge reads
+    // On a failed cycle the buffers hold garbage and the parse below would
+    // clobber the struct with it: keep a copy to restore, so getters keep
+    // returning the LAST GOOD values (flagged stale via getFuelGaugeReadOK).
+    FuelGaugeSensors lastGood = fuelGaugeSensors;
     currentlyReading = READ_INTERNAL_TEMPERATURE;       // (0x2A/0x2B)
-    HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x2A, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY);
+    ok &= (HAL_OK == HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x2A, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY));
     // T is received in units of 0.1 K
     rawI2C = (uint16_t)((buffer[1] << 8) | buffer[0]);
     fuelGaugeSensors.internalTemperature = (rawI2C * 0.1f) - 273.15f;      // Converting to ºC
 
     currentlyReading = READ_EXTERNAL_TEMPERATURE;       // (0x0C/0x0D)
-    HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x0C, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY);
+    ok &= (HAL_OK == HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x0C, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY));
     rawI2C = (uint16_t)((buffer[1] << 8) | buffer[0]);
     fuelGaugeSensors.externalTemperature = (rawI2C * 0.1f) - 273.15f;      // Converting to ºC
 
     currentlyReading = READ_VOLTAGE_SCALE;      // (0x20)
-    HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x20, I2C_MEMADD_SIZE_8BIT, buffer, 1, HAL_MAX_DELAY);
+    ok &= (HAL_OK == HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x20, I2C_MEMADD_SIZE_8BIT, buffer, 1, HAL_MAX_DELAY));
     fuelGaugeSensors.voltageScale = buffer[0];
 
     currentlyReading = READ_VOLTAGE;            // (0x08/0x09)
-    HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x08, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY);
+    ok &= (HAL_OK == HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x08, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY));
     rawI2C = (uint16_t)((buffer[1] << 8) | buffer[0]);
     if (fuelGaugeSensors.voltageScale > 1) {
         fuelGaugeSensors.voltage = rawI2C * fuelGaugeSensors.voltageScale;
@@ -176,49 +201,67 @@ void readSensors() {
     }
 
     currentlyReading = READ_CURRENT_SCALE;      // (0x21)
-    HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x21, I2C_MEMADD_SIZE_8BIT, buffer, 1, HAL_MAX_DELAY);
+    ok &= (HAL_OK == HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x21, I2C_MEMADD_SIZE_8BIT, buffer, 1, HAL_MAX_DELAY));
     fuelGaugeSensors.currentScale = buffer[0];
 
+    // Current registers are SIGNED two's complement (negative = discharge);
+    // reading them as unsigned showed ~65 A while discharging.
+    int16_t rawSigned;
+
     currentlyReading = READ_CURRENT;            // (0x10/0x11)
-    HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x10, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY);
-    rawI2C = (uint16_t)((buffer[1] << 8) | buffer[0]);
+    ok &= (HAL_OK == HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x10, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY));
+    rawSigned = (int16_t)((buffer[1] << 8) | buffer[0]);
     if (fuelGaugeSensors.currentScale > 1) {
-        fuelGaugeSensors.current = rawI2C * fuelGaugeSensors.currentScale;
+        fuelGaugeSensors.current = rawSigned * fuelGaugeSensors.currentScale;
     } else {
-        fuelGaugeSensors.current = rawI2C;
+        fuelGaugeSensors.current = rawSigned;
     }
 
     currentlyReading = READ_AVG_CURRENT;        // (0x0A/0x0B)
-    HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x0A, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY);
-    rawI2C = (uint16_t)((buffer[1] << 8) | buffer[0]);
+    ok &= (HAL_OK == HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x0A, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY));
+    rawSigned = (int16_t)((buffer[1] << 8) | buffer[0]);
     if (fuelGaugeSensors.currentScale > 1) {
-        fuelGaugeSensors.avgCurrent = rawI2C * fuelGaugeSensors.currentScale;
+        fuelGaugeSensors.avgCurrent = rawSigned * fuelGaugeSensors.currentScale;
     } else {
-        fuelGaugeSensors.avgCurrent = rawI2C;
+        fuelGaugeSensors.avgCurrent = rawSigned;
     }
 
     currentlyReading = READ_SOC;                // (0x02)
-    HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x02, I2C_MEMADD_SIZE_8BIT, buffer, 1, HAL_MAX_DELAY);
+    ok &= (HAL_OK == HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x02, I2C_MEMADD_SIZE_8BIT, buffer, 1, HAL_MAX_DELAY));
     fuelGaugeSensors.SoC = buffer[0];
 
+    // SoC threshold events only from data actually read this cycle — a
+    // failed read leaves stale/garbage buffer content that must not fire
+    // SAFETY/LOWV/OK transitions (the failure itself is reported below).
+    static float prevSoC = 100.0f;
+    if (ok) {
+        if (fuelGaugeSensors.SoC < SOC_LOWV_THRESHOLD && prevSoC >= SOC_LOWV_THRESHOLD)
+            event_push(EVT_SOC_LOWV);
+        else if (fuelGaugeSensors.SoC < SOC_SAFETY_THRESHOLD && prevSoC >= SOC_SAFETY_THRESHOLD)
+            event_push(EVT_SOC_SAFETY);
+        if (fuelGaugeSensors.SoC >= SOC_OK_THRESHOLD && prevSoC < SOC_OK_THRESHOLD)
+            event_push(EVT_SOC_OK);
+        prevSoC = fuelGaugeSensors.SoC;
+    }
+
     currentlyReading = READ_AVG_TIME_TO_EMPTY;  // (0x18/0x19)
-    HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x18, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY);
+    ok &= (HAL_OK == HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x18, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY));
     fuelGaugeSensors.avgTimeToEmpty = (uint16_t)((buffer[1] << 8) | buffer[0]);
 
     currentlyReading = READ_AVG_TIME_TO_FULL;   // (0x1A/0x1B)
-    HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x1A, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY);
+    ok &= (HAL_OK == HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x1A, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY));
     fuelGaugeSensors.avgTimeToFull = (uint16_t)((buffer[1] << 8) | buffer[0]);
 
     currentlyReading = READ_CYCLE_COUNT;        // (0x2C/0x2D)
-    HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x2C, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY);
+    ok &= (HAL_OK == HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x2C, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY));
     fuelGaugeSensors.cycleCount = (uint16_t)((buffer[1] << 8) | buffer[0]);
 
     currentlyReading = READ_STATE_OF_HEALTH;    // (0x2E/0x2F)
-    HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x2E, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY);
+    ok &= (HAL_OK == HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x2E, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY));
     fuelGaugeSensors.stateOfHealth = (uint16_t)((buffer[1] << 8) | buffer[0]);
 
     currentlyReading = READ_FLAGS;              // (0x0E/0x0F)
-    HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x0E, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY);
+    ok &= (HAL_OK == HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x0E, I2C_MEMADD_SIZE_8BIT, buffer, 2, HAL_MAX_DELAY));
     // Little-endian order -> buffer[0] contains Low-Byte; buffer[1] contains High-Byte
     uint8_t rawLow = buffer[0];
     uint8_t rawHigh = buffer[1];
@@ -234,36 +277,55 @@ void readSensors() {
     fuelGaugeSensors.flags.CHG = (rawHigh >> 0) & 0x01;
 
     // Low-Byte
-    fuelGaugeSensors.flags.DSG = (rawLow >> 0) & 0x01;
+    fuelGaugeSensors.flags.DSG  = (rawLow >> 0) & 0x01;
+    fuelGaugeSensors.flags.SOCF = (rawLow >> 1) & 0x01;
+    fuelGaugeSensors.flags.SOC1 = (rawLow >> 2) & 0x01;
+    fuelGaugeSensors.flags.CF   = (rawLow >> 4) & 0x01;
+    fuelGaugeSensors.flags.REST = (rawLow >> 7) & 0x01;
 
-    // Throw faults
-    if (fuelGaugeSensors.flags.OTC) {
-        // Throw Over Temperature while Charging
+    // FSM fault events — edge-detected to avoid queue saturation, and
+    // gated on ok like the SoC block above (no events from stale flags)
+    static bool prevOT     = false;
+    static bool prevBATHI  = false;
+    static bool prevBATLOW = false;
+    static bool prevCF     = false;
+
+    if (ok) {
+        bool ot = fuelGaugeSensors.flags.OTC || fuelGaugeSensors.flags.OTD;
+        if (ot && !prevOT)     event_push(EVT_FAULT_OT);
+        prevOT = ot;
+
+        if (fuelGaugeSensors.flags.BATHI && !prevBATHI) {
+            event_push(EVT_SOC_OVCH);
+        } else if (!fuelGaugeSensors.flags.BATHI && prevBATHI) {
+            // Overcharge condition cleared (gauge drops BATHI with
+            // hysteresis once the pack voltage relaxes): EVT_SOC_OK ends
+            // the overcharge episode (clears the FSM's ovchargeBlock).
+            event_push(EVT_SOC_OK);
+        }
+        prevBATHI = fuelGaugeSensors.flags.BATHI;
+
+        bool underv = fuelGaugeSensors.flags.BATLOW || (fuelGaugeSensors.voltage < UNDERV_VOLTAGE_MV);
+        if (underv && !prevBATLOW) event_push(EVT_SOC_UNDERV);
+        prevBATLOW = underv;
+
+        if (fuelGaugeSensors.flags.CF && !prevCF) event_push(EVT_ERROR);
+        prevCF = fuelGaugeSensors.flags.CF;
     }
-    if (fuelGaugeSensors.flags.OTD) {
-        // Throw Over Temperature while Discharging
+
+    // Gauge reachability: telemetry copies this into sensor_ok so the UI
+    // can flag stale data. Losing the gauge is itself a fault (edge).
+    static bool prevGaugeOK = true;
+    fuelGaugeReadOK = ok;
+    if (!ok) {
+        fuelGaugeSensors = lastGood;    // drop the garbage parsed above
+        if (prevGaugeOK) event_push(EVT_ERROR);
     }
-    if (fuelGaugeSensors.flags.BATHI) {
-        // Throw High Battery  voltage condition
-    }
-    if (fuelGaugeSensors.flags.BATLOW) {
-        // Throw Low Battery  voltage condition
-    }
-    if (fuelGaugeSensors.flags.CHG_INH) {
-        // Throw unable to start charging
-    }
-    if (fuelGaugeSensors.flags.XCHG) {
-        // Throw charging not allowed
-    }
-    if (fuelGaugeSensors.flags.FC) {
-        // Throw full charge detected                   <----
-    }
-    if (fuelGaugeSensors.flags.CHG) {
-        // Throw fast charging allowed                  <----
-    }
-    if (fuelGaugeSensors.flags.DSG) {
-        // Throw discharging detected                   <----
-    }
+    prevGaugeOK = ok;
+
+    // Display-only status flags (CHG_INH/XCHG/FC/CHG/DSG): no FSM event —
+    // telemetry.c copies them (charge_inhibited, is_full, is_charging) and
+    // the UI renders the indicators and the CHARGE INHIBITED warning.
 }
 
 float voltageToCurrentChannel(const uint8_t buffer[2]) {
@@ -293,15 +355,21 @@ void readINA() {
     ina3221_sensors.critical_alert_channel2 = (maskEnable >> 8) & 0x01;     // Channel 2 critical alert flag
     ina3221_sensors.critical_alert_channel3 = (maskEnable >> 7) & 0x01;     // Channel 3 critical alert flag
 
-    if (ina3221_sensors.critical_alert_channel1) {
-        // Throw channel 1 critical alert flag
+    static bool prevOCC1 = false;
+    static bool prevOCC2 = false;
+
+    if (ina3221_sensors.critical_alert_channel1 && !prevOCC1) {
+        disable_USBA1();
+        event_push(EVT_FAULT_OCC);
     }
-    if (ina3221_sensors.critical_alert_channel2) {
-        // Throw channel 2 critical alert flag
+    prevOCC1 = ina3221_sensors.critical_alert_channel1;
+
+    if (ina3221_sensors.critical_alert_channel2 && !prevOCC2) {
+        disable_USBA2();
+        event_push(EVT_FAULT_OCC);
     }
-    if (ina3221_sensors.critical_alert_channel3) {
-        // Throw channel 3 critical alert flag
-    }
+    prevOCC2 = ina3221_sensors.critical_alert_channel2;
+    // channel3 tied to GND — unused
 }
 
 /*
@@ -400,30 +468,53 @@ void readCS() {        // Check and update critical signals and their status (e.
     //PD_IRQ_PREV = PD_IRQ;   // Remember PD_IRQ status before updating it
     PD_IRQ = HAL_GPIO_ReadPin(USB_IRQ_CTRL_GPIO_Port, USB_IRQ_CTRL_Pin);
 
-    // Read C2_ST_INT (PC12): STUSB4710 interrupt — PD protocol event
-    ST_INT = HAL_GPIO_ReadPin(USB_ST_INT_CTRL_GPIO_Port, USB_ST_INT_CTRL_Pin);
+    // Read STPD01_INT (PC12): STPD01 interrupt — converter power state change
+    STPD01_INT = HAL_GPIO_ReadPin(STPD01_INT_GPIO_Port, STPD01_INT_Pin);
 
-    // Read C2_RDY (PC3): STPD01 interrupt — converter power state change
-    C2_RDY = HAL_GPIO_ReadPin(C2_RDY_CTRL_GPIO_Port, C2_RDY_CTRL_Pin);
+    // Read CYPD3175_INT (PC3): CYPD3175 interrupt — PD protocol event
+    CYPD3175_INT = HAL_GPIO_ReadPin(CYPD3175_INT_GPIO_Port, CYPD3175_INT_Pin);
 
     // Read HP.CHRG_OK (PB13) and update CHRG_OK status
     CHRG_OK = HAL_GPIO_ReadPin(USB_CHRG_OK_CTRL_GPIO_Port, USB_CHRG_OK_CTRL_Pin);
-
-    if (CHRG_OK == GPIO_PIN_RESET) {
-        // Throw high-current path not ok
-    }
 
     if (PD_IRQ == GPIO_PIN_RESET) {
         primaryUSBC_ConnectionINT();
     }
 
-    if (ST_INT == GPIO_PIN_RESET) {
+    if (STPD01_INT == GPIO_PIN_RESET) {
+        stpd01_PowerStateINT();
+    }
+
+    if (CYPD3175_INT == GPIO_PIN_RESET) {
         secondaryUSBC_ConnectionINT();
     }
 
-    if (C2_RDY == GPIO_PIN_RESET) {
-        stpd01_PowerStateINT();
+    // CHRG_OK (BQ25713) is low whenever no valid adapter is present — the
+    // normal battery-powered condition, not a fault. A falling edge while a
+    // charger contract is active is suspicious, but on a plain unplug it
+    // arrives milliseconds BEFORE the TPS25750 plug-removal interrupt: only
+    // report EVT_ERROR if the contract is still active once CHRGOK_GRACE_MS
+    // has passed (adapter collapsed with the cable still in).
+    static bool prevCHRG_OK = true;
+    static bool chrgokFallPending = false;
+    static uint32_t chrgokFallTick;
+    bool chrgOkNow = (CHRG_OK == GPIO_PIN_SET);
+    bool contractActive = primaryUSBC_Contract.isPlugged &&
+                          primaryUSBC_Contract.isSink;
+
+    if (!chrgOkNow && prevCHRG_OK && contractActive) {
+        chrgokFallPending = true;
+        chrgokFallTick = HAL_GetTick();
     }
+    if (chrgOkNow || !contractActive) {
+        // adapter back, or the unplug interrupt explained the fall
+        chrgokFallPending = false;
+    } else if (chrgokFallPending &&
+               HAL_GetTick() - chrgokFallTick >= CHRGOK_GRACE_MS) {
+        chrgokFallPending = false;
+        event_push(EVT_ERROR);
+    }
+    prevCHRG_OK = chrgOkNow;
 }
 
 void readNCS() {        // Check and update NON-critical signals and their status (e.g., USBA1_STATUS)
@@ -432,6 +523,7 @@ void readNCS() {        // Check and update NON-critical signals and their statu
     USBC2_STATUS = HAL_GPIO_ReadPin(USB_C2_EN_GPIO_Port, USB_C2_EN_Pin);
     EN_OTG_STATUS = HAL_GPIO_ReadPin(USB_OTG_CTRL_GPIO_Port, USB_OTG_CTRL_Pin);
     STPD01_EN_STATUS = HAL_GPIO_ReadPin(USB_STPD01_EN_CTRL_GPIO_Port, USB_STPD01_EN_CTRL_Pin);
+    LAB_EN_STATUS = HAL_GPIO_ReadPin(USB_LAB_EN_GPIO_Port, USB_LAB_EN_Pin);
 }
 
 /*
@@ -443,29 +535,34 @@ void readNCS() {        // Check and update NON-critical signals and their statu
 
 void primaryUSBC_ConnectionINT() {
     // Read INT_EVENT1 (0x14) [Little-endian]
+    // On any read failure below: report and return WITHOUT clearing
+    // INT_CLEAR1 — I2Cs_IRQ stays asserted and the handler retries on
+    // the next readCS() cycle.
     uint8_t eventBuffer[11];
-    HAL_I2C_Mem_Read(&hi2c3, TPS25750_PD_CONTROLLER_ADDR, INT_EVENT1_REG_ADDR, I2C_MEMADD_SIZE_8BIT, eventBuffer, 11, HAL_MAX_DELAY);
+    if (tps25750_read(INT_EVENT1_REG_ADDR, eventBuffer, 11) != HAL_OK) {
+        event_push(EVT_ERROR);
+        return;
+    }
     // Read from INT_EVENT1
     bool plugInsertOrRemoval = (eventBuffer[0] >> 3) & 0x01;    // USB Plug Status has Changed
     bool newContractAsCons = (eventBuffer[1] >> 4) & 0x01;      // Far-end source has accepted an RDO sent by the PD Controller as a Sink
     bool newContractAsProv = (eventBuffer[1] >> 5) & 0x01;      // An RDO from the far-end device has been accepted and the PD Controller is a Source
-    bool usbHostPresent = (eventBuffer[2] >> 4) & 0x01;         // Set when STATUS.UsbHostPresent transitions to 11b
-    bool usbHostPresentNoLonger = (eventBuffer[2] >> 5) & 0x01;          // Set when STATUS.UsbHostPresent transitions to anything other than 11b
     bool powerStatusUpdate = (eventBuffer[3] >> 0) & 0x01;      // Set if Power Status changes
 
     // Read from PowerStatus
-    bool powerConnection;       // Asserted if there is a connection
-    bool sourceSink;            // Source / Sink indicator
-    uint8_t typeCCurrent;       // If the port is connected as source, the field is updated upon initial connection only (useful for sink mode only)
+    bool powerConnection = false;   // Asserted if there is a connection
+    bool sourceSink      = false;   // Source / Sink indicator
     // For having more details about newContractAsCons and newContractAsProv, see ACTIVE_CONTRACT_PDO register (0x34) and ACTIVE_CONTRACT_RDO register (0x35)
 
     if (powerStatusUpdate) {
         uint8_t powerStatusBuffer[2];
         // Read POWER_STATUS Register
-        HAL_I2C_Mem_Read(&hi2c3, TPS25750_PD_CONTROLLER_ADDR, POWER_STATUS_REG_ADDR, I2C_MEMADD_SIZE_8BIT, powerStatusBuffer, 2, HAL_MAX_DELAY);
+        if (tps25750_read(POWER_STATUS_REG_ADDR, powerStatusBuffer, 2) != HAL_OK) {
+            event_push(EVT_ERROR);
+            return;
+        }
         powerConnection = (powerStatusBuffer[0] >> 0) & 0x01;
         sourceSink = (powerStatusBuffer[0] >> 1) & 0x01;
-        typeCCurrent = (powerStatusBuffer[0] >> 2) & 0x03;
     }
 
     // Check the AND gate in the if below
@@ -474,8 +571,20 @@ void primaryUSBC_ConnectionINT() {
         if (primaryUSBC_Contract.isPlugged) {
             // Determine whether the powerbank is the source or the sink
             primaryUSBC_Contract.isSink = sourceSink;        // 1 -> is sink; 0 -> is source
+            if (sourceSink) {
+                event_push(EVT_CHARGER_CONNECTED);
+            } else {
+                // Source (OTG): BQ25713 also needs EN_OTG driven HIGH (see
+                // disable_OTG()). Same auto-enable gate as the C2/STPD01
+                // path above.
+                State_ID_t st = PB_FSM_ActiveState();
+                if (st == STATE_IDLE || st == STATE_SLEEP)
+                    enable_OTG();
+            }
         } else {        // if not plugged
             primaryUSBC_Contract.isNegotiationDone = false;
+            disable_OTG();
+            event_push(EVT_CHARGER_DISCONNECTED);
         }
     }
 
@@ -486,17 +595,23 @@ void primaryUSBC_ConnectionINT() {
         uint8_t activeContractRDOBuffer[4];
 
         // Check PDO type is compatible, otherwise throw a warning and ignore it
-        HAL_I2C_Mem_Read(&hi2c3, TPS25750_PD_CONTROLLER_ADDR, ACTIVE_CONTRACT_PDO_REG_ADDR, I2C_MEMADD_SIZE_8BIT, activeContractPDOBuffer, 6, HAL_MAX_DELAY);
+        if (tps25750_read(ACTIVE_CONTRACT_PDO_REG_ADDR, activeContractPDOBuffer, 6) != HAL_OK) {
+            event_push(EVT_ERROR);
+            return;
+        }
         uint8_t pdoType = (activeContractPDOBuffer[3] >> 6) & 0x03;     // Bits 31:30
         if (pdoType != 0x00) {
-            // Throw "Uncompatible PDO contract type" (not Fixed)
+            event_push(EVT_ERROR);
         } else {
             // Read PDO for fetching Voltage a maximum Current
             uint16_t voltageRaw = ((activeContractPDOBuffer[2] & 0x0F) << 6) | ((activeContractPDOBuffer[1] >> 2) & 0x3F);  // (19:10)
             uint16_t maxCurrentRaw = ((activeContractPDOBuffer[1] & 0x03) << 8) | activeContractPDOBuffer[0];       // (9:0)
 
             // Read RDO for fetching negotiated current
-            HAL_I2C_Mem_Read(&hi2c3, TPS25750_PD_CONTROLLER_ADDR, ACTIVE_CONTRACT_RDO_REG_ADDR, I2C_MEMADD_SIZE_8BIT, activeContractRDOBuffer, 4, HAL_MAX_DELAY);
+            if (tps25750_read(ACTIVE_CONTRACT_RDO_REG_ADDR, activeContractRDOBuffer, 4) != HAL_OK) {
+                event_push(EVT_ERROR);
+                return;
+            }
             uint16_t operatingCurrentRaw = ((activeContractRDOBuffer[2] & 0x0F) << 6) | ((activeContractRDOBuffer[1] >> 2) & 0x03F);        // (19:10)
 
             // Convert fetched values accordingly
@@ -508,189 +623,175 @@ void primaryUSBC_ConnectionINT() {
     }
 
     // Clear INT_EVENT1 to make I2Cs_IRQ back to HIGH (only bits previously read are cleared to be able to get possibly new occurring interrupts)
-    HAL_I2C_Mem_Write(&hi2c3, TPS25750_PD_CONTROLLER_ADDR, INT_CLEAR1_REG_ADDR, I2C_MEMADD_SIZE_8BIT, eventBuffer, 11, HAL_MAX_DELAY);
+    if (tps25750_write(INT_CLEAR1_REG_ADDR, eventBuffer, 11) != HAL_OK) {
+        event_push(EVT_ERROR);
+    }
+}
+
+// Shared fault/disconnect teardown for the secondary USB-C port.
+// clearPlugged is false only for Hard Reset, where the device is still
+// physically present and the CYPD3175 re-advertises automatically.
+static void secondaryUSBC_Shutdown(bool clearPlugged) {
+    disable_USBC2();
+    disable_STPD01();
+    secondaryUSBC_PDContract.isNegotiationDone = false;
+    if (clearPlugged) {
+        secondaryUSBC_PDContract.isPlugged = false;
+    }
+}
+
+// Programs STPD01 for the current PD contract, clamped to the user's
+// ceiling (never above what PD negotiated, only below it — see the
+// ceiling variables' comment). Single source of truth: called both right
+// after a fresh contract completes and whenever the ceiling itself changes
+// live while already connected, so the two paths can't drift apart.
+static void secondaryUSBC_ApplyOutput(void) {
+    float v = secondaryUSBC_PDContract.voltage;
+    float i = secondaryUSBC_PDContract.maxCurrent;
+    if (v > secondaryUSBC_voltageCeiling_mV) v = secondaryUSBC_voltageCeiling_mV;
+    if (i > secondaryUSBC_currentCeiling_mA) i = secondaryUSBC_currentCeiling_mA;
+
+    if (!setupSTPD01(v, i)) {
+        event_push(EVT_ERROR);
+        return;
+    }
+    enable_STPD01();
+    HAL_Delay(10);
+
+    if (checkSTPD01() && stpd01_status.powerOn) {
+        enable_USBC2();
+        secondaryUSBC_PDContract.isNegotiationDone = true;
+    } else {
+        disable_STPD01();
+        if (stpd01_status.shortCircuitProtection  ||
+            stpd01_status.overVoltageProtection   ||
+            stpd01_status.inductorPeakCurrentProtection) {
+            event_push(EVT_FAULT_CRITICAL);
+        } else if (stpd01_status.overTemperatureProtection) {
+            event_push(EVT_FAULT_OT);
+        } else {
+            // I2C failure, or no fault bit set but the converter never
+            // reached power-on — either way, charging didn't start.
+            event_push(EVT_ERROR);
+        }
+    }
+}
+
+void setSecondaryUSBC_VoltageCeiling(float mv) {
+    secondaryUSBC_voltageCeiling_mV = mv;
+    if (secondaryUSBC_PDContract.isPlugged && secondaryUSBC_PDContract.isNegotiationDone)
+        secondaryUSBC_ApplyOutput();
+}
+
+void setSecondaryUSBC_CurrentCeiling(float ma) {
+    secondaryUSBC_currentCeiling_mA = ma;
+    if (secondaryUSBC_PDContract.isPlugged && secondaryUSBC_PDContract.isNegotiationDone)
+        secondaryUSBC_ApplyOutput();
 }
 
 void secondaryUSBC_ConnectionINT() {
-    uint8_t alertBuffer;
-    // Read alert status register (the register is read and clear)
-    if (HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, ALERT_STATUS_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &alertBuffer, 1, HAL_MAX_DELAY) != HAL_OK) {
-        // Throw I2C operation error
-        return;
-    }
-    bool PRT_STATUS_AL = (alertBuffer >> 1) & 0x01;      // If asserted: the PD protocol layer completed a message transaction
-    bool CC_HW_FAULT_STATUS_AL = (alertBuffer >> 4) & 0x01;      // If asserted: a hardware fault was detected on the CC lines
-    bool TYPEC_MONITORING_STATUS_AL = (alertBuffer >> 5) & 0x01;     // If asserted: the STUSB4710's VBUS/VCONN monitoring detected something unexpected
-    bool PORT_STATUS_AL = (alertBuffer >> 6) & 0x01;     // If asserted: the value of CC_CONNECTION_STATUS (register 0x0E) has changed
-    bool HARD_RESET_AL = (alertBuffer >> 7) & 0x01;      // If asserted: the USB PD protocol layer sent or received a Hard Reset message
+    uint8_t intrReg;
+    uint8_t eventCode;
+    uint8_t pdoBuf[4];
+    uint8_t rdoBuf[4];
+    uint8_t clearBit;
+    uint16_t voltageRaw, maxCurrentRaw, opCurrentRaw;
 
-    // --- Priority 1: hard faults that require immediate port shutdown ---
-    if (CC_HW_FAULT_STATUS_AL) {
-        disable_USBC2();
-        disable_STPD01();
-        secondaryUSBC_PDContract.isNegotiationDone = false;
-        secondaryUSBC_PDContract.isPlugged = false;
-        // Throw: CC hardware fault on secondary USB-C
+    if (HAL_I2C_Mem_Read(&hi2c1, CYPD3175_PD_CONTROLLER_ADDR,
+                          CYPD3175_INTR_REG, I2C_MEMADD_SIZE_16BIT,
+                          &intrReg, 1, HAL_MAX_DELAY) != HAL_OK) {
+        event_push(EVT_ERROR);
         return;
     }
 
-    if (HARD_RESET_AL) {
-        disable_USBC2();
-        disable_STPD01();
-        secondaryUSBC_PDContract.isNegotiationDone = false;
-        // isPlugged stays true — the device is still physically connected
-        // the STUSB4710 will re-advertise and re-negotiate automatically
+    if (!(intrReg & CYPD3175_INTR_PORT0_BIT)) {
+        // No port-0 event pending. Still write back exactly the bits we read:
+        // INTR_REG is write-1-to-clear, so this acks only the bit(s) observed
+        // set here (e.g. DEV_INTR) without touching PORT0_INTR. We don't
+        // decode device-level events, but we must ack them or the interrupt
+        // line (CYPD3175_INT) stays asserted and this handler is re-entered
+        // every readCS() cycle forever.
+        HAL_I2C_Mem_Write(&hi2c1, CYPD3175_PD_CONTROLLER_ADDR,
+                           CYPD3175_INTR_REG, I2C_MEMADD_SIZE_16BIT,
+                           &intrReg, 1, HAL_MAX_DELAY);
         return;
     }
 
-    // --- Priority 2: VBUS / monitoring anomaly ---
-
-    if (TYPEC_MONITORING_STATUS_AL) {
-        uint8_t vbusBuffer;
-        if (HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, VBUS_ENABLE_STATUS_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &vbusBuffer, 1, HAL_MAX_DELAY) != HAL_OK) {
-            // Throw I2C operation error
-            return;
-        }
-        if (!(vbusBuffer & 0x01)) {
-            // Power path dropped unexpectedly
-            disable_USBC2();
-            disable_STPD01();
-            secondaryUSBC_PDContract.isNegotiationDone = false;
-            // Throw: VBUS lost during active contract
-        }
+    if (HAL_I2C_Mem_Read(&hi2c1, CYPD3175_PD_CONTROLLER_ADDR,
+                          CYPD3175_RESPONSE_REG, I2C_MEMADD_SIZE_16BIT,
+                          &eventCode, 1, HAL_MAX_DELAY) != HAL_OK) {
+        event_push(EVT_ERROR);
+        return;
     }
 
-    // --- Priority 3: connection/disconnection ---
+    clearBit = CYPD3175_INTR_PORT0_BIT;
+    HAL_I2C_Mem_Write(&hi2c1, CYPD3175_PD_CONTROLLER_ADDR,
+                       CYPD3175_INTR_REG, I2C_MEMADD_SIZE_16BIT,
+                       &clearBit, 1, HAL_MAX_DELAY);
 
-    if (PORT_STATUS_AL) {
-        uint8_t ccStatus;
-        if (HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, CC_CONNECTION_STATUS_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &ccStatus, 1, HAL_MAX_DELAY) != HAL_OK) {
-            // Throw I2C operation error
+    if (eventCode == CYPD3175_EVT_OVP || eventCode == CYPD3175_EVT_OCP) {
+        cypd_lastFaultEvent = eventCode;
+        secondaryUSBC_Shutdown(true);
+        event_push(EVT_FAULT_CRITICAL);
+    } else if (eventCode == CYPD3175_EVT_OTP) {
+        cypd_lastFaultEvent = eventCode;
+        secondaryUSBC_Shutdown(true);
+        event_push(EVT_FAULT_OT);
+    } else if (eventCode == CYPD3175_EVT_HARD_RESET) {
+        secondaryUSBC_Shutdown(false);
+    } else if (eventCode == CYPD3175_EVT_DISCONNECT) {
+        secondaryUSBC_Shutdown(true);
+    } else if (eventCode == CYPD3175_EVT_CONTRACT_COMPLETE) {
+        cypd_lastFaultEvent = 0;    // fresh session, stale cause gone
+        secondaryUSBC_PDContract.isPlugged = true;
+
+        if (HAL_I2C_Mem_Read(&hi2c1, CYPD3175_PD_CONTROLLER_ADDR,
+                              CYPD3175_PORT0_CURRENT_PDO, I2C_MEMADD_SIZE_16BIT,
+                              pdoBuf, 4, HAL_MAX_DELAY) != HAL_OK) {
+            event_push(EVT_ERROR);
             return;
         }
-        switch ((ccStatus >> 5) & 0x07) {
-            case 0: {       // NONE_ATT: Not connected
-                secondaryUSBC_PDContract.isPlugged = false;
-                secondaryUSBC_PDContract.isNegotiationDone = false;
-                disable_USBC2();
-                disable_STPD01();
-                break;
-            }
-            case 1: {       // SNK_ATT: Sink device connected
-                secondaryUSBC_PDContract.isPlugged = true;
-                break;
-            }
-            case 2: {       // SRC_ATT: Source device connected
-                secondaryUSBC_PDContract.isPlugged = false;     // Reject connection
-                secondaryUSBC_PDContract.isNegotiationDone = false;
-                disable_USBC2();
-                disable_STPD01();
-                //secondaryUSBC_PDContract.isSink = true;
-                // Throw error: secondary USB-C is source-only
-                break;
-            }
-            default: {      // DBG_ATT / AUD_ATT / POW_ACC_ATT
-                // Accessory mode is not supported on secondary USB-C
-                secondaryUSBC_PDContract.isPlugged = false;
-                secondaryUSBC_PDContract.isNegotiationDone = false;
-                disable_USBC2();
-                disable_STPD01();
-                // Throw unexpected flag
-            }
-        }
-    }
-
-    // --- Priority 4: PD negotiation completed ---
-
-    if (PRT_STATUS_AL && secondaryUSBC_PDContract.isPlugged && !secondaryUSBC_PDContract.isNegotiationDone) {
-        // A PD message completed. If we have a plugged sink with no contract yet, check if we now have one
-        uint8_t rdoBuffer[4];
-        if (HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, SRC_RDO_REG_ADDR, I2C_MEMADD_SIZE_8BIT, rdoBuffer, 4, HAL_MAX_DELAY) != HAL_OK) {
-            // Throw I2C operation error
+        if (HAL_I2C_Mem_Read(&hi2c1, CYPD3175_PD_CONTROLLER_ADDR,
+                              CYPD3175_PORT0_CURRENT_RDO, I2C_MEMADD_SIZE_16BIT,
+                              rdoBuf, 4, HAL_MAX_DELAY) != HAL_OK) {
+            event_push(EVT_ERROR);
             return;
         }
 
-        // Important note: the following configured PDOs readings are assumed to be always of Fixed-Voltage type;
-        // if not we need to add a guard like for the primary USB-C case
-        uint8_t PDOConfiguration = (rdoBuffer[3] >> 4) & 0x07;
-        switch (PDOConfiguration) {
-            case 0: {
-                // No negotiated contract
-                break;
-            }
-            case 1: {
-                selectPDO1();
-                break;
-            }
-            case 2: {
-                selectPDO2();
-                break;
-            }
-            case 3: {
-                selectPDO3();
-                break;
-            }
-            case 4: {
-                selectPDO4();
-                break;
-            }
-            case 5: {
-                selectPDO5();
-                break;
-            }
-            default: {
-                // Throw error
-            }
+        // Fixed PDO decode: voltage [19:10] × 50 mV, max current [9:0] × 10 mA
+        voltageRaw    = ((pdoBuf[2] & 0x0F) << 6) | ((pdoBuf[1] >> 2) & 0x3F);
+        maxCurrentRaw = ((pdoBuf[1] & 0x03) << 8) | pdoBuf[0];
+        // RDO decode: operating current [19:10] × 10 mA
+        opCurrentRaw  = ((rdoBuf[2] & 0x0F) << 6) | ((rdoBuf[1] >> 2) & 0x3F);
+
+        if (voltageRaw == 0 || maxCurrentRaw == 0) {
+            // PDO/RDO not populated yet (premature/spurious event before the
+            // CYPD3175 finished writing the contract) — wait for the next event
+            // instead of configuring STPD01 with a fabricated 0V/0A contract.
+            // No known-good HPI attach-type register bit map is available in
+            // this repo (CYPD3175_PORT0_TYPE_C_STATUS is defined but its bit
+            // layout isn't documented here) — this zero-check is the only
+            // guard against a non-PD/garbage "contract" reaching setupSTPD01().
+            return;
         }
 
-        if (PDOConfiguration > 0 && PDOConfiguration <= 5) {
-            uint16_t operatingCurrentRaw = ((rdoBuffer[2] & 0x0F) << 6) | ((rdoBuffer[1] >> 2) & 0x03F);        // (19:10)
-            secondaryUSBC_PDContract.operatingCurrent = operatingCurrentRaw * 10.0f;  // To get mA (as stated in the USB_PD standard)
-            if (!setupSTPD01(secondaryUSBC_PDContract.voltage, secondaryUSBC_PDContract.maxCurrent)) {
-                // Throw STPD01 setup error + don't enable STPD01
+        secondaryUSBC_PDContract.voltage          = voltageRaw    * 50.0f;
+        secondaryUSBC_PDContract.maxCurrent       = maxCurrentRaw * 10.0f;
+        secondaryUSBC_PDContract.operatingCurrent = opCurrentRaw  * 10.0f;
+
+        // Auto-enable only where outputs are allowed (IDLE/SLEEP); MANUAL
+        // is excluded since the STPD01 rail belongs to the lab output.
+        // Elsewhere the contract is stored but the output stays off.
+        {
+            State_ID_t st = PB_FSM_ActiveState();
+            if (st != STATE_IDLE && st != STATE_SLEEP)
                 return;
-            }
-
-            // After setup, enable STPD01, wait to let it stabilize and then check for its flags and VBUS
-            enable_STPD01();
-            HAL_Delay(10);      // Wait for 10ms
-            // Check VBUS_EN_SRC and STPD01 flags, if everything ok enable charging
-            if (checkSTPD01()) {
-                // Check VBUS_EN_SRC to confirm power path is alive, if ok enable USB-C2 port
-                uint8_t vbusBuffer;
-                status = HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, VBUS_ENABLE_STATUS_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &vbusBuffer, 1, HAL_MAX_DELAY);
-                if (status != HAL_OK) {
-                    // Throw I2C operation error
-                    disable_STPD01();
-                    return;
-                }
-                if (vbusBuffer & 0x01) {
-                    enable_USBC2();
-                    secondaryUSBC_PDContract.isNegotiationDone = true;
-                } else {
-                    disable_STPD01();
-                    // Throw VBUS_EN_SRC -> power path not available
-                }
-            } else {
-                disable_STPD01();
-                if (stpd01_status.shortCircuitProtection) {
-                    // Throw STPD01 short-circuit handling
-                    // Probably disables both STPD01 and USB-C2 (if enabled)
-                } else if (stpd01_status.overVoltageProtection) {
-                    // Throw STPD01 over voltage handling
-                    // Probably disables both STPD01 and USB-C2 (if enabled)
-                } else if (stpd01_status.overTemperatureWarning) {
-                    // Throw over temperature warning handling
-                    // (Possibly enables anyway the std01 and continues charging procedure)
-                } else if (stpd01_status.overTemperatureProtection) {
-                    // Throw STPD01 over temperature handling
-                    // Probably disables both STPD01 and USB-C2 (if enabled)
-                } else {
-                    // Throw inductor peak current protection handling
-                    // Probably disables both STPD01 and USB-C2 (if enabled)
-                }
-            }
         }
+
+        secondaryUSBC_ApplyOutput();
+    } else {
+        // Unrecognized HPI event code
+        event_push(EVT_ERROR);
     }
 }
 
@@ -727,34 +828,42 @@ bool setupSTPD01(float voltage_mV, float current_mA) {
 
     // --- Provide max voltage and max current addresses to STPD01
     status = HAL_I2C_Mem_Write(&hi2c1, STPD01_PD_ADDR, VOUT_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &voltageReg, 1, HAL_MAX_DELAY);
-    if (status != HAL_OK) {
-        // Throw I2C operation error
-        return false;
-    }
+    if (status != HAL_OK) return false;
+
     status = HAL_I2C_Mem_Write(&hi2c1, STPD01_PD_ADDR, ILIM_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &currentReg, 1, HAL_MAX_DELAY);
-    if (status != HAL_OK) {
-        // Throw I2C operation error
-        return false;
-    }
+    if (status != HAL_OK) return false;
+
+    // Remember what the rail is now programmed to. Decode the registers back
+    // instead of storing the request: the encoding above quantizes (20/100/
+    // 200 mV steps), and the quantized value is what the converter outputs.
+    if (voltageReg <= 0x90)
+        stpd01_setpoint_mV = 3000.0f + voltageReg * 20.0f;
+    else if (voltageReg < 0xC4)
+        stpd01_setpoint_mV = 5900.0f + (voltageReg - 0x91) * 100.0f;
+    else
+        stpd01_setpoint_mV = 11000.0f + (voltageReg - 0xC4) * 200.0f;
+    stpd01_setpoint_mA = 100.0f + currentReg * 100.0f;
     return true;
 }
 
 bool checkSTPD01() {
     uint8_t buffer;
-    HAL_I2C_Mem_Read(&hi2c1, STPD01_PD_ADDR, INT_STAT_REG_ADDR, I2C_MEMADD_SIZE_8BIT, &buffer, 1, HAL_MAX_DELAY);
-    stpd01_status.overVoltageProtection = (buffer >> 0) & 0x01;
-    stpd01_status.shortCircuitProtection = (buffer >> 2) & 0x01;
-    stpd01_status.powerOn = (buffer >> 3) & 0x01;
-    // OR:
-    // stpd01_status.powerOn = HAL_GPIO_ReadPin(USB_STPD01_EN_CTRL_GPIO_Port, USB_STPD01_EN_CTRL_Pin);   //(already implemented in NCS reading)
-    // stpd01_status.powerOn = STPD01_EN_STATUS;
-    stpd01_status.overTemperatureProtection = (buffer >> 5) & 0x01;
-    stpd01_status.overTemperatureWarning = (buffer >> 6) & 0x01;
+    if (HAL_I2C_Mem_Read(&hi2c1, STPD01_PD_ADDR, INT_STAT_REG_ADDR,
+                          I2C_MEMADD_SIZE_8BIT, &buffer, 1, HAL_MAX_DELAY) != HAL_OK) {
+        // I2C failure: status is unknown, not "no fault" — clear stale data so
+        // callers can't mistake a previous good read for a fresh confirmation.
+        stpd01_status = (STPD01_Status){0};
+        return false;
+    }
+    stpd01_status.overVoltageProtection         = (buffer >> 0) & 0x01;
+    stpd01_status.shortCircuitProtection        = (buffer >> 2) & 0x01;
+    stpd01_status.powerOn                       = (buffer >> 3) & 0x01;
+    stpd01_status.overTemperatureProtection     = (buffer >> 5) & 0x01;
+    stpd01_status.overTemperatureWarning        = (buffer >> 6) & 0x01;
     stpd01_status.inductorPeakCurrentProtection = (buffer >> 7) & 0x01;
-    if (stpd01_status.overVoltageProtection ||
-        stpd01_status.shortCircuitProtection ||
-        stpd01_status.overTemperatureProtection ||
-        stpd01_status.overTemperatureWarning ||
+    if (stpd01_status.overVoltageProtection         ||
+        stpd01_status.shortCircuitProtection        ||
+        stpd01_status.overTemperatureProtection     ||
         stpd01_status.inductorPeakCurrentProtection) {
         return false;
     }
@@ -765,7 +874,7 @@ void stpd01_PowerStateINT() {
     uint8_t buffer;
     if (HAL_I2C_Mem_Read(&hi2c1, STPD01_PD_ADDR, INT_STAT_REG_ADDR,
                           I2C_MEMADD_SIZE_8BIT, &buffer, 1, HAL_MAX_DELAY) != HAL_OK) {
-        // Throw I2C operation error
+        event_push(EVT_ERROR);
         return;
     }
 
@@ -776,17 +885,22 @@ void stpd01_PowerStateINT() {
     stpd01_status.overTemperatureWarning        = (buffer >> 6) & 0x01;
     stpd01_status.inductorPeakCurrentProtection = (buffer >> 7) & 0x01;
 
-    if (stpd01_status.overVoltageProtection        ||
-        stpd01_status.shortCircuitProtection       ||
-        stpd01_status.overTemperatureProtection    ||
+    if (stpd01_status.overVoltageProtection     ||
+        stpd01_status.shortCircuitProtection    ||
         stpd01_status.inductorPeakCurrentProtection) {
         disable_USBC2();
         disable_STPD01();
         secondaryUSBC_PDContract.isNegotiationDone = false;
         secondaryUSBC_PDContract.isPlugged = false;
-        // Throw: STPD01 hard fault during active charge
+        event_push(EVT_FAULT_CRITICAL);
+    } else if (stpd01_status.overTemperatureProtection) {
+        disable_USBC2();
+        disable_STPD01();
+        secondaryUSBC_PDContract.isNegotiationDone = false;
+        secondaryUSBC_PDContract.isPlugged = false;
+        event_push(EVT_FAULT_OT);
     }
-    // OTW alone: log warning, keep charging
+    // OTW alone: no FSM event, display layer handles the warning
 }
 
 void enable_USBA1() {
@@ -827,6 +941,19 @@ void enable_USBC2() {
 void disable_USBC2() {
     HAL_GPIO_WritePin(USB_C2_EN_GPIO_Port, USB_C2_EN_Pin, GPIO_PIN_RESET);
     USBC2_STATUS = false;
+}
+
+// EN_OTG (PB15): OTG needs this pin HIGH *and* the I2C bit TPS25750 sets
+// (BQ25713 ChargeOption3.EN_OTG) — either alone isn't enough, so the MCU
+// holding this low is a real kill switch on C1 discharging the battery.
+void enable_OTG() {
+    HAL_GPIO_WritePin(USB_OTG_CTRL_GPIO_Port, USB_OTG_CTRL_Pin, GPIO_PIN_SET);
+    EN_OTG_STATUS = true;
+}
+
+void disable_OTG() {
+    HAL_GPIO_WritePin(USB_OTG_CTRL_GPIO_Port, USB_OTG_CTRL_Pin, GPIO_PIN_RESET);
+    EN_OTG_STATUS = false;
 }
 
 // Get data functions
@@ -874,63 +1001,23 @@ int get_STPD01_Enabled() {
     return STPD01_EN_STATUS;        // getSTPD01_Status() provides isPowerOn
 }
 
-// Selection functions for PDO configuration for secondary USB-C
-void selectPDO1() {
-    uint8_t activeContractPDOBuffer[4];
-    // Read PDO for fetching Voltage a maximum Current
-    HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, SRC_PDO1_REG_ADDR, I2C_MEMADD_SIZE_8BIT, activeContractPDOBuffer, 4, HAL_MAX_DELAY);
-    uint16_t voltageRaw = ((activeContractPDOBuffer[2] & 0x0F) << 6) | ((activeContractPDOBuffer[1] >> 2) & 0x3F);  // (19:10)
-    uint16_t maxCurrentRaw = ((activeContractPDOBuffer[1] & 0x03) << 8) | activeContractPDOBuffer[0];       // (9:0)
-
-    // Convert fetched values accordingly
-    secondaryUSBC_PDContract.voltage = voltageRaw * 50.0f;                    // To get mV (as stated in the USB_PD standard)
-    secondaryUSBC_PDContract.maxCurrent = maxCurrentRaw * 10.0f;              // To get mA (as stated in the USB_PD standard)
+int get_LAB_Status() {
+    return LAB_EN_STATUS;
 }
 
-void selectPDO2() {
-    uint8_t activeContractPDOBuffer[4];
-    // Read PDO for fetching Voltage a maximum Current
-    HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, SRC_PDO2_REG_ADDR, I2C_MEMADD_SIZE_8BIT, activeContractPDOBuffer, 4, HAL_MAX_DELAY);
-    uint16_t voltageRaw = ((activeContractPDOBuffer[2] & 0x0F) << 6) | ((activeContractPDOBuffer[1] >> 2) & 0x3F);  // (19:10)
-    uint16_t maxCurrentRaw = ((activeContractPDOBuffer[1] & 0x03) << 8) | activeContractPDOBuffer[0];       // (9:0)
-
-    // Convert fetched values accordingly
-    secondaryUSBC_PDContract.voltage = voltageRaw * 50.0f;                    // To get mV (as stated in the USB_PD standard)
-    secondaryUSBC_PDContract.maxCurrent = maxCurrentRaw * 10.0f;              // To get mA (as stated in the USB_PD standard)
+float getSTPD01_SetpointVoltage() {
+    return stpd01_setpoint_mV;
 }
 
-void selectPDO3() {
-    uint8_t activeContractPDOBuffer[4];
-    // Read PDO for fetching Voltage a maximum Current
-    HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, SRC_PDO3_REG_ADDR, I2C_MEMADD_SIZE_8BIT, activeContractPDOBuffer, 4, HAL_MAX_DELAY);
-    uint16_t voltageRaw = ((activeContractPDOBuffer[2] & 0x0F) << 6) | ((activeContractPDOBuffer[1] >> 2) & 0x3F);  // (19:10)
-    uint16_t maxCurrentRaw = ((activeContractPDOBuffer[1] & 0x03) << 8) | activeContractPDOBuffer[0];       // (9:0)
-
-    // Convert fetched values accordingly
-    secondaryUSBC_PDContract.voltage = voltageRaw * 50.0f;                    // To get mV (as stated in the USB_PD standard)
-    secondaryUSBC_PDContract.maxCurrent = maxCurrentRaw * 10.0f;              // To get mA (as stated in the USB_PD standard)
+float getSTPD01_SetpointCurrent() {
+    return stpd01_setpoint_mA;
 }
 
-void selectPDO4() {
-    uint8_t activeContractPDOBuffer[4];
-    // Read PDO for fetching Voltage a maximum Current
-    HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, SRC_PDO4_REG_ADDR, I2C_MEMADD_SIZE_8BIT, activeContractPDOBuffer, 4, HAL_MAX_DELAY);
-    uint16_t voltageRaw = ((activeContractPDOBuffer[2] & 0x0F) << 6) | ((activeContractPDOBuffer[1] >> 2) & 0x3F);  // (19:10)
-    uint16_t maxCurrentRaw = ((activeContractPDOBuffer[1] & 0x03) << 8) | activeContractPDOBuffer[0];       // (9:0)
-
-    // Convert fetched values accordingly
-    secondaryUSBC_PDContract.voltage = voltageRaw * 50.0f;                    // To get mV (as stated in the USB_PD standard)
-    secondaryUSBC_PDContract.maxCurrent = maxCurrentRaw * 10.0f;              // To get mA (as stated in the USB_PD standard)
+uint8_t getCYPD_LastFaultEvent() {
+    return cypd_lastFaultEvent;
 }
 
-void selectPDO5() {
-    uint8_t activeContractPDOBuffer[4];
-    // Read PDO for fetching Voltage a maximum Current
-    HAL_I2C_Mem_Read(&hi2c1, STUSB4710_PD_CONTROLLER_ADDR, SRC_PDO5_REG_ADDR, I2C_MEMADD_SIZE_8BIT, activeContractPDOBuffer, 4, HAL_MAX_DELAY);
-    uint16_t voltageRaw = ((activeContractPDOBuffer[2] & 0x0F) << 6) | ((activeContractPDOBuffer[1] >> 2) & 0x3F);  // (19:10)
-    uint16_t maxCurrentRaw = ((activeContractPDOBuffer[1] & 0x03) << 8) | activeContractPDOBuffer[0];       // (9:0)
-
-    // Convert fetched values accordingly
-    secondaryUSBC_PDContract.voltage = voltageRaw * 50.0f;                    // To get mV (as stated in the USB_PD standard)
-    secondaryUSBC_PDContract.maxCurrent = maxCurrentRaw * 10.0f;              // To get mA (as stated in the USB_PD standard)
+bool getFuelGaugeReadOK() {
+    return fuelGaugeReadOK;
 }
+

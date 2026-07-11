@@ -37,9 +37,20 @@ BUILD_DIR = build
 # C sources
 C_SOURCES =  \
 Core/Src/main.c \
+Core/Src/system/event.c \
+Core/Src/system/fsm.c \
+Core/Src/system/charge.c \
+Core/Src/system/tps25750_io.c \
 Core/Src/app/initialization.c \
 Core/Src/app/provisioning.c \
 Core/Src/app/tps25750_bundle.c \
+Core/Src/app/encoder.c \
+Core/Src/app/telemetry.c \
+Core/Src/display/ili9341.c \
+Core/Src/display/gfx.c \
+Core/Src/ui/widgets.c \
+Core/Src/ui/screens.c \
+Core/Src/ui/ui_state.c \
 Core/Src/gpio.c \
 Core/Src/adc.c \
 Core/Src/i2c.c \

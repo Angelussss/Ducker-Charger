@@ -1,0 +1,4 @@
+emulator
+fw_main.o
+fw_main.d
+*.ppm

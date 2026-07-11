@@ -20,9 +20,13 @@ This document covers the implementation of the charge management system of the D
 - Reading all relevant sensors via `ADC` and converting appropriately the read values into correct units
 - Initializing, reading and updating the statuses of ports and both critical and non-critical signals via `GPIO`
 - Detecting faults (e.g. short circuit, over-temperature, etc...) and throwing interrupts accordingly
-- Reading status registers and flags of different key components (`BQ34Z100-R2`, `INA3221`, `TPS25750`, `STUSB4710`, `STPD01`) via two different `I2C` channels
-- Assisting the secondary USB-C during negotiation by reading the contract, configuring accordingly the power delivery and enabling/disabling the secondary USB-C port and the power delivery component
+- Reading status registers and flags of different key components (`BQ34Z100-R2`, `INA3221`, `TPS25750`, `CYPD3175`, `STPD01`) via two different `I2C` channels
+- Monitoring the secondary USB-C PD controller (`CYPD3175`) via HPI, reading the negotiated contract, configuring accordingly the power delivery and enabling/disabling the secondary USB-C port and the power delivery component
+- Gating the primary port's OTG (source) mode through `EN_OTG` (PB15) — enabled only when a sink device negotiates while the FSM allows outputs, dropped on unplug and in every protection state
+- Applying the user-configurable output ceiling on the secondary USB-C port (`setSecondaryUSBC_VoltageCeiling/CurrentCeiling`): the delivered rail is `min(ceiling, negotiated contract)` — the ceiling can only lower what PD negotiated, never raise it
 - Providing ready-to-use get functions for easy data fetch regarding sensors, statuses and components read
+
+All TPS25750 register access goes through `system/tps25750_io.c`: the host interface is length-prefixed on the wire (a read returns `[len][data...]`, a write is `[reg][len][data...]`), which `HAL_I2C_Mem_*` cannot produce — hence the dedicated `tps25750_read()`/`tps25750_write()` helpers on I2C3.
 
 
 ---
@@ -89,19 +93,21 @@ Signals used to enable power rails and modes.
 | ------------- | --------- | ----------------- | ------------------------------------- |
 | `USB_A1_CTRL` | PC1       | Q10 (Load Switch) | Enable USB-A Port 1 Output (5V)       |
 | `USB_A2_CTRL` | PC2       | Q11 (Load Switch) | Enable USB-A Port 2 Output (5V)       |
-| `USB_C2_CTRL` | PA12      | *(To be defined)* | Enable Secondary USB-C Port Output    |
-| `HP.EN_OTG`   | PB15      | U1/U2             | Enable OTG (Reverse Power) on HP Port |
-| `LP_ST_EN`    | PC11      | U3 (Enable Pin)   | Enable Aux Converter (V_OUT_AUX)      |
+| `C2_PORT_EN`  | PA12      | Port FET          | Route the STPD01 rail to the USB-C2 connector |
+| `C2_LAB_EN`   | PA11      | Lab FET           | Route the STPD01 rail to the Lab output (interlocked with `C2_PORT_EN`) |
+| `HP.EN_OTG`   | PB15      | BQ25713 EN_OTG    | Enable OTG (Reverse Power) on C1 — see the Primary USB-C section |
+| `STPD01_EN`   | PC11      | STPD01 Enable Pin | Enable the shared C2/Lab buck converter |
 
 #### Interrupts & Status Inputs
 
 Critical signals. Configure as EXTI (External Interrupt) or Polling.
 
-| Signal Name  | STM32 Pin | Trigger      | Action Required                                 |
-| ------------ | --------- | ------------ | ----------------------------------------------- |
-| `HP.PD_IRQ`  | PB14      | Falling Edge | Read TPS25750 Event Register (Plug/Unplug).     |
-| `LP_ST_INT`  | PC12      | Level/Edge   | Handle Aux Converter Fault (Overcurrent/Temp).  |
-| `HP.CHRG_OK` | PB13      | High Level   | Adapter is valid. Safe to start charging logic. |
+| Signal Name  | STM32 Pin | Trigger      | Action Required                                              |
+| ------------ | --------- | ------------ | ------------------------------------------------------------ |
+| `HP.PD_IRQ`  | PB14      | Falling Edge | Read TPS25750 Event Register (Plug/Unplug).                  |
+| `C2_ST_INT`  | PC12      | Falling Edge | Read STPD01 fault register (overcurrent/temp).               |
+| `C2_RDY`     | PC3       | Falling Edge | Read CYPD3175 HPI event register (PD protocol event/fault).  |
+| `HP.CHRG_OK` | PB13      | High Level   | Adapter is valid. Safe to start charging logic.              |
 
 ### I2C1
 
@@ -147,8 +153,12 @@ the lower address). The bundled [`bq34z100-r2.pdf`](../PCB/Ducker-Charger/docs/b
 - **FC:** Full charge is detected
 - **CHG:** (Fast) charging allowed. True when set  
 - **DSG:** Discharging detected. True when set
+- **SOCF:** State of Charge is below the final (critical) low threshold
+- **SOC1:** State of Charge is at threshold 1
+- **CF:** Condition Flag — indicates the gauge needs a re-learning cycle. Firmware pushes `EVT_ERROR` on rising edge
+- **REST:** Rest condition detected (no charge or discharge current for a sustained period)
 
-*Note:* The firmware decodes all high-byte bits and `DSG` from the low byte
+*Note:* The firmware decodes all high-byte bits and all four documented low-byte bits (`DSG`, `SOCF`, `SOC1`, `CF`, `REST`). `CF` is the only low-byte flag that pushes an FSM event; the rest are available for the display layer
 
 #### INA3221 Register Map @ 0x40
 
@@ -191,64 +201,49 @@ Where:
 
 *Note:* These bits are asserted if the corresponding channel measurement has exceeded the critical alert limit, resulting in the Critical alert pin being asserted
 
-#### STUSB4710 Register Map @ 0x28
+#### CYPD3175-24LQXQ HPI Register Map @ 0x08
 
-| Register Name          | Addr (LSB/MSB) | Access | Bytes | Description                                   |
-| :--------------------- | :------------- | :----- | :---: | :-------------------------------------------- |
-| `ALERT_STATUS`         | 0x0B           | RC     |   1   | Alert register linked to transition registers |
-| `CC_CONNECTION_STATUS` | 0x0E           | RO     |   1   | CC connection status                          |
-| `VBUS_ENABLE_STATUS`   | 0x27           | RO     |   1   | VBUS power path activation status             |
-| `SRC_PDO1`             | 0x71           | R/W    |   4   | PDO1 capabilities configuration               |
-| `SRC_PDO2`             | 0x75           | R/W    |   4   | PDO2 capabilities configuration               |
-| `SRC_PDO3`             | 0x79           | R/W    |   4   | PDO3 capabilities configuration               |
-| `SRC_PDO4`             | 0x7D           | R/W    |   4   | PDO4 capabilities configuration               |
-| `SRC_PDO5`             | 0x81           | R/W    |   4   | PDO5 capabilities configuration               |
-| `SRC_RDO`              | 0x91           | RO     |   4   | PDO request status                            |
+The CYPD3175 (Cypress EZ-PD CCG3PA) uses the **HPI (Host Processor Interface)** protocol over I2C. All register addresses are **16-bit** and must be transmitted using `I2C_MEMADD_SIZE_16BIT`. The register space is split between global device registers and per-port registers.
 
-***Important Note:*** due to insufficient details related to single register bit composition presented in the `STUSB4710` datasheet, a cross-reference with the bit mapping provided by the `STUSB4700` datasheet has been done. This was possible thanks to the fact that the `STUSB4710` contains a subset of the registers present in the `STUSB4700`, as stated by the ST's central support [here](https://community.st.com/interface-and-connectivity-ics-52/stusb4700-4710-i2c-register-details-43666?postid=183084#post183084)
+**Global registers:**
 
-- **`ALERT_STATUS` register description:**
+| Register Name | Addr   | Access | Bytes | Description                                       |
+| :------------ | :----- | :----- | :---: | :------------------------------------------------ |
+| `INTR_REG`    | 0x0006 | R/WC   |   1   | Interrupt source flags; write 1 to clear each bit |
 
-| Bit   | Name                         |
-| ----- | ---------------------------- |
-| 7     | `HARD_RESET_AL`              |
-| 6     | `PORT_STATUS_AL`             |
-| 5     | `TYPEC_MONITORING_STATUS_AL` |
-| 4     | `CC_HW_FAULT_STATUS_AL`      |
-| 3...2 | `Reserved`                   |
-| 1     | `PRT_STATUS_AL`              |
-| 0     | `PHY_STATUS_AL`              |
+- **`INTR_REG` bit description:**
 
-*Note:* the firmware decodes only the 6th bit
+| Bit | Name         | Description                    |
+| --- | ------------ | ------------------------------ |
+| 0   | `DEV_INTR`   | Device-level interrupt pending |
+| 1   | `PORT0_INTR` | Port 0 interrupt pending       |
 
-- **`CC_CONNECTION_STATUS` register description:**
+**Port 0 registers (port base 0x1000, offsets per `cy_hpi_master_port_reg_t`):**
 
-| Bit   | Name                | Description                                                                                                                                                                                                                                                                                                                        |
-| ----- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 7...5 | `ATTACHED_DEVICE`   | 000: (NONE_ATT) No device connected<br><br>001: (SNK_ATT) Sink device connected<br><br>010: (SRC_ATT) Source device connected<br><br>011: (DBG_ATT) Debug accessory device connected<br><br>100: (AUD_ATT) Audio accessory device connected<br><br>101: (POW_ACC_ATT) Powered accessory device connected<br><br>Others: Do not use |
-| 4     | `LOW_POWER_STANDBY` | 0: (LP_OFF) Device is operating in normal mode<br><br>1: (LP_ON) Device is operating in standby mode                                                                                                                                                                                                                               |
-| 3     | `POWER_MODE`        | 0: (POW_SNK)<br><br>1: (POW_SRC)                                                                                                                                                                                                                                                                                                   |
-| 2     | `DATA_MODE`         | 0: (UFP)<br><br>1: (DFP)                                                                                                                                                                                                                                                                                                           |
-| 1     | `VCONN_MODE`        | 0: (VCONN_OFF) VCONN is not supplied<br><br>1: (VCONN_ON) VCONN is supplied                                                                                                                                                                                                                                                        |
-| 0     | `ATTACH`            | 0: (UNATTACHED)<br><br>1: (ATTACHED)                                                                                                                                                                                                                                                                                               |
+| Register Name         | Addr   | Access | Bytes | Description                                                  |
+| :-------------------- | :----- | :----- | :---: | :----------------------------------------------------------- |
+| `PORT0_TYPE_C_STATUS` | 0x100C | RO     |   4   | Type-C connection state                                      |
+| `PORT0_CURRENT_PDO`   | 0x1010 | RO     |   4   | Active PDO contract (USB PD Fixed PDO format, little-endian) |
+| `PORT0_CURRENT_RDO`   | 0x1014 | RO     |   4   | Active RDO from sink (USB PD RDO format, little-endian)      |
 
-*Note:* the firmware decodes only bits 7-5 in order to detect the connection status of the secondary USB-C port
+- **HPI event codes — read from `RESPONSE_REG` (0x007E) per `cy_hpi_master_response_t`:**
+
+| Code | Firmware macro                   | Description                      |
+| ---- | -------------------------------- | -------------------------------- |
+| 0x82 | `CYPD3175_EVT_OCP`               | VBUS overcurrent fault           |
+| 0x83 | `CYPD3175_EVT_OVP`               | VBUS overvoltage fault           |
+| 0x85 | `CYPD3175_EVT_DISCONNECT`        | Type-C disconnection             |
+| 0x86 | `CYPD3175_EVT_CONTRACT_COMPLETE` | PD contract negotiation complete |
+| 0x8F | `CYPD3175_EVT_HARD_RESET`        | Hard Reset received              |
+| 0xB6 | `CYPD3175_EVT_OTP`               | Overtemperature fault            |
+
+*Note:* the firmware reads `INTR_REG` (0x0006) to confirm a port 0 interrupt (bit 1 set), then reads the device-level `RESPONSE_REG` (0x007E) for the single-byte event code. The port 0 interrupt bit is then cleared by writing `0x02` back to `INTR_REG`. PDO/RDO data follows the standard [Fixed-Voltage PDO/RDO bit mappings](#usb-power-delivery-standard) and is decoded identically to the primary port.
 
 
-- **`VBUS_ENABLE_STATUS` register description:**
 
-| Bit   | Name             | Description                                                                                                                               |
-| ----- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| 7...2 | `Reserved`       | Reserved                                                                                                                                  |
-| 1     | `SINK_VBUS_EN`   | 0: (VBUS_EN_SNK_FORCE_DIS) Disable the forced VBUS_EN_SNK pin assertion<br><br>1: (VBUS_EN_SNK_FORCE) Force the VBUS EN SNK pin assertion |
-| 0     | `SOURCE_VBUS_EN` | 0: (VBUS_EN_SRC_FORCE_DIS) Disable the forced VBUS_EN_SRC pin assertion<br><br>1: (VBUS_EN_SRC_FORCE) Force the VBUS EN SRC pin assertion |
+####  STPD01PUR Register Map @ 0x05
 
-*Note:* the firmware only decodes bit 0 (referred to as `VBUS_EN_SRC` in `charge.c`) since the secondary USB-C port is source-only
-
-- **`SRC_PDO(1-5)` & `SRC_RDO` register description:**
-	- *Note:* `SRC_PDOx` and `SRC_RDO` each span 4 consecutive byte-addressable registers, forming the 32-bit value described in the [Fixed-Voltage PDO/RDO bit mappings](#usb-power-delivery-standard)
-
-####  STPD01PUR Register Map @ 0x54 (to check)
+*Note:* the `ADD` pin is grounded on this PCB (confirmed via schematic netlist); per the STPD01 datasheet's I2C address table, `ADD` tied to GND selects `ADD1,ADD0 = 01`, giving a 7-bit address of `0b0000101` (0x05).
 
 | Register Name    | Addr (LSB/MSB) | Access | Bytes | Description                                     |
 | :--------------- | :------------- | :----- | :---: | :---------------------------------------------- |
@@ -270,11 +265,13 @@ Where:
 | 6   | `Overtemperature warning`          | Junction temperature 145 °C |
 | 7   | `Inductor peak current protection` |                             |
 
-*Note:* the firmware decodes all bits except numbers 1 and 4
+*Note:* the firmware decodes all bits except 1 and 4. Bit 6 (`OTW`) is decoded and stored in `stpd01_status.overTemperatureWarning` for the display layer but does **not** block STPD01 enable — only bits 0, 2, 5, and 7 (OVP, SCP, OTP, ILIM) are treated as blocking faults in `checkSTPD01()`
 
 ### I2C3
 
-#### TPS25750 Register Map @ 0x20 / 0x21 (to check)
+#### TPS25750 Register Map @ 0x20
+
+All access is length-prefixed (see `system/tps25750_io.c`): reads return `[len][data...]`, writes send `[reg][len][data...]`. The byte counts below are payload sizes, excluding the length prefix.
 
 | Register Name         | Addr (LSB/MSB) | Access | Bytes | Description                                                                                                                                     |
 | :-------------------- | :------------- | :----- | :---: | :---------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -320,7 +317,7 @@ Where:
 
 ## Charging Ports
 
-In this section, a detailed explanation of the logic adopted behind each of the charging ports is provided. The powerbank exposes four output ports: two USB-A ports (`USB-A1`, `USB-A2`), a primary USB-C port (autonomously negotiated by the `TPS25750`), and a secondary USB-C port (negotiated by the `STUSB4710` with output regulated via the `STPD01`).
+In this section, a detailed explanation of the logic adopted behind each of the charging ports is provided. The powerbank exposes four output ports: two USB-A ports (`USB-A1`, `USB-A2`), a primary USB-C port (autonomously negotiated by the `TPS25750`), and a secondary USB-C port (PD negotiated autonomously by the `CYPD3175`, output regulated via the `STPD01`).
 
 All the following logic and the firmware in general expects:
 - The call of its `init` function at start, and
@@ -338,7 +335,11 @@ The primary USB-C allows for both source and sink connections. This port is also
 - `NewContractAsCons` detects a new contract negotiated with our device acting as **sink** (consumer)
 - `NewContractAsProv` detects a new contract negotiated with our device acting as **source** (provider)
 
-If both `PlugInsertOrRemoval` and `PowerStatusUpdate` are set, the firmware reads the `POWER_STATUS` register and updates the port's connection state and, if connected, whether the powerbank is acting as source or sink.
+If both `PlugInsertOrRemoval` and `PowerStatusUpdate` are set, the firmware reads the `POWER_STATUS` register and updates the port's connection state and, if connected, whether the powerbank is acting as source or sink:
+
+- **Sink** (being charged): `EVT_CHARGER_CONNECTED` is pushed and the FSM enters CHARGING.
+- **Source** (OTG, powering a device): the firmware raises `EN_OTG` (PB15) via `enable_OTG()` — but only while the FSM is in IDLE or SLEEP, the same auto-enable gate used for the secondary port. Per the BQ25713 TRM, OTG output requires this pin HIGH **and** the `ChargeOption3.EN_OTG` I2C bit the TPS25750 sets on its private bus — an AND condition, so the MCU holding the pin low is an independent kill switch on C1 discharging the pack (protection-state `onEnter` handlers rely on exactly this).
+- **Unplug**: `disable_OTG()` runs before `EVT_CHARGER_DISCONNECTED` is pushed.
 
 If the port is connected and either `NewContractAsCons` or `NewContractAsProv` is set, the firmware reads the `ACTIVE_CONTRACT_PDO` register and checks the `PDO Type` field. If the contract is not Fixed-Voltage type, it is rejected; otherwise, the firmware extracts the `Voltage` and `Maximum Current` from the PDO, then reads the `ACTIVE_CONTRACT_RDO` in order to extract the `Operating Current`.
 
@@ -348,13 +349,17 @@ Finally, the firmware clears the bits it has read from `INT_EVENT1` by setting t
 
 #### Secondary USB-C
 
-The secondary USB-C port is source-only: it can only charge connected devices but cannot be charged (sink behavior is not supported). The firmware periodically reads the `STUSB4710`'s `ALERT_STATUS` register in order to detect connection changes, then checks `CC_CONNECTION_STATUS` to determine the attached device type, rejecting the connection if a source is detected.
+The secondary USB-C port is source-only. PD negotiation is handled autonomously by the `CYPD3175` (EZ-PD CCG3PA). The MCU monitors the `C2_RDY` signal (PC3), which is wired to the CYPD3175's `GPIO_3`/interrupt pin; when it goes low, `secondaryUSBC_ConnectionINT()` is called. `C2_ST_INT` (PC12) is wired to the STPD01's `INT` pin and triggers `stpd01_PowerStateINT()` instead.
 
-Once a sink device has been connected, the firmware periodically reads the `SRC_RDO` register. If a contract has been negotiated, the RDO's `Object Position` field identifies which of the 5 PDO configurations has been selected, and the `Operating Current` is extracted from the same read.
+The function reads `INTR_REG` (0x0006) to confirm a port 0 interrupt (bit 1), then reads the single-byte event code from `RESPONSE_REG` (0x007E). The port 0 interrupt bit is cleared by writing `0x02` to `INTR_REG`. Events are handled as follows:
 
-The corresponding PDO's `Voltage` and `Maximum Current` are then used to configure voltage and current limits on the `STPD01`.
+1. **OVP / OCP** (codes 0x83 / 0x82): USB-C2 and STPD01 are immediately disabled, the contract is cleared, and `EVT_FAULT_CRITICAL` is pushed.
+2. **OTP** (code 0xB6): USB-C2 and STPD01 are disabled, negotiation is cleared, and `EVT_FAULT_OT` is pushed.
+3. **Hard Reset** (code 0x8F): STPD01 and USB-C2 are disabled and negotiation is cleared; `isPlugged` stays true because the device is still physically present and the CYPD3175 re-advertises automatically.
+4. **Disconnect** (code 0x85): contract and connection state are cleared, both STPD01 and USB-C2 are disabled.
+5. **Contract complete** (code 0x86): `PORT0_CURRENT_PDO` (0x1010) and `PORT0_CURRENT_RDO` (0x1014) are read to extract the negotiated `Voltage`, `Maximum Current`, and `Operating Current` using the standard USB PD Fixed PDO/RDO bit mapping. The output is then applied through `secondaryUSBC_ApplyOutput()` — the single path shared with the ceiling setters, so a fresh contract and a live ceiling change can never diverge. It clamps the contract to the user ceiling (`min(ceiling, contract)` on both voltage and current — the CYPD3175 only negotiates; the STPD01 is what physically produces the rail, so the clamp is a real limit), configures the `STPD01` via `setupSTPD01()`, and enables it with a 10 ms stabilization delay, after which `checkSTPD01()` verifies no post-setup fault is active. If healthy, the USB-C2 output is enabled and the contract is marked as negotiated. A state gate applies before any of this: auto-enable only runs while the FSM is in IDLE or SLEEP — everywhere else the event is acked and the contract stored, but the output stays off (MANUAL is excluded too: there the STPD01 rail belongs to the Lab output).
 
-If configuration succeeds, the `STPD01` is enabled and given a short stabilization delay, after which the firmware checks for post-setup faults via `checkSTPD01()`. If no fault is detected, it verifies the power path is active by reading `VBUS_ENABLE_STATUS`, and only then enables the secondary USB-C port.
+Changing the ceiling from the UI while a device is already connected and negotiated re-runs `secondaryUSBC_ApplyOutput()` immediately — the rail is reprogrammed live, no replug needed. Since the STPD01 offers no VOUT/ILIM readback and its rail carries no shunt (INA3221 ch3 is grounded), `setupSTPD01()` records the register-decoded setpoint, exposed via `getSTPD01_SetpointVoltage()/Current()` — the quantized value the rail actually holds, which telemetry and the UI use as the source of truth for that rail.
 
 ---
 
@@ -399,4 +404,4 @@ In this section we provide the complete PDO and RDO register bit mappings used f
 | 19...10 | `Operating Current`                     | Operating current, **in 10mA units**<br><br>Indicates the highest current the Sink will draw during the Explicit Contract. |
 | 9...0   | `Maximum Operating Current`             | **Deprecated**, transmitter **Shall** set this field equal to "Operating Current", receiver should ignore this field.      |
 
-*Note:* the firmware extracts **Operating Current** (bits 19:10) from every RDO contract. For the secondary USB-C, it additionally extracts the PDO **Object Position** using bits 30:28 (3 bits) rather than the full 31:28 field. This is sufficient since object positions only range from 1 to 7
+*Note:* the firmware extracts **Operating Current** (bits 19:10) from every RDO contract. For the secondary USB-C port the CYPD3175 handles PDO negotiation internally; the firmware reads the already-resolved contract directly from `PORT0_CURRENT_PDO` (0x1010) and `PORT0_CURRENT_RDO` (0x1014) — no Object Position lookup is needed

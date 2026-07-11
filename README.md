@@ -29,6 +29,10 @@ This project involves the use of Lithium-Ion (Li-Ion) or Lithium Polymer (LiPo) 
 * **Interface:** Status LEDs, SPI display, pressable rotary encoder
 * **Protections:** Overcharge, Overdischarge, Short-circuit, Thermal protection.
 
+## UI Preview
+
+![UI demo](docs/ui_demo.gif)
+
 ## 🧩 Hardware Architecture
 
 Distributed design — safety, power conversion and telemetry are handled by dedicated subsystems.

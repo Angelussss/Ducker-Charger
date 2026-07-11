@@ -1,7 +1,8 @@
 #ifndef __CHARGEMANAGEMENT__
 #define __CHARGEMANAGEMENT__
 #include "stdbool.h"
-#include "stm32f4xx.h"
+#include "system/defines.h"
+#include "system/event.h"
 
 // Sensors:
 typedef struct {
@@ -24,6 +25,10 @@ typedef struct {
 
     // Low-Byte
     bool DSG;           // (BIT0) Discharging detected. True when set
+    bool SOCF;          // (BIT1) State of Charge below final threshold (critical low)
+    bool SOC1;          // (BIT2) State of Charge at threshold 1
+    bool CF;            // (BIT4) Condition Flag — re-learning cycle needed
+    bool REST;          // (BIT7) Rest condition detected
 } fuelGaugeFlags;
 
 typedef struct {
@@ -87,68 +92,6 @@ typedef enum {
     READ_FLAGS
 } I2C_ReadState;
 
-// Fuel Gauge Mapping
-#define FUEL_GAUGE_ADDR ((uint16_t)(0x55 << 1))     // Convert 7-bit address to 8-bit and then cast to 16-bit
-
-// TPS25750 Mapping
-// TO CHECK --> 0x20 / 0x21 ?
-#define TPS25750_PD_CONTROLLER_ADDR ((uint16_t)(0x20 << 1))     // Convert 7-bit address to 8-bit and then cast to 16-bit
-#define INT_EVENT1_REG_ADDR 0x14
-#define INT_MASK1_REG_ADDR 0x16
-#define INT_CLEAR1_REG_ADDR 0x18
-#define POWER_STATUS_REG_ADDR 0x3F
-#define ACTIVE_CONTRACT_PDO_REG_ADDR 0x34
-#define ACTIVE_CONTRACT_RDO_REG_ADDR 0x35
-
-// STUSB4710 Mapping
-#define STUSB4710_PD_CONTROLLER_ADDR ((uint16_t)(0x28 << 1))
-#define ALERT_STATUS_REG_ADDR 0x0B
-#define CC_CONNECTION_STATUS_REG_ADDR 0x0E      // Equivalent of PORT_STATUS_1 register of the STUSB4700
-#define VBUS_ENABLE_STATUS_REG_ADDR 0x27                 // To check if power path is alive
-#define SRC_PDO1_REG_ADDR 0x71
-#define SRC_PDO2_REG_ADDR 0x75
-#define SRC_PDO3_REG_ADDR 0x79
-#define SRC_PDO4_REG_ADDR 0x7D
-#define SRC_PDO5_REG_ADDR 0x81
-#define SRC_RDO_REG_ADDR 0x91
-
-// STPD01 Mapping
-// (Power supply for secondary USB-C)
-#define STPD01_PD_ADDR ((uint16_t)(0x54 << 1))      // To be verified (according to GitHub repo)
-#define VOUT_REG_ADDR 0x00
-#define ILIM_REG_ADDR 0x01
-#define INT_STAT_REG_ADDR 0x02
-//#define SERVICES_REG_ADDR 0x05        // Contains the discharge toggle ON/OFF (default is ON)
-#define DIGITAL_ENABLE_REG_ADDR 0x06
-
-// INA3221 Mapping
-#define INA3221_ADDR ((uint16_t)(0x40 << 1))
-#define SHUNT_VOLTAGE_CH1_REG_ADDR 0x01
-#define SHUNT_VOLTAGE_CH2_REG_ADDR 0x03
-#define SHUNT_VOLTAGE_CH3_REG_ADDR 0x05
-#define MASK_ENABLE_REG_ADDR 0x0F
-
-// Critical Signals Mapping
-#define USB_IRQ_CTRL_Pin GPIO_PIN_14        // IRQ Pin is the number 14
-#define USB_IRQ_CTRL_GPIO_Port GPIOB        // IRQ GPIO channel is the B (PB14)
-#define USB_ST_INT_CTRL_Pin GPIO_PIN_12
-#define USB_ST_INT_CTRL_GPIO_Port GPIOC
-#define C2_RDY_CTRL_Pin GPIO_PIN_3
-#define C2_RDY_CTRL_GPIO_Port GPIOC
-#define USB_CHRG_OK_CTRL_Pin GPIO_PIN_13
-#define USB_CHRG_OK_CTRL_GPIO_Port GPIOB
-
-// NON-Critical Signals Mapping
-#define USB_A1_CTRL_Pin GPIO_PIN_1
-#define USB_A1_CTRL_GPIO_Port GPIOC
-#define USB_A2_CTRL_Pin GPIO_PIN_2
-#define USB_A2_CTRL_GPIO_Port GPIOC
-#define USB_OTG_CTRL_Pin GPIO_PIN_15
-#define USB_OTG_CTRL_GPIO_Port GPIOB
-#define USB_STPD01_EN_CTRL_Pin GPIO_PIN_11
-#define USB_STPD01_EN_CTRL_GPIO_Port GPIOC
-#define USB_C2_EN_Pin GPIO_PIN_12
-#define USB_C2_EN_GPIO_Port GPIOA
 
 extern SensorData sensor_data;
 
@@ -192,15 +135,16 @@ void enable_USBC2();
 
 void disable_USBC2();
 
-void selectPDO1();
+/** EN_OTG (PB15): gates whether the BQ25713 is allowed into OTG mode
+ *  (C1 sourcing power). See charge.c — it's a real kill switch, not a
+ *  status readback. */
+void enable_OTG();
+void disable_OTG();
 
-void selectPDO2();
-
-void selectPDO3();
-
-void selectPDO4();
-
-void selectPDO5();
+/** Ceiling on the C2 output (UI OUTPUT page): clamps what PD negotiated,
+ *  never raises it. Live if C2 is connected, else stored for next time. */
+void setSecondaryUSBC_VoltageCeiling(float mv);
+void setSecondaryUSBC_CurrentCeiling(float ma);
 
 // Get data functions
 SensorData getSensorData();
@@ -224,5 +168,26 @@ int get_USBC2_Status();
 int get_OTG_Status();
 
 int get_STPD01_Enabled();
+
+/** C2_LAB_EN (PA11): 1 while the STPD01 rail is routed to the lab output.
+ *  Mutually exclusive with get_USBC2_Status() — the UI enforces the
+ *  interlock, this is the physical readback. */
+int get_LAB_Status();
+
+/** Voltage / current STPD01 was last programmed to (decoded from the
+ *  register encoding — the converter has no readback). 0 before the
+ *  first setupSTPD01() call. */
+float getSTPD01_SetpointVoltage();
+float getSTPD01_SetpointCurrent();
+
+/** Last CYPD3175 fault event (CYPD3175_EVT_OVP/OCP/OTP, 0 = none).
+ *  Cleared when a new PD contract completes. The UI fault screen uses it
+ *  to name the cause — FSM events don't carry one by design. */
+uint8_t getCYPD_LastFaultEvent();
+
+/** true while the fuel-gauge I2C reads succeed. false means the values in
+ *  FuelGaugeSensors are STALE (last good read): telemetry propagates this
+ *  as sensor_ok and the UI must flag the data as not live. */
+bool getFuelGaugeReadOK();
 
 #endif

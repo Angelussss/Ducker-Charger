@@ -71,3 +71,14 @@ CMakeLists.txt
 
 # obsidian
 .obsidian/
+
+# build
+build/
+
+# clangd
+.clangd
+compile_commands.json
+
+# --- Firmware test binaries (build artifacts, not sources) ---
+firmware/tests/test_*
+!firmware/tests/test_*.c
