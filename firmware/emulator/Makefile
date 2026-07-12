@@ -8,6 +8,7 @@ FW  = $(FWSRC)/system/fsm.c \
       $(FWSRC)/system/event.c \
       $(FWSRC)/app/initialization.c \
       $(FWSRC)/app/provisioning.c \
+      $(FWSRC)/app/calibration.c \
       $(FWSRC)/app/telemetry.c \
       $(FWSRC)/app/encoder.c \
       $(FWSRC)/app/tps25750_bundle.c \

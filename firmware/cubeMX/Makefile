@@ -43,6 +43,7 @@ Core/Src/system/charge.c \
 Core/Src/system/tps25750_io.c \
 Core/Src/app/initialization.c \
 Core/Src/app/provisioning.c \
+Core/Src/app/calibration.c \
 Core/Src/app/tps25750_bundle.c \
 Core/Src/app/encoder.c \
 Core/Src/app/telemetry.c \
