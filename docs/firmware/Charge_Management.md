@@ -116,8 +116,8 @@ Critical signals. Configure as EXTI (External Interrupt) or Polling.
 These are the standard/extended commands the firmware reads from the fuel gauge.
 Addresses, byte order, and units verified against the **BQ34Z100-R2 Technical
 Reference Manual (SLUUCO5A)**. Multi-byte values are **little-endian** (low byte at
-the lower address). The bundled [`bq34z100-r2.pdf`](../PCB/Ducker-Charger/docs/bq34z100-r2.pdf) is the *datasheet* and does
-**not** contain this table — it is sourced from the [TRM](../PCB/Ducker-Charger/docs/BQ34Z100-R2_Technical Reference_Manual.pdf). All mentioned registers are Read-Only (RO)
+the lower address). The bundled [`bq34z100-r2.pdf`](../../PCB/Ducker-Charger/docs/bq34z100-r2.pdf) is the *datasheet* and does
+**not** contain this table — it is sourced from the [TRM](../../PCB/Ducker-Charger/docs/BQ34Z100-R2_Technical Reference_Manual.pdf). All mentioned registers are Read-Only (RO)
 
 | Command                 | Addr (LSB/MSB) | Bytes | Unit     | Firmware field (`FuelGaugeSensors`) |
 | :---------------------- | :------------- | :---: | :------- | :---------------------------------- |

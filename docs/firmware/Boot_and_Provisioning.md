@@ -128,11 +128,12 @@ the schematic netlist, see `Charge_Management.md`).
 
 ## Maintenance notes
 
-- **Flash budget:** the TPS bundle costs 32 KB of MCU flash. Current
-  build with these modules: ~45 KB of 128 KB; the realistic estimate
-  with UI + charge logic integrated is ~100 KB.
+- **Flash budget:** the TPS bundle costs 32 KB of MCU flash. The UI and
+  charge logic are now integrated in the build — re-measure with
+  `arm-none-eabi-size` after significant changes (128 KB total).
 - **CubeMX regeneration rewrites the Makefile** (it has no USER CODE
-  sections): after every regeneration, re-check that the three
-  `Core/Src/app/*.c` entries are still in `C_SOURCES`.
+  sections): after every regeneration, re-check that all the application
+  entries (`Core/Src/app/*.c`, `system/*.c`, `display/*.c`, `ui/*.c`)
+  are still in `C_SOURCES`.
 - The `main.c` hooks live inside USER CODE sections and survive
   regeneration.

@@ -31,7 +31,7 @@ This project involves the use of Lithium-Ion (Li-Ion) or Lithium Polymer (LiPo) 
 
 ## UI Preview
 
-![UI demo](docs/ui_demo.gif)
+![UI demo](docs/assets/ui_demo.gif)
 
 ## 🧩 Hardware Architecture
 
@@ -40,28 +40,51 @@ Distributed design — safety, power conversion and telemetry are handled by ded
 | Subsystem | Part | Role |
 |-----------|------|------|
 | Safety / Protection | TI **BQ77915** + N-ch MOSFETs | Autonomous, software-independent cell OV/UV/SC/OC cutoff (4S, always-on) |
-| Charger | TI **BQ25713** | Buck-boost battery charger |
-| Main USB-C PD | TI **TPS25750** | Primary PD port controller, drives the charger |
-| Aux USB-C PD | Infineon **CYPD3175** (CCG3PA) | Secondary PD ports negotiation |
-| Fuel gauge | TI **BQ34Z100** | Impedance Track™ State-of-Charge / Time-to-Empty |
+| Charger | TI **BQ25713** | Buck-boost NVDC battery charger (driven by the TPS25750 on a private I²C bus) |
+| Main USB-C PD | TI **TPS25750** | Primary PD port controller; patch bundle streamed by the MCU at every boot |
+| Aux USB-C PD | Infineon **CYPD3175** (CCG3PA) | Secondary PD port negotiation (replaced the EOL STUSB4710) |
+| Aux programmable rail | ST **STPD01** | I²C-programmable supply for the secondary USB-C / lab output |
+| Fuel gauge | TI **BQ34Z100-R2** | Impedance Track™ State-of-Charge / Time-to-Empty |
 | Telemetry | TI **INA3221** | 3-channel voltage/current monitoring |
 | Step-down | TI **TPS54302 / TPS54202** | Auxiliary rails |
-| ESD / I²C isolation | **USBLC6**, **ISO1540** | Port ESD protection, isolated I²C |
-| Host | **STM32F401RBT6** | I²C master, thermal manager, HMI / supervisor |
+| ESD / I²C isolation | **USBLC6**, **ISO1540** | Port ESD protection, isolated I²C to the battery-referenced gauge |
+| Host | **STM32F401RBT6** | I²C master, power-state FSM, thermal manager, HMI / supervisor |
 
 
 ## 📂 Repository Structure
 
 ```text
 Ducker-Charger/
-├── PCB/                    # KiCad projects (schematics + PCB layouts)
-│   ├── Ducker-Charger/     # Main charger board
-│   └── Sensing-Board/      # Cell sensing board
-├── firmware/               # Source code & CubeMX project
-│   ├── cubeMX/
-│   └── TPS25750/           # PD controller config
-└── docs/                   # Documentation & architecture notes
+├── PCB/                        # KiCad projects (see PCB/README.md)
+│   ├── Ducker-Charger/         # Main charger board (schematics, layout, datasheets)
+│   └── Sensing-Board/          # Cell sensing board
+├── firmware/
+│   ├── cubeMX/                 # STM32F401 firmware (FSM, charge mgmt, UI, drivers)
+│   ├── TPS25750/               # Primary PD controller config (JSON project + .bin)
+│   ├── CYPD3175/               # Secondary PD controller firmware (hex, patches, LED driver)
+│   ├── emulator/               # Full-PCB emulator: real firmware vs IC models (SDL)
+│   ├── interface-tester/       # Desktop UI simulator (SDL)
+│   └── tests/                  # Host-side unit tests (FSM, charge, HPI, math)
+├── powerbank_enclosure/        # 3D-printable enclosure (F3D, STEP, STL, renders)
+└── docs/                       # Documentation — start from docs/README.md
+    ├── hardware/               # Power architecture, pin map / BSP reference
+    ├── firmware/               # Architecture, FSM, charge mgmt, boot, UI
+    └── assets/                 # UI demo gif
 ```
+
+## 📖 Documentation
+
+Start from **[`docs/README.md`](docs/README.md)** — full system overview and a
+walkthrough of how the firmware works, with links to:
+
+* [Hardware architecture](docs/hardware/Hardware_Architecture.md) and the
+  [pin-level BSP reference](docs/hardware/BSP_reference.md)
+* [Firmware architecture](docs/firmware/Firmware_Architecture.md),
+  the [power-state FSM](docs/firmware/FSM.md) and
+  [charge management](docs/firmware/Charge_Management.md)
+* [Boot initialization & IC provisioning](docs/firmware/Boot_and_Provisioning.md)
+  and the [UI / display reference](docs/firmware/UI_and_Display.md)
+* [KiCad projects & block diagram](PCB/README.md)
 
 ## 🚧 Not Yet Completed
 

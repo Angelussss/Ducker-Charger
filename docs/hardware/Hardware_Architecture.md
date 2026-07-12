@@ -64,6 +64,9 @@ The BMS prioritizes safety through hardware redundancy, separating protection fr
 
 *Schematic Sheet: `/Low_pow/*`
 
+* **Secondary USB-C (PD chain):** An Infineon **CYPD3175** (CCG3PA) negotiates PD on the secondary USB-C port (it replaced the EOL STUSB4710), while an ST **STPD01** programmable supply generates the negotiated voltage on the aux rail. Both sit on the low-power I2C bus (I2C1).
+
+
 * **Lab Mode Switching:** The system can route power to banana jacks (`V_LABS`) or USB ports via back-to-back MOSFETs (Q6-Q9), controlled by `USB_C_ZENABLER` and `LAB_ZENABLER` signals.
 
 
