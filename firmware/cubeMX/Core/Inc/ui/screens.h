@@ -160,10 +160,18 @@ typedef enum {
                         (firmware cannot stop the autonomous C1 charge path) */
     WARN_CHGINH,     /* gauge CHG_INH/XCHG with a charger attached: pack outside
                         its charge-temperature window, unplug the charger */
+    WARN_NOCAL,      /* gauge never calibrated (QEN clear): shown at boot and
+                        at every wake until the wizard's IT-enable step runs */
     WARN_COUNT
 } WarnType_t;
 
-typedef enum { CONFIRM_LOCKALL = 0, CONFIRM_SHUTDOWN } ConfirmAction_t;
+/* "gauge not calibrated" cache: refreshed at UI_Init and after the
+ * wizard's IT-enable; read by the header icon and the warning scan
+ * (an I2C read per UI tick would be too chatty). */
+void    Screen_NoCal_Refresh(void);
+uint8_t Screen_NoCal_Get(void);
+
+typedef enum { CONFIRM_LOCKALL = 0, CONFIRM_SHUTDOWN, CONFIRM_CALIBRATE } ConfirmAction_t;
 void Screen_Confirm_Open(ConfirmAction_t action);
 void Screen_Confirm_Draw(void);
 void Screen_Confirm_OnRotate(int8_t d);
@@ -192,6 +200,13 @@ void Screen_Settings_LockAll(uint8_t on);
 uint8_t Screen_Settings_GetLockAll(void);
 void Screen_Stats_Update(void);
 void Screen_Ports_Update(void);
+
+/* ---- Calibration page (gauge calibration wizard) ---- */
+void Screen_Cal_Open(void);
+void Screen_Cal_Draw(void);
+void Screen_Cal_Update(void);      /* live readings + offset-routine poll */
+void Screen_Cal_OnRotate(int8_t d);
+void Screen_Cal_OnPress(void);
 
 /* ---- Output channel page (Lab / USB-C2) ---- */
 void Screen_Output_Open(uint8_t channel);        /* 0 = Lab, 1 = USB-C2 */

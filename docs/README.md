@@ -17,6 +17,7 @@ docs/
 │   ├── FSM.md                       # power-state machine: events, states, transition matrix
 │   ├── Charge_Management.md         # charge.c: sensors, register maps, port logic
 │   ├── Boot_and_Provisioning.md     # every-boot IC init + one-time gauge provisioning
+│   ├── Gauge_Calibration.md         # on-device fuel-gauge calibration wizard
 │   └── UI_and_Display.md            # screens, widgets, per-screen behaviour
 └── assets/
     └── ui_demo.gif                  # UI demo capture
@@ -94,7 +95,7 @@ Full detail: [`firmware/Firmware_Architecture.md`](firmware/Firmware_Architectur
 
 ```text
 UI          ui/ui_state.c · ui/screens.c · ui/widgets.c
-App         app/telemetry.c · app/encoder.c · app/initialization.c · app/provisioning.c
+App         app/telemetry.c · app/encoder.c · app/initialization.c · app/provisioning.c · app/calibration.c
 System      system/fsm.c · system/charge.c · system/event.c · system/tps25750_io.c
 Display     display/ili9341.c · display/gfx.c
 HAL         CubeMX-generated (SPI1 · I2C1 · I2C3 · TIM3 · ADC1 · GPIO)
@@ -167,7 +168,7 @@ Docs: [`firmware/Firmware_Architecture.md`](firmware/Firmware_Architecture.md),
 per-port V/I with 60-sample histories, lifetime/session stats) — no I2C of its own.
 Display stack: `ili9341.c` (SPI, RGB565, 240×320) + `gfx.c` (text/primitives).
 UI: screen carousel MAIN ↔ DETAIL ↔ GRAPH ↔ PORTS ↔ STATS, SETTINGS overlay
-(long-press/double-click) with OUTPUT / DISPLAY / TEST sub-pages, CONFIRM/WARNING
+(long-press/double-click) with OUTPUT / DISPLAY / CALIBRATION / TEST sub-pages, CONFIRM/WARNING
 modals, FAULT takeover, SLEEP page. Two-phase draw (full `Draw` on entry, partial
 `Update` at 4 fps) eliminates flicker.
 
@@ -213,5 +214,10 @@ source (`.f3d`), STEP, STLs (body, upper lid, short-side lid) and renders.
 - Open `CHECK:` items (TPS burst chunking/address, gauge data-flash offsets,
   design capacity vs final pack, CYPD3175 LED pin) tracked in
   [`firmware/Boot_and_Provisioning.md`](firmware/Boot_and_Provisioning.md#open-verification-points).
-- Fuel-gauge **golden image** (Impedance Track learning cycle) still to be
-  produced — SoC readings indicative until then.
+- Fuel-gauge calibration is done **on-device**: SETTINGS → Calibration, a
+  nine-step multimeter-assisted wizard (electrical cal, pack config, IT
+  enable, learning-cycle monitor) — see
+  [`firmware/Gauge_Calibration.md`](firmware/Gauge_Calibration.md). Until it
+  is run on the real pack, SoC readings are indicative and the UI shows a
+  NOT CALIBRATED warning at every wake. ChemID selection (optional accuracy
+  refinement) still needs one bqStudio session.

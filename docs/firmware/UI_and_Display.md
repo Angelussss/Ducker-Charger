@@ -135,6 +135,7 @@ change with new telemetry data (called every 250 ms).
 │     ├─ Lock all (confirm modal)                          │
 │     ├─ DISPLAY page (brightness, auto-sleep, screen off, │
 │     │                shutdown)                           │
+│     ├─ CALIBRATION page (gauge calibration wizard)       │
 │     └─ TEST page (force warning scenarios)               │
 │                                                          │
 │  Modals: CONFIRM (yes/no), WARNING (temp / voltage)      │
@@ -212,6 +213,18 @@ auto-sleep timeout (Off / 1 / 2 / 15 min, default 2 min to match the FSM's
 Shutdown — a confirm modal that pushes `EVT_BUTTON_LONG`, the same
 primitive as the physical 3 s hold, driving the FSM to DEEP_SLEEP subject
 to the same transition-table gate (only honored from IDLE/SLEEP).
+
+**Not-calibrated nag**: until the wizard's IT-enable step has run (QEN
+flag in the gauge), an orange `CAL` icon sits in the header and a
+NOT CALIBRATED warning modal greets every boot, light-sleep wake and
+deep-sleep wake (re-armed on each sleep entry, acked with OK).
+
+**CALIBRATION** — nine-step fuel-gauge calibration wizard (offsets,
+voltage divider, current gain, temperature offset, pack config/VOLTSEL,
+IT enable, learning-cycle monitor), multimeter-assisted; opens behind a
+confirm modal (previous calibration data gets overwritten);
+DF written only on explicit APPLY/SAVE. Backend in `app/calibration.c`,
+full procedure in [Gauge_Calibration.md](Gauge_Calibration.md).
 
 **TEST** — forces telemetry values for UI stress scenarios: low voltage,
 critical voltage, low temperature, high temperature, overcurrent, reset
@@ -324,15 +337,16 @@ loop, not here). It runs in order:
 | Encoder action | Result |
 |----------------|--------|
 | Rotate (main carousel) | Move between MAIN / DETAILS / GRAPH / PORTS / STATS |
-| Rotate (SETTINGS) | Scroll through 8 rows |
-| Rotate (OUTPUT, DISPLAY, TEST) | Change value / scroll rows |
+| Rotate (SETTINGS) | Scroll through 9 rows |
+| Rotate (OUTPUT, DISPLAY, CALIBRATION, TEST) | Change value / scroll rows |
 | Short press (GRAPH) | Cycle Y-axis scale |
 | Short press (SETTINGS row 0–1) | Toggle USB-A output |
 | Short press (SETTINGS row 2–3) | Open Lab / USB-C2 channel page |
 | Short press (SETTINGS row 4) | Lock all (confirm modal) |
 | Short press (SETTINGS row 5) | Open DISPLAY page |
-| Short press (SETTINGS row 6) | Open TEST page |
-| Short press (SETTINGS row 7) | Exit SETTINGS |
+| Short press (SETTINGS row 6) | Open CALIBRATION page |
+| Short press (SETTINGS row 7) | Open TEST page |
+| Short press (SETTINGS row 8) | Exit SETTINGS |
 | Double press | Jump directly to SETTINGS from anywhere |
 | Long press ≥ 1 s | Open SETTINGS overlay |
 

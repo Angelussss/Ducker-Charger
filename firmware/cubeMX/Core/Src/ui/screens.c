@@ -10,6 +10,7 @@
 #include "ui/ui_state.h"
 #include "system/fsm.h"    /* PB_FSM_ActiveState: gates + fault screen */
 #include "system/charge.h" /* fault-cause getters for the FAULT screen */
+#include "app/calibration.h" /* gauge calibration wizard backend */
 #include <stdio.h>      /* snprintf */
 
 /* Manual output enables (SETTINGS toggles, OUTPUT page) are honored only
@@ -67,6 +68,11 @@ static void draw_header(const char *title)
 }
 
 /* called on every periodic tick so icons track live telemetry on all screens */
+/* "gauge not calibrated" cache (see screens.h) */
+static uint8_t _nocal;
+void Screen_NoCal_Refresh(void) { _nocal = !Calibration_IsDone(); }
+uint8_t Screen_NoCal_Get(void)  { return _nocal; }
+
 void Screen_Header_RefreshIcons(void)
 {
     ILI9341_FillRect(150, HEADER_Y + 4, 88, HEADER_H - 10, COLOR_HEADER);
@@ -89,6 +95,10 @@ void Screen_Header_RefreshIcons(void)
     if (volt_alarm_pub(telemetry.voltage_mV) == 2 &&
         ((HAL_GetTick() / 500) & 1))
         Widget_StatusIcon_Draw(155, HEADER_Y + 10, ICON_ALERT, "", 1);
+    /* "CAL" = gauge never calibrated (same slot, alert wins) */
+    else if (_nocal)
+        GFX_DrawString(152, HEADER_Y + 11, "CAL",
+                       &GFX_FontSmall, COLOR_ORANGE, COLOR_HEADER);
 
     /* USB-C plug when a supply is attached */
     if (telemetry.vbus_present)
@@ -813,6 +823,420 @@ void Screen_Test_OnPress(void)
 }
 
 /* =========================================================
+ * SCREEN: CALIBRATION PAGE — gauge calibration wizard
+ * Four steps, each backed by app/calibration.c; the multimeter
+ * readings are entered with the encoder. DF is written only on
+ * the explicit APPLY/SAVE actions, never while browsing.
+ * ========================================================= */
+
+typedef enum {
+    CALSTEP_INTRO = 0,   /* gauge check + current DF values          */
+    CALSTEP_OFFSET,      /* internal CC + board offset routines      */
+    CALSTEP_VOLT,        /* multimeter pack voltage -> divider       */
+    CALSTEP_CURR,        /* multimeter series current -> CC gain     */
+    CALSTEP_TEMP,        /* ambient temperature -> ext temp offset   */
+    CALSTEP_PACK,        /* VOLTSEL + series cells + design capacity */
+    CALSTEP_ITEN,        /* Impedance Track enable (one-way)         */
+    CALSTEP_LEARN,       /* learning-cycle monitor (read-only)       */
+    CALSTEP_DONE,        /* review                                   */
+} CalStep_t;
+
+static CalStep_t _cal_step;
+static uint8_t   _cal_row;      /* 0 value, 1 action, 2 next, 3 exit */
+static uint8_t   _cal_edit;     /* encoder edits the value row       */
+static int32_t   _cal_val;      /* entered value (mV / mA / 0.1 C)   */
+static uint8_t   _cal_ready;    /* Calibration_Begin() succeeded     */
+static uint8_t   _cal_running;  /* offset routine in flight          */
+static char      _cal_msg[24];  /* one-line status feedback          */
+
+#define CAL_ROWS 4
+
+static const char *_cal_title[] = {
+    [CALSTEP_INTRO]  = "1/9 GAUGE CHECK",
+    [CALSTEP_OFFSET] = "2/9 ZERO OFFSET",
+    [CALSTEP_VOLT]   = "3/9 VOLTAGE",
+    [CALSTEP_CURR]   = "4/9 CURRENT",
+    [CALSTEP_TEMP]   = "5/9 TEMPERATURE",
+    [CALSTEP_PACK]   = "6/9 PACK CONFIG",
+    [CALSTEP_ITEN]   = "7/9 ENABLE IT",
+    [CALSTEP_LEARN]  = "8/9 LEARNING",
+    [CALSTEP_DONE]   = "9/9 REVIEW",
+};
+
+/* step instructions: imperative, action-first (4 short lines) */
+static const char *_cal_help[][4] = {
+    [CALSTEP_INTRO]  = { "No tools needed here.",
+                         "Press CHECK GAUGE: unlocks the",
+                         "gauge config memory.",
+                         "Nothing gets written yet." },
+    [CALSTEP_OFFSET] = { "1. Unplug charger + all loads",
+                         "2. Power the MCU from SWD 3V3",
+                         "3. Press START, wait ~20s",
+                         "(gauge needs true 0mA to zero)" },
+    [CALSTEP_VOLT]   = { "1. Multimeter on DC volts",
+                         "2. Probe the pack + and - pins",
+                         "3. Enter the exact reading",
+                         "4. Press APPLY" },
+    [CALSTEP_CURR]   = { "1. Multimeter on 10A, in series",
+                         "   with any load on USB-A1",
+                         "2. Enter the amps, press CAPTURE",
+                         "3. Remove the load, press SAVE" },
+    [CALSTEP_TEMP]   = { "1. Read the room temperature",
+                         "   (any thermometer, +-2C fine)",
+                         "2. Enter it below",
+                         "3. Press APPLY" },
+    [CALSTEP_PACK]   = { "No tools needed.",
+                         "Press APPLY to describe the",
+                         "pack to the gauge: 4S cells,",
+                         "7800mAh, ext voltage divider." },
+    [CALSTEP_ITEN]   = { "Finish steps 2-6 FIRST:",
+                         "this switch is permanent.",
+                         "Then press ENABLE IT to start",
+                         "the self-learning algorithm." },
+    [CALSTEP_LEARN]  = { "1. Charge the pack to full",
+                         "2. Rest 2h (nothing plugged)",
+                         "3. Discharge ~1.5A until empty",
+                         "4. Rest 5h. Live status:" },
+    [CALSTEP_DONE]   = { "Nothing more to do.",
+                         "Values are stored in the gauge",
+                         "flash: permanent, they survive",
+                         "power loss and reboots." },
+};
+
+/* only the multimeter-entry steps use the value row */
+static uint8_t cal_has_value(void)
+{
+    return _cal_step == CALSTEP_VOLT || _cal_step == CALSTEP_CURR ||
+           _cal_step == CALSTEP_TEMP;
+}
+
+/* seed the value row from the live reading so the user only dials
+ * in the (small) difference the multimeter shows */
+static void cal_seed_value(void)
+{
+    uint16_t mv; int16_t ma;
+
+    if (Calibration_Live(&mv, &ma) != CAL_OK)
+        { _cal_val = 0; return; }
+    switch (_cal_step) {
+        case CALSTEP_VOLT: _cal_val = mv;  break;
+        case CALSTEP_CURR: _cal_val = ma;  break;
+        case CALSTEP_TEMP: _cal_val = 250; break;   /* 25.0 C */
+        default:           _cal_val = 0;   break;
+    }
+}
+
+static void cal_draw_rows(void)
+{
+    char buf[28];
+    uint16_t mv = 0; int16_t ma = 0;
+    uint8_t live_ok = (Calibration_Live(&mv, &ma) == CAL_OK);
+
+    /* info block: step title + numbered instructions + live gauge
+     * reading (shares the line with the status message) */
+    ILI9341_FillRect(0, CONTENT_Y, ILI9341_WIDTH, 96, COLOR_BG);
+    GFX_DrawString(10, CONTENT_Y + 2, _cal_title[_cal_step],
+                   &GFX_FontSmall, COLOR_WHITE, COLOR_BG);
+    for (uint8_t i = 0; i < 4u; i++)
+        GFX_DrawString(10, CONTENT_Y + 16 + i * 13, _cal_help[_cal_step][i],
+                       &GFX_FontSmall, COLOR_LIGHTGRAY, COLOR_BG);
+
+    if (live_ok)
+        snprintf(buf, sizeof(buf), "%u.%02uV %+dmA",
+                 mv / 1000u, (mv % 1000u) / 10u, (int)ma);
+    else
+        snprintf(buf, sizeof(buf), "no answer");
+    GFX_DrawString(10, CONTENT_Y + 72, buf,
+                   &GFX_FontSmall, COLOR_ACCENT, COLOR_BG);
+    GFX_DrawString(110, CONTENT_Y + 72, _cal_msg,
+                   &GFX_FontSmall, COLOR_WARN, COLOR_BG);
+
+    /* LEARN: the two input slots become a live learning-cycle monitor */
+    if (_cal_step == CALSTEP_LEARN) {
+        LearnStatus_t ls;
+        ILI9341_FillRect(10, CONTENT_Y + 96, 220, 64, COLOR_BG);
+        if (Calibration_LearnStatus(&ls) == CAL_OK) {
+            snprintf(buf, sizeof(buf), "Upd 0x%02X  QEN:%u VOK:%u",
+                     ls.update_status, ls.qen, ls.vok);
+            GFX_DrawString(10, CONTENT_Y + 100, buf,
+                           &GFX_FontSmall, COLOR_WHITE, COLOR_BG);
+            snprintf(buf, sizeof(buf), "FC:%u REST:%u  %+dmA",
+                     ls.fc, ls.rest, (int)ls.avg_ma);
+            GFX_DrawString(10, CONTENT_Y + 118, buf,
+                           &GFX_FontSmall, COLOR_WHITE, COLOR_BG);
+            const char *hint =
+                !ls.qen                  ? "IT off: run step 7 first" :
+                ls.update_status >= 0x06 ? "DONE: Qmax + Ra learned" :
+                ls.update_status == 0x05 ? "Qmax OK: recharge full"  :
+                ls.fc                    ? "Full: rest 2h, then load" :
+                ls.dsg                   ? "Discharging: to term V"   :
+                ls.rest                  ? "Resting: wait it out"     :
+                                           "Charge the pack full";
+            GFX_DrawString(10, CONTENT_Y + 136, hint,
+                           &GFX_FontSmall, COLOR_ACCENT, COLOR_BG);
+        } else {
+            GFX_DrawString(10, CONTENT_Y + 100, "Status read failed",
+                           &GFX_FontSmall, COLOR_DANGER, COLOR_BG);
+        }
+        Widget_MenuRow_Draw(10, CONTENT_Y + 164, 220, 30, "Next >",
+                            (_cal_row == 2));
+        Widget_MenuRow_Draw(10, CONTENT_Y + 198, 220, 30, "< Exit",
+                            (_cal_row == 3));
+        ILI9341_FillRect(0, FOOTER_Y, ILI9341_WIDTH, FOOTER_H, COLOR_HEADER);
+        GFX_DrawString(10, FOOTER_Y + 11, "Live status, updates alone",
+                       &GFX_FontSmall, COLOR_GRAY, COLOR_HEADER);
+        return;
+    }
+
+    /* REVIEW: the two input slots become the DF readout the user is
+     * meant to copy into the provisioning patch list */
+    if (_cal_step == CALSTEP_DONE) {
+        CalData_t cd;
+        LearnStatus_t ls;
+        ILI9341_FillRect(10, CONTENT_Y + 96, 220, 64, COLOR_BG);
+        if (Calibration_Read(&cd) == CAL_OK) {
+            int gw = (int)cd.cc_gain;
+            int gf = (int)((cd.cc_gain - (float)gw) * 10000.0f + 0.5f);
+            snprintf(buf, sizeof(buf), "Gain %d.%04d  Div %u",
+                     gw, gf, (unsigned)cd.divider);
+            GFX_DrawString(10, CONTENT_Y + 100, buf,
+                           &GFX_FontSmall, COLOR_WHITE, COLOR_BG);
+            snprintf(buf, sizeof(buf), "CCoff %d  Boff %d",
+                     (int)cd.cc_offset, (int)cd.board_offset);
+            GFX_DrawString(10, CONTENT_Y + 118, buf,
+                           &GFX_FontSmall, COLOR_WHITE, COLOR_BG);
+            snprintf(buf, sizeof(buf), "Toff %d/%d",
+                     (int)cd.int_temp_off, (int)cd.ext_temp_off);
+            if (Calibration_LearnStatus(&ls) == CAL_OK) {
+                size_t l = strlen(buf);
+                snprintf(buf + l, sizeof(buf) - l, "  Upd 0x%02X IT:%u",
+                         ls.update_status, ls.qen);
+            }
+            GFX_DrawString(10, CONTENT_Y + 136, buf,
+                           &GFX_FontSmall, COLOR_WHITE, COLOR_BG);
+        } else {
+            GFX_DrawString(10, CONTENT_Y + 100, "DF read failed",
+                           &GFX_FontSmall, COLOR_DANGER, COLOR_BG);
+        }
+        Widget_MenuRow_Draw(10, CONTENT_Y + 164, 220, 30, "Restart wizard",
+                            (_cal_row == 2));
+        Widget_MenuRow_Draw(10, CONTENT_Y + 198, 220, 30, "< Exit",
+                            (_cal_row == 3));
+        ILI9341_FillRect(0, FOOTER_Y, ILI9341_WIDTH, FOOTER_H, COLOR_HEADER);
+        GFX_DrawString(10, FOOTER_Y + 11, "Calibration complete",
+                       &GFX_FontSmall, COLOR_GRAY, COLOR_HEADER);
+        return;
+    }
+
+    /* value row: only the steps with a multimeter entry have one; on
+     * the others the slot stays blank and navigation skips it */
+    if (cal_has_value()) {
+        switch (_cal_step) {
+            case CALSTEP_VOLT:
+                snprintf(buf, sizeof(buf), _cal_edit ? "DMM <%2d.%02dV>"
+                                                     : "DMM  %2d.%02dV",
+                         (int)(_cal_val / 1000), (int)((_cal_val % 1000) / 10));
+                break;
+            case CALSTEP_CURR:
+                snprintf(buf, sizeof(buf), _cal_edit ? "DMM <%+dmA>"
+                                                     : "DMM  %+dmA",
+                         (int)_cal_val);
+                break;
+            default: /* CALSTEP_TEMP */
+                snprintf(buf, sizeof(buf), _cal_edit ? "Temp <%d.%dC>"
+                                                     : "Temp  %d.%dC",
+                         (int)(_cal_val / 10), (int)(_cal_val % 10));
+                break;
+        }
+        Widget_MenuRow_Draw(10, CONTENT_Y + 96, 220, 30, buf, (_cal_row == 0));
+    } else {
+        ILI9341_FillRect(10, CONTENT_Y + 96, 220, 30, COLOR_BG);
+    }
+
+    /* action row */
+    switch (_cal_step) {
+        case CALSTEP_INTRO:  snprintf(buf, sizeof(buf), _cal_ready
+                                      ? "Gauge OK  (re-check)" : "CHECK GAUGE"); break;
+        case CALSTEP_OFFSET: snprintf(buf, sizeof(buf), _cal_running
+                                      ? "RUNNING..." : "START (needs 0mA)");    break;
+        case CALSTEP_VOLT:   snprintf(buf, sizeof(buf), "APPLY");               break;
+        case CALSTEP_CURR:   snprintf(buf, sizeof(buf),
+                                      Calibration_HasPendingCurrent()
+                                      ? "SAVE (remove load)" : "CAPTURE");      break;
+        case CALSTEP_TEMP:   snprintf(buf, sizeof(buf), "APPLY");               break;
+        case CALSTEP_PACK:   snprintf(buf, sizeof(buf), "APPLY PACK CONFIG");   break;
+        case CALSTEP_ITEN:   snprintf(buf, sizeof(buf), "ENABLE IT (one-way)"); break;
+        default:             snprintf(buf, sizeof(buf), "-");                   break;
+    }
+    Widget_MenuRow_Draw(10, CONTENT_Y + 130, 220, 30, buf, (_cal_row == 1));
+
+    Widget_MenuRow_Draw(10, CONTENT_Y + 164, 220, 30,
+                        (_cal_step == CALSTEP_DONE) ? "Restart wizard" : "Next >",
+                        (_cal_row == 2));
+    Widget_MenuRow_Draw(10, CONTENT_Y + 198, 220, 30, "< Exit",
+                        (_cal_row == 3));
+
+    ILI9341_FillRect(0, FOOTER_Y, ILI9341_WIDTH, FOOTER_H, COLOR_HEADER);
+    GFX_DrawString(10, FOOTER_Y + 11,
+                   _cal_edit ? "ROTATE=value  PRESS=set" : "PRESS=select",
+                   &GFX_FontSmall, COLOR_GRAY, COLOR_HEADER);
+}
+
+void Screen_Cal_Open(void)
+{
+    _cal_step = CALSTEP_INTRO;
+    _cal_row = 1;
+    _cal_edit = 0;
+    _cal_ready = 0;
+    _cal_running = 0;
+    _cal_msg[0] = '\0';
+}
+
+void Screen_Cal_Draw(void)
+{
+    ILI9341_FillScreen(COLOR_BG);
+    draw_header("CALIBRATION");
+    cal_draw_rows();
+}
+
+void Screen_Cal_Update(void)
+{
+    /* poll the in-flight offset routine; refresh live readings */
+    if (_cal_running) {
+        CalStatus_t st = Calibration_OffsetPoll();
+        if (st != CAL_BUSY) {
+            _cal_running = 0;
+            snprintf(_cal_msg, sizeof(_cal_msg), (st == CAL_OK)
+                     ? "Offsets saved" : "Offset FAILED");
+        }
+    }
+    cal_draw_rows();
+}
+
+static void cal_next_step(void)
+{
+    _cal_step = (_cal_step == CALSTEP_DONE)
+                ? CALSTEP_INTRO : (CalStep_t)(_cal_step + 1);
+    _cal_row  = (_cal_step == CALSTEP_DONE ||
+                 _cal_step == CALSTEP_LEARN) ? 2u : 1u;
+    _cal_edit = 0;
+    _cal_msg[0] = '\0';
+    cal_seed_value();
+    Screen_Cal_Draw();
+}
+
+void Screen_Cal_OnRotate(int8_t d)
+{
+    if (_cal_edit) {
+        /* granularity: 10 mV / 10 mA / 0.5 C per click */
+        int32_t step = (_cal_step == CALSTEP_TEMP) ? 5 : 10;
+        _cal_val += (d > 0 ? step : -step);
+    } else {
+        /* skip the rows a step doesn't have: value row on the
+         * non-entry steps, value+action on LEARN/REVIEW */
+        uint8_t first = (_cal_step == CALSTEP_DONE ||
+                         _cal_step == CALSTEP_LEARN) ? 2u
+                        : (cal_has_value() ? 0u : 1u);
+        uint8_t n     = (uint8_t)(CAL_ROWS - first);
+        _cal_row = (uint8_t)(first + ((_cal_row - first
+                                       + (d > 0 ? 1u : n - 1u)) % n));
+    }
+    cal_draw_rows();
+}
+
+static void cal_do_action(void)
+{
+    CalStatus_t st;
+
+    switch (_cal_step) {
+        case CALSTEP_INTRO:
+            st = Calibration_Begin();
+            _cal_ready = (st == CAL_OK);
+            snprintf(_cal_msg, sizeof(_cal_msg), _cal_ready
+                     ? "Unsealed, DF readable"
+                     : (st == CAL_WRONG_DEVICE ? "Wrong device!"
+                                               : "Bus error"));
+            break;
+
+        case CALSTEP_OFFSET:
+            if (_cal_running) break;
+            st = Calibration_OffsetStart();
+            _cal_running = (st == CAL_OK);
+            snprintf(_cal_msg, sizeof(_cal_msg), _cal_running
+                     ? "Running (~20 s)..." : "Bus error");
+            break;
+
+        case CALSTEP_VOLT:
+            st = Calibration_ApplyVoltage((uint16_t)_cal_val);
+            snprintf(_cal_msg, sizeof(_cal_msg),
+                     (st == CAL_OK)    ? "Divider written" :
+                     (st == CAL_RANGE) ? "Out of range (>15%)" : "Bus error");
+            break;
+
+        case CALSTEP_CURR:
+            if (Calibration_HasPendingCurrent()) {
+                st = Calibration_CommitCurrent();
+                snprintf(_cal_msg, sizeof(_cal_msg), (st == CAL_OK)
+                         ? "Gain written" : "Write failed");
+            } else {
+                st = Calibration_CaptureCurrent((int16_t)_cal_val);
+                snprintf(_cal_msg, sizeof(_cal_msg),
+                         (st == CAL_OK)    ? "Captured: unload+SAVE" :
+                         (st == CAL_RANGE) ? "Out of range (>15%)" : "Bus error");
+            }
+            break;
+
+        case CALSTEP_TEMP:
+            st = Calibration_ApplyTemp((int16_t)_cal_val);
+            snprintf(_cal_msg, sizeof(_cal_msg),
+                     (st == CAL_OK)    ? "Offset written" :
+                     (st == CAL_RANGE) ? "Diff >12C: not offset" : "Bus error");
+            break;
+
+        case CALSTEP_PACK:
+            st = Calibration_ApplyPackConfig();
+            snprintf(_cal_msg, sizeof(_cal_msg), (st == CAL_OK)
+                     ? "Pack config written" : "Write failed");
+            break;
+
+        case CALSTEP_ITEN:
+            st = Calibration_ITEnable();
+            snprintf(_cal_msg, sizeof(_cal_msg), (st == CAL_OK)
+                     ? "IT enabled (QEN set)" : "Bus error");
+            Screen_NoCal_Refresh();   /* header CAL flag + wake warning off */
+            break;
+
+        default:
+            break;
+    }
+}
+
+void Screen_Cal_OnPress(void)
+{
+    if (_cal_edit) { _cal_edit = 0; cal_draw_rows(); return; }
+
+    switch (_cal_row) {
+        case 0:     /* value row: enter edit on the entry steps */
+            if (_cal_step == CALSTEP_VOLT || _cal_step == CALSTEP_CURR ||
+                _cal_step == CALSTEP_TEMP) {
+                _cal_edit = 1;
+            }
+            cal_draw_rows();
+            break;
+        case 1:
+            cal_do_action();
+            cal_draw_rows();
+            break;
+        case 2:
+            cal_next_step();
+            break;
+        case 3:
+            UI_NavigateTo(UI_SCREEN_SETTINGS);
+            break;
+    }
+}
+
+/* =========================================================
  * SCREEN: CONFIRM — are-you-sure gate for big actions
  * ========================================================= */
 
@@ -820,8 +1244,9 @@ static ConfirmAction_t _confirm_action = CONFIRM_LOCKALL;
 static uint8_t         _confirm_sel    = 1;   /* 0=OK 1=Cancel (safe default) */
 
 static const char *_confirm_title[] = {
-    [CONFIRM_LOCKALL]  = "LOCK ALL PORTS?",
-    [CONFIRM_SHUTDOWN] = "SHUTDOWN?",
+    [CONFIRM_LOCKALL]   = "LOCK ALL PORTS?",
+    [CONFIRM_SHUTDOWN]  = "SHUTDOWN?",
+    [CONFIRM_CALIBRATE] = "CALIBRATE GAUGE?",
 };
 void Screen_Confirm_Open(ConfirmAction_t action)
 {
@@ -850,6 +1275,11 @@ void Screen_Confirm_Draw(void)
                        &GFX_FontSmall, COLOR_WHITE, COLOR_BG),
         GFX_DrawString(35, 152, "USB-C1 keeps charging in.",
                        &GFX_FontSmall, COLOR_WHITE, COLOR_BG);
+    else if (_confirm_action == CONFIRM_CALIBRATE)
+        GFX_DrawString(30, 140, "Previous calibration data",
+                       &GFX_FontSmall, COLOR_WARN, COLOR_BG),
+        GFX_DrawString(50, 152, "will be overwritten.",
+                       &GFX_FontSmall, COLOR_WARN, COLOR_BG);
     else /* CONFIRM_SHUTDOWN */
         GFX_DrawString(35, 140, "Everything off. Press the",
                        &GFX_FontSmall, COLOR_WHITE, COLOR_BG),
@@ -900,6 +1330,9 @@ static const WarnText_t _warn_text[WARN_COUNT] = {
     [WARN_CHGINH] = { "CHARGE INHIBITED",
         { "Battery outside its charge", "temperature window:",
           "unplug the charger." } },
+    [WARN_NOCAL] = { "NOT CALIBRATED",
+        { "Gauge readings unreliable", "until calibrated. Run:",
+          "Settings > Calibration." } },
 };
 
 void Screen_Warning_Draw(void)
@@ -929,12 +1362,12 @@ void Screen_Warning_Draw(void)
                            200 + i * 12, w->line[i],
                            &GFX_FontSmall, COLOR_WHITE, COLOR_BG);
 
-    /* the number that matters */
+    /* the number that matters (none for NOT CALIBRATED) */
     if (_warn_type == WARN_TEMP || _warn_type == WARN_CHGINH) {
         snprintf(buf, sizeof(buf), "%d C", telemetry.temp_celsius);
         GFX_DrawStringScaled(96, 240, buf, &GFX_FontSmall, 2,
                              temp_color_pub(telemetry.temp_celsius), COLOR_BG);
-    } else {
+    } else if (_warn_type != WARN_NOCAL) {
         snprintf(buf, sizeof(buf), "%u.%02u V", telemetry.voltage_mV / 1000,
                  (telemetry.voltage_mV % 1000) / 10);
         GFX_DrawStringScaled(85, 240, buf, &GFX_FontSmall, 2,
@@ -1396,7 +1829,7 @@ void Screen_Output_OnPress(void)
 }
 #define SETTINGS_NUM_ROWS  (sizeof(_settings_rows) / sizeof(_settings_rows[0]))
 
-#define SET_LIST_ROW_H      28
+#define SET_LIST_ROW_H      26   /* 8 rows + Exit button must fit CONTENT_H */
 #define SET_LIST_START      (CONTENT_Y + 6)
 
 static uint8_t _lock_all = 0;
@@ -1443,12 +1876,12 @@ void Screen_Settings_Update(uint8_t selected_row)
 {
     char buf[32];
 
-    /* Exit button, bottom right (virtual row 7) */
+    /* Exit button, bottom right (virtual row 8) */
     Widget_Button_Draw(SETTINGS_EXIT_X, SETTINGS_EXIT_Y,
                        SETTINGS_EXIT_W, SETTINGS_EXIT_H,
-                       "Exit >", (selected_row == 7));
+                       "Exit >", (selected_row == 8));
 
-    for (uint8_t i = 0; i < 7; i++)
+    for (uint8_t i = 0; i < 8; i++)
     {
         uint16_t row_y = SET_LIST_START + i * SET_LIST_ROW_H;
 
@@ -1478,6 +1911,9 @@ void Screen_Settings_Update(uint8_t selected_row)
         else if (i == 5) {
             snprintf(buf, sizeof(buf), "%-12s %3u%% >", "Display",
                      ILI9341_GetBrightness());
+        }
+        else if (i == 6) {
+            snprintf(buf, sizeof(buf), "%s", "Calibration >");
         }
         else {
             snprintf(buf, sizeof(buf), "%s", "Test modes >");

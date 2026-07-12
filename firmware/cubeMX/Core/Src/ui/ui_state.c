@@ -69,6 +69,8 @@ void UI_Init(void)
     ui_state.btn_press_tick    = 0;
     ui_state.btn_was_held      = 0;
 
+    Screen_NoCal_Refresh();   /* one I2C read: header CAL flag + warning */
+
     Screen_Boot_Draw();
     _boot_start_tick = HAL_GetTick();
 }
@@ -194,6 +196,14 @@ void UI_Tick(void)
         else if (va == 1 && !_warn_acked[WARN_VLOW])  t = WARN_VLOW;
         else if (!_warn_acked[WARN_TEMP] &&
                  temp_out_of_range_pub(telemetry.temp_celsius)) t = WARN_TEMP;
+        /* never-calibrated gauge: lowest priority, re-armed at every
+         * sleep entry / deep-sleep wake so it greets each wake until
+         * the wizard's IT-enable clears it. Suppressed while the user
+         * is already inside the wizard or its confirm modal. */
+        else if (!_warn_acked[WARN_NOCAL] && Screen_NoCal_Get() &&
+                 ui_state.current_screen != UI_SCREEN_CALPG &&
+                 ui_state.current_screen != UI_SCREEN_CONFIRM)
+            t = WARN_NOCAL;
 
         if (t != WARN_COUNT)
         {
@@ -312,8 +322,9 @@ void UI_Tick(void)
             /* in settings knob scroll rows, button act on row.
              * static var remember row between calls. */
             static uint8_t settings_row = 0;
-            static const uint8_t SETTINGS_ROWS = 8; /* A1, A2, Lab, C2, Lock all,
-                                                       Screen off, Light sleep, Exit */
+            static const uint8_t SETTINGS_ROWS = 9; /* A1, A2, Lab, C2, Lock all,
+                                                       Display, Calibration,
+                                                       Test modes, Exit */
 
             if (enc_delta > 0)
             {
@@ -359,11 +370,17 @@ void UI_Tick(void)
                         Screen_Display_Open();
                         UI_NavigateTo(UI_SCREEN_DISPLAYPG);
                         break;
-                    case 6:                     /* test page */
+                    case 6:                     /* calibration wizard: warn
+                                                 * first, old cal data gets
+                                                 * overwritten */
+                        Screen_Confirm_Open(CONFIRM_CALIBRATE);
+                        UI_OpenConfirm();
+                        break;
+                    case 7:                     /* test page */
                         Screen_Test_Open();
                         UI_NavigateTo(UI_SCREEN_TESTPG);
                         break;
-                    case 7:                     /* Exit */
+                    case 8:                     /* Exit */
                         UI_CloseSettings();
                         break;
                 }
@@ -380,6 +397,11 @@ void UI_Tick(void)
         case UI_SCREEN_DISPLAYPG:
             if (enc_delta != 0) Screen_Display_OnRotate(enc_delta);
             if (click) Screen_Display_OnPress();
+            break;
+
+        case UI_SCREEN_CALPG:
+            if (enc_delta != 0) Screen_Cal_OnRotate(enc_delta);
+            if (click) Screen_Cal_OnPress();
             break;
 
         case UI_SCREEN_TESTPG:
@@ -399,6 +421,11 @@ void UI_Tick(void)
                     {
                         Screen_Settings_LockAll(1);
                         UI_NavigateTo(_confirm_return);
+                    }
+                    else if (action == CONFIRM_CALIBRATE)
+                    {
+                        Screen_Cal_Open();
+                        UI_NavigateTo(UI_SCREEN_CALPG);
                     }
                     else      /* CONFIRM_SHUTDOWN */
                     {
@@ -472,6 +499,7 @@ void UI_Tick(void)
                 case UI_SCREEN_SETTINGS: Screen_Settings_Draw(0); break;
                 case UI_SCREEN_OUTPUT:   Screen_Output_Draw();     break;
                 case UI_SCREEN_DISPLAYPG: Screen_Display_Draw();   break;
+                case UI_SCREEN_CALPG:     Screen_Cal_Draw();       break;
                 case UI_SCREEN_TESTPG:    Screen_Test_Draw();      break;
                 case UI_SCREEN_CONFIRM:  Screen_Confirm_Draw();    break;
                 case UI_SCREEN_WARNING:  Screen_Warning_Draw();    break;
@@ -503,6 +531,7 @@ void UI_Tick(void)
                 case UI_SCREEN_GRAPH:  Screen_Graph_Update();  break;
                 case UI_SCREEN_PORTS:  Screen_Ports_Update();  break;
                 case UI_SCREEN_OUTPUT: Screen_Output_Update(); break;
+                case UI_SCREEN_CALPG:  Screen_Cal_Update();    break;
                 case UI_SCREEN_STATS:  Screen_Stats_Update();  break;
 
                 /* settings redraw on navigation, not on timer */
@@ -527,9 +556,12 @@ void UI_EnterSleep(void)
     _sleep_return = (ui_state.current_screen == UI_SCREEN_SETTINGS ||
                      ui_state.current_screen == UI_SCREEN_OUTPUT ||
                      ui_state.current_screen == UI_SCREEN_DISPLAYPG ||
+                     ui_state.current_screen == UI_SCREEN_CALPG ||
                      ui_state.current_screen == UI_SCREEN_TESTPG ||
                      ui_state.current_screen == UI_SCREEN_CONFIRM)
                     ? _settings_return : ui_state.current_screen;
+    /* wake must re-warn about a still-uncalibrated gauge */
+    _warn_acked[WARN_NOCAL] = 0;
     UI_NavigateTo(UI_SCREEN_SLEEP);
 }
 
@@ -556,6 +588,9 @@ void UI_OnDeepSleepWake(void)
     (void)Encoder_IsPressed();
     ui_state.btn_press_tick = 0;
     ui_state.btn_was_held   = 0;
+
+    /* deep-sleep wake re-warns about a still-uncalibrated gauge */
+    _warn_acked[WARN_NOCAL] = 0;
 
     /* restart from the splash, like the light-sleep wake path */
     _boot_dest       = UI_SCREEN_MAIN;

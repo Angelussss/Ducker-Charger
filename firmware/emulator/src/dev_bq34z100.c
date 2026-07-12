@@ -50,9 +50,60 @@ typedef struct {
     int chginh_latch;       /* CHG_INH/XCHG: set <0 C or >45 C, 3 C hysteresis */
     int sealed;             /* accepted unseal keys clear it */
     int unseal_step;
+    int qen;                /* IT_ENABLE received (one-way, like silicon) */
+    /* calibration-routine emulation (CC_OFFSET / BOARD_OFFSET) */
+    uint32_t cca_until, bca_until;
 } Bq34;
 
 static Bq34 gg;
+
+/* ---- calibration model ----
+ * The DF Calibration/Data block (subclass 104) is live: reported voltage,
+ * current and temperature are distorted by the stored parameters exactly
+ * as on the real silicon, so the firmware's ratio-method calibration can
+ * be exercised end to end. bq34_attach() seeds the block with deliberate
+ * errors; a correct wizard run converges to DIV_TRUE / GAIN_TRUE. */
+
+#define CAL_SUBCLASS   104
+#define GAIN_TRUE      0.4768f     /* 10 mOhm shunt */
+#define DIV_TRUE       5000.0f
+
+/* F4 (Xemics) float codec — same encoding calibration.c uses */
+static float xemics_decode(const uint8_t b[4])
+{
+    float mant = (float)(b[1] & 0x7Fu) / 256.0f + (float)b[2] / 65536.0f
+               + (float)b[3] / 16777216.0f + 0.5f;
+    float val  = mant * powf(2.0f, (float)((int)b[0] - 128));
+    return (b[1] & 0x80u) ? -val : val;
+}
+
+static void xemics_encode(float val, uint8_t b[4])
+{
+    int neg = (val < 0.0f);
+    float x = neg ? -val : val;
+    int exp = 0;
+    if (x < 1e-30f) x = 1e-30f;
+    while (x < 0.5f)  { x *= 2.0f; exp--; }
+    while (x >= 1.0f) { x /= 2.0f; exp++; }
+    uint32_t m = (uint32_t)((x - 0.5f) * 2.0f * 8388608.0f + 0.5f);
+    if (m >= 8388608u) { m = 0u; exp++; }
+    b[0] = (uint8_t)(exp + 128);
+    b[1] = (uint8_t)((m >> 16) & 0x7Fu) | (neg ? 0x80u : 0x00u);
+    b[2] = (uint8_t)(m >> 8);
+    b[3] = (uint8_t)m;
+}
+
+static float cal_gain(void)
+{ return xemics_decode(&gg.df[CAL_SUBCLASS][0][0]); }
+
+static float cal_divider(void)
+{
+    const uint8_t *b = gg.df[CAL_SUBCLASS][0];
+    return (float)(((uint16_t)b[14] << 8) | b[15]);
+}
+
+static float cal_ext_temp_off_c(void)
+{ return (float)(int8_t)gg.df[CAL_SUBCLASS][0][12] * 0.1f; }
 
 /* ---- flag & value computation from board state ---- */
 
@@ -113,10 +164,15 @@ static uint8_t reg_read_byte(uint8_t reg)
     uint16_t w;
     switch (reg & 0xFE) {
     case R_CNTL:  w = gg.cntl_resp;                          break;
-    case R_VOLT:  w = (uint16_t)board.pack_mv;               break;
+    /* reported values are distorted by the DF calibration parameters,
+     * like the real ADC front-end: divider scales V, CC gain scales I */
+    case R_VOLT:  w = (uint16_t)(board.pack_mv
+                                 * cal_divider() / DIV_TRUE); break;
     case R_AI:
-    case R_I:     w = (uint16_t)(int16_t)board.i_batt_ma;    break;
-    case R_TEMPX: w = (uint16_t)((board.temp_c + 273.15f) * 10.0f);  break;
+    case R_I:     w = (uint16_t)(int16_t)(board.i_batt_ma
+                                 * cal_gain() / GAIN_TRUE);   break;
+    case R_TEMPX: w = (uint16_t)((board.temp_c + cal_ext_temp_off_c()
+                                  + 273.15f) * 10.0f);        break;
     case R_TEMPI: w = (uint16_t)((board.temp_c + 275.15f) * 10.0f);  break;
     case R_FLAGS: w = flags_word();                          break;
     case R_TTE:   w = tte_min();                             break;
@@ -152,7 +208,36 @@ static uint8_t reg_read_byte(uint8_t reg)
 static void cntl_subcommand(uint16_t sub)
 {
     switch (sub) {
+    case 0x0000: {                               /* CONTROL_STATUS    */
+        uint16_t hi = 0, lo = 0;
+        if (gg.sealed)                    hi |= 1u << 5;   /* SS  */
+        if (sim_now_ms() < gg.cca_until)  hi |= 1u << 3;   /* CCA */
+        if (sim_now_ms() < gg.bca_until)  hi |= 1u << 2;   /* BCA */
+        if (gg.qen) { lo |= 1u << 0;                       /* QEN */
+                      lo |= 1u << 1; }                     /* VOK */
+        gg.cntl_resp = (uint16_t)((hi << 8) | lo);
+        break;
+    }
+    case 0x0021:                                  /* IT_ENABLE         */
+        gg.qen = 1;
+        gg.df[82][0][4] = 0x04;    /* Update Status: IT on, not learned */
+        sim_log("[GG  ] IT_ENABLE: QEN set, Update Status 0x04");
+        break;
     case 0x0001: gg.cntl_resp = 0x0100; break;   /* DEVICE_TYPE       */
+    case 0x0009:                                  /* BOARD_OFFSET      */
+        gg.bca_until = sim_now_ms() + 1500u;
+        gg.df[CAL_SUBCLASS][0][10] = (uint8_t)(int8_t)(-2);
+        sim_log("[GG  ] BOARD_OFFSET routine started");
+        break;
+    case 0x000A:                                  /* CC_OFFSET         */
+        gg.cca_until = sim_now_ms() + 2000u;
+        sim_log("[GG  ] CC_OFFSET routine started");
+        break;
+    case 0x000B:                                  /* CC_OFFSET_SAVE    */
+        gg.df[CAL_SUBCLASS][0][8] = 0xFF;         /* -12 raw, I2 BE    */
+        gg.df[CAL_SUBCLASS][0][9] = 0xF4;
+        sim_log("[GG  ] CC offset saved");
+        break;
     case 0x0414: gg.unseal_step = 1;    break;   /* unseal key 1      */
     case 0x3672:
         if (gg.unseal_step == 1) { gg.sealed = 0; sim_log("[GG  ] unsealed"); }
@@ -233,6 +318,17 @@ void bq34_attach(void)
 {
     memset(&gg, 0, sizeof(gg));
     gg.sealed = 1;
+
+    /* factory-fresh calibration block with deliberate errors: +2.8% on
+     * the current gain, -2.6% on the divider, -2.0 C on the ext sensor.
+     * The on-device wizard is expected to converge these to the _TRUE
+     * values (watch the DF writes in the log). */
+    xemics_encode(0.4900f, &gg.df[CAL_SUBCLASS][0][0]);          /* CC Gain  */
+    xemics_encode(0.4900f * 1190738.0f, &gg.df[CAL_SUBCLASS][0][4]); /* Delta */
+    gg.df[CAL_SUBCLASS][0][12] = (uint8_t)(int8_t)(-20);         /* ext toff */
+    gg.df[CAL_SUBCLASS][0][14] = (uint8_t)(4870u >> 8);          /* divider  */
+    gg.df[CAL_SUBCLASS][0][15] = (uint8_t)(4870u & 0xFFu);
+
     if (cfg.gauge_provisioned) {
         /* Manufacturer Info Block A, subclass 58: "D" + rev 0x01 marker */
         gg.df[58][0][0] = 'D';

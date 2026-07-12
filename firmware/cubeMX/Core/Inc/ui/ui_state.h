@@ -75,6 +75,7 @@ typedef enum {
     UI_SCREEN_SETTINGS,   /**< USB output control and lab mode */
     UI_SCREEN_OUTPUT,     /**< channel page: Lab bench-PSU face / C2 PD list */
     UI_SCREEN_DISPLAYPG,  /**< display sub-page: brightness, screen off, light sleep */
+    UI_SCREEN_CALPG,      /**< gauge calibration wizard (multimeter-assisted) */
     UI_SCREEN_TESTPG,     /**< test sub-page: pretend emergencies */
     UI_SCREEN_CONFIRM,    /**< are-you-sure modal for big actions */
     UI_SCREEN_WARNING,    /**< warning modal (temp / voltage), ack once per boot */
