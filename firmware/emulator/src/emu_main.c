@@ -177,6 +177,22 @@ static int handle_key(char k)
 
 typedef struct { uint32_t at_ms; char key; } ScriptEv;
 
+/* --rec <ms>: dump a numbered frame to frames/ every <ms>, in both the
+ * headless and the SDL loop. record.sh assembles the dumps into a gif. */
+static uint32_t g_rec_ms;
+
+static void rec_tick(uint32_t now)
+{
+    static uint32_t last_rec;
+    static int frame;
+    if (!g_rec_ms || now - last_rec < g_rec_ms)
+        return;
+    char name[64];
+    snprintf(name, sizeof name, "frames/f%04d.ppm", frame++);
+    panel_dump_ppm(name);
+    last_rec = now;
+}
+
 static int run_headless(uint32_t run_ms, ScriptEv *ev, int nev)
 {
     uint32_t last = sim_now_ms();
@@ -184,6 +200,7 @@ static int run_headless(uint32_t run_ms, ScriptEv *ev, int nev)
     while (sim_now_ms() < run_ms) {
         usleep(10000);
         uint32_t now = sim_now_ms();
+        rec_tick(now);
         while (next < nev && ev[next].at_ms <= now) {
             sim_log("[EMU ] script key '%c'", ev[next].key);
             if (ev[next].key == ' ') {          /* short press */
@@ -250,6 +267,7 @@ static int run_sdl(void)
         panel_render(fb);
         sim_unlock();
         last = now;
+        rec_tick(now);
 
         SDL_UpdateTexture(tex, NULL, fb, PANEL_W * 2);
         SDL_RenderClear(ren);
@@ -280,6 +298,8 @@ int main(int argc, char **argv)
         }
         else if (!strcmp(argv[i], "--config") && i + 1 < argc)
             ini = argv[++i];
+        else if (!strcmp(argv[i], "--rec") && i + 1 < argc)
+            g_rec_ms = (uint32_t)atoi(argv[++i]);
     }
 
     EmuConfig_Load(ini);
