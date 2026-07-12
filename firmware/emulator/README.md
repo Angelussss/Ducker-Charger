@@ -65,6 +65,23 @@ status report on exit.
 `emu_config.ini` sets the initial battery state, PD contracts, loads and
 IC behavior. `time_scale` accelerates only the battery physics.
 
+## Recording gifs
+
+`--rec <ms>` dumps a numbered frame to `frames/` every `<ms>` in both
+the SDL and the headless loop. `./record.sh [out.gif]` wraps it:
+records an interactive SDL session until ESC, trims the display-off
+boot frames, inverts the colors back to the real-panel palette and
+assembles the gif with ffmpeg (`REC_MS=50` for 20 fps).
+
+## Gauge calibration model
+
+The BQ34Z100 model exercises the on-device calibration wizard end to
+end: the DF calibration block (subclass 104) is live — reported V/I/T
+are distorted by the stored divider/gain/offset, seeded with deliberate
+errors at attach — the internal offset routines run with realistic
+CCA/BCA timing, and IT_ENABLE sets QEN + Update Status 0x04. A correct
+wizard run visibly converges the readings.
+
 Every log line carries the firmware FSM state as a column, and every
 event fired into the FSM is traced as a `[FSM ]` line with the
 transition it caused (`CHARGER_CONNECTED: IDLE -> CHARGING`), including

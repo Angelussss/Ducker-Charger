@@ -16,6 +16,7 @@ firmware/cubeMX/
 │   │   │   ├── encoder.h        # Rotary encoder API
 │   │   │   ├── initialization.h # Boot-time IC bring-up (TPS25750 patch…)
 │   │   │   ├── provisioning.h   # BQ34Z100 data-flash provisioning
+│   │   │   ├── calibration.h    # On-device gauge calibration backend
 │   │   │   └── telemetry.h      # UI-facing data aggregation
 │   │   ├── display/
 │   │   │   ├── ili9341.h        # Low-level SPI display driver
@@ -33,7 +34,7 @@ firmware/cubeMX/
 │   │       └── widgets.h        # Reusable graphical components
 │   └── Src/
 │       ├── app/        (encoder, initialization, provisioning,
-│       │                telemetry, tps25750_bundle)
+│       │                calibration, telemetry, tps25750_bundle)
 │       ├── display/    (ili9341, gfx)
 │       ├── system/     (charge, event, fsm, tps25750_io)
 │       ├── ui/         (ui_state, screens, widgets)
@@ -83,6 +84,7 @@ single direction (lower layers do not know about upper layers):
 | **App** | `telemetry` | Reshapes charge-layer getters into UI-facing structs (`telemetry`, `port_stats[]`, `sys_stats`); no I2C of its own |
 | **App** | `encoder` | Reads TIM3 counter delta and button debounce |
 | **App** | `initialization` / `provisioning` | Boot-time IC bring-up (TPS25750 patch bundle, STPD01/INA3221 defaults) and one-time BQ34Z100 data-flash provisioning |
+| **App** | `calibration` | On-device gauge calibration backend: ratio-method DF rewrites, internal offset routines, pack config, IT enable, learning monitor (see `Gauge_Calibration.md`) |
 | **System** | `fsm` | Power-state FSM: consumes events, drives port actuators via `onEnter`/`onExit` (see `FSM.md`) |
 | **System** | `charge` | All sensor reads (ADC + I2C) and all port actuation; pushes FSM events (see `Charge_Management.md`) |
 | **System** | `event` | 8-slot ring buffer decoupling event producers from the FSM |
@@ -297,7 +299,8 @@ extern UIState_t ui_state;
 [MAIN] <--> [DETAIL] <--> [GRAPH] <--> [PORTS] <--> [STATS]   (carousel, wraps)
 
   SETTINGS overlay: long press (1 s) or double click from anywhere;
-  its rows open the OUTPUT (Lab / USB-C2), DISPLAY and TEST sub-pages.
+  its rows open the OUTPUT (Lab / USB-C2), DISPLAY, CALIBRATION
+  (gauge wizard, behind a confirm modal) and TEST sub-pages.
   Modals: CONFIRM (Lock all / Shutdown), WARNING, FAULT (FSM takeover),
   SLEEP (dark screen page).
 ```
@@ -315,7 +318,7 @@ void       UI_NavigateTo(UIScreen_t screen);
 ```
 
 **`UIScreen_t` enum:** see `ui/ui_state.h` — BOOT, MAIN, DETAIL, GRAPH,
-PORTS, STATS, SETTINGS, OUTPUT, DISPLAYPG, TESTPG, CONFIRM, WARNING,
+PORTS, STATS, SETTINGS, OUTPUT, DISPLAYPG, CALPG, TESTPG, CONFIRM, WARNING,
 SLEEP, FAULT.
 
 ### 6.2 Screens (`screens.h / screens.c`)
@@ -356,7 +359,7 @@ Y=320 └───────────────────────�
 └──────────────────────────┘
 ```
 
-**SETTINGS screen:** scrollable overlay of 8 rows. The currently selected
+**SETTINGS screen:** scrollable overlay of 9 rows. The currently selected
 row is highlighted with `COLOR_ACCENT`.
 
 | Row | Action | Backing signal / path |
@@ -367,8 +370,9 @@ row is highlighted with `COLOR_ACCENT`.
 | 3 | USB-C Port 2 → OUTPUT page | `C2_PORT_EN_Pin` (PA12) — row reads the live pin (the port auto-enables on PD negotiation) |
 | 4 | Lock all (confirm modal) | `EVT_LOCK`/`EVT_UNLOCK` → FSM SAFETY_LOCK |
 | 5 | DISPLAY page | brightness, auto-sleep, screen off, shutdown |
-| 6 | TEST page | forced warning scenarios |
-| 7 | Exit | back to the screen SETTINGS was opened from |
+| 6 | CALIBRATION page | nine-step gauge calibration wizard (`app/calibration.c`), behind a CONFIRM modal |
+| 7 | TEST page | forced warning scenarios |
+| 8 | Exit | back to the screen SETTINGS was opened from |
 
 ### 6.3 Widgets (`widgets.h / widgets.c`)
 

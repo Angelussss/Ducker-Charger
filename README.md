@@ -37,6 +37,7 @@
 * **Lab output** — banana-jack rail that behaves like a bench power supply
 * **Hardware-autonomous BMS** — BQ77915 protection works even if all firmware fails
 * **STM32F401 supervisor** — power-state FSM, charge management, TFT + rotary-encoder UI
+* **On-device gauge calibration** — guided 9-step wizard on the display; a multimeter is the only tool needed (no bqStudio / EV2400)
 * **Develop without hardware** — full-PCB emulator, desktop UI simulator, host-side unit tests
 
 ## ⚠️ Safety & Disclaimer
@@ -110,7 +111,7 @@ walkthrough of how the firmware works, with links to:
 
 * [Hardware architecture](docs/hardware/Hardware_Architecture.md) · [pin-level BSP reference](docs/hardware/BSP_reference.md)
 * [Firmware architecture](docs/firmware/Firmware_Architecture.md) · [power-state FSM](docs/firmware/FSM.md) · [charge management](docs/firmware/Charge_Management.md)
-* [Boot & IC provisioning](docs/firmware/Boot_and_Provisioning.md) · [UI / display reference](docs/firmware/UI_and_Display.md)
+* [Boot & IC provisioning](docs/firmware/Boot_and_Provisioning.md) · [gauge calibration wizard](docs/firmware/Gauge_Calibration.md) · [UI / display reference](docs/firmware/UI_and_Display.md)
 * [KiCad projects & block diagram](PCB/README.md)
 
 ## 🤝 Contributing

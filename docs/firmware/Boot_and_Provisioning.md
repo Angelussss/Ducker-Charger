@@ -88,11 +88,18 @@ data-flash block protocol (0x3E/0x3F class+block select, 0x40 window,
 spare the flash. Current list: design capacity (7800 mAh, 3P × VTC5),
 series cells (4), the revision marker.
 
+### Electrical calibration (on-device)
+
+Shunt/divider/offset calibration is done from the device itself —
+SETTINGS → Calibration, multimeter-assisted, no bqStudio needed. The
+resulting DF values belong in the patch list above as golden-image
+entries. Full procedure: [Gauge_Calibration.md](Gauge_Calibration.md).
+
 ### The golden image (still to do)
 
 Static parameters are not enough for accurate gauging: the BQ34Z100
 uses Impedance Track and must **learn** Qmax and the Ra tables on a
-sample pack once — bqStudio + EV2400, ChemID selection, full
+sample pack once — ChemID selection, full
 charge/rest/discharge/rest learning cycle, then export. The exported
 golden image becomes additional `GaugeDfPatch_t` entries, and every
 production unit receives it through this same module. Until then, SoC
