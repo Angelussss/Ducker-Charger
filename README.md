@@ -1,41 +1,59 @@
+<div align="center">
 
+# ⚡ Ducker-Charger
+
+**A fully custom, open-source smart power bank — designed from scratch.**
+
+*4S3P Li-Ion pack · bidirectional USB-PD · bench-supply output · TFT telemetry UI*
 
 ![Project Status](https://img.shields.io/badge/Status-Work_in_Progress-yellow)
 ![License](https://img.shields.io/github/license/Angelussss/Ducker-Charger)
 ![KiCad](https://img.shields.io/badge/Designed_with-KiCad-blue)
+![MCU](https://img.shields.io/badge/MCU-STM32F401-03234b)
 
-**THIS PROJECT HAS NOT YET BEEN COMPLETED, TAKE ANY INFO AT YOUR OWN RISK**
+<table>
+  <tr>
+    <td align="center"><img src="powerbank_enclosure/renders/isometric_lid_off.png" alt="Enclosure render" width="420"/></td>
+    <td align="center"><img src="docs/assets/ui_demo.gif" alt="UI demo" width="220"/></td>
+  </tr>
+  <tr>
+    <td align="center"><em>Enclosure (prototype 3, lid off)</em></td>
+    <td align="center"><em>Live telemetry UI</em></td>
+  </tr>
+</table>
 
-**Ducker-Charger** is a completely custom, open-source smart power bank designed from scratch. It pairs an autonomous, hardware-based Battery Management System (BMS) with bidirectional USB-PD charging and a telemetry/HMI core, packed into a compact design.
+</div>
 
-## ⚠️ Disclaimer & Safety
+> [!WARNING]
+> **Work in progress — the design is not yet validated.** This project involves
+> Li-Ion batteries, which can overheat, catch fire, or explode if mishandled.
+> Take any information here at your own risk and read the safety note below.
 
-**READ CAREFULLY BEFORE PROCEEDING**
+## 🌟 Highlights
 
-This project involves the use of Lithium-Ion (Li-Ion) or Lithium Polymer (LiPo) batteries. If handled improperly, these batteries can overheat, catch fire, or explode.
+* **115 Wh** — 12× 18650 cells (Sony Murata VTC5, 4S3P), 14.4 V nominal / 16.8 V max
+* **2× USB-C PD** — primary port is bidirectional (charges the pack *and* powers loads)
+* **2× USB-A** — fixed 5 V, individually switchable, current-monitored
+* **Lab output** — banana-jack rail that behaves like a bench power supply
+* **Hardware-autonomous BMS** — BQ77915 protection works even if all firmware fails
+* **STM32F401 supervisor** — power-state FSM, charge management, TFT + rotary-encoder UI
+* **Develop without hardware** — full-PCB emulator, desktop UI simulator, host-side unit tests
+
+## ⚠️ Safety & Disclaimer
+
 * **I assume no liability** for any damage to property, people, or components resulting from the construction or use of this project.
 * Always double-check polarity before connecting the batteries.
 * Do not attempt to assemble this circuit if you are not experienced in handling lithium batteries.
 
-## 🌟 Key Features
+## 🧩 Architecture
 
-* **Microcontroller:** STM32F401RBT6 (ARM Cortex-M4)
-* **Battery Support:** 12x 18650 cells, 4S3P (Sony Murata VTC5) — 14.4V nominal / 16.8V max / ~115Wh
-* **Charger:** TI BQ25713 buck-boost battery charger
-* **Outputs:**
-    * 2x USB-C (USB-PD, one for recharging)
-    * Lab output (exposed pins that behave like a tabletop power supply)
-    * 2x USB-A
-* **Interface:** Status LEDs, SPI display, pressable rotary encoder
-* **Protections:** Overcharge, Overdischarge, Short-circuit, Thermal protection.
+Distributed design: cell safety, power conversion, PD negotiation and gauging
+each live in a dedicated IC — the STM32 supervises, aggregates telemetry and
+drives the UI. Block diagram in [`PCB/README.md`](PCB/README.md).
 
-## UI Preview
-
-![UI demo](docs/assets/ui_demo.gif)
-
-## 🧩 Hardware Architecture
-
-Distributed design — safety, power conversion and telemetry are handled by dedicated subsystems.
+<details>
+<summary><strong>Full IC breakdown (10 subsystems)</strong></summary>
+<br>
 
 | Subsystem | Part | Role |
 |-----------|------|------|
@@ -50,12 +68,23 @@ Distributed design — safety, power conversion and telemetry are handled by ded
 | ESD / I²C isolation | **USBLC6**, **ISO1540** | Port ESD protection, isolated I²C to the battery-referenced gauge |
 | Host | **STM32F401RBT6** | I²C master, power-state FSM, thermal manager, HMI / supervisor |
 
+</details>
 
-## 📂 Repository Structure
+## 📂 Repository
+
+| Path | Contents |
+| --- | --- |
+| [`PCB/`](PCB/README.md) | KiCad projects: main board + cell sensing board |
+| [`firmware/`](firmware/) | STM32 firmware, PD controller configs, emulator, UI simulator, tests |
+| [`docs/`](docs/README.md) | Documentation — start here |
+| [`powerbank_enclosure/`](powerbank_enclosure/) | 3D-printable enclosure (F3D, STEP, STL, renders) |
+
+<details>
+<summary><strong>Full tree</strong></summary>
 
 ```text
 Ducker-Charger/
-├── PCB/                        # KiCad projects (see PCB/README.md)
+├── PCB/
 │   ├── Ducker-Charger/         # Main charger board (schematics, layout, datasheets)
 │   └── Sensing-Board/          # Cell sensing board
 ├── firmware/
@@ -66,37 +95,29 @@ Ducker-Charger/
 │   ├── interface-tester/       # Desktop UI simulator (SDL)
 │   └── tests/                  # Host-side unit tests (FSM, charge, HPI, math)
 ├── powerbank_enclosure/        # 3D-printable enclosure (F3D, STEP, STL, renders)
-└── docs/                       # Documentation — start from docs/README.md
+└── docs/
     ├── hardware/               # Power architecture, pin map / BSP reference
     ├── firmware/               # Architecture, FSM, charge mgmt, boot, UI
     └── assets/                 # UI demo gif
 ```
+
+</details>
 
 ## 📖 Documentation
 
 Start from **[`docs/README.md`](docs/README.md)** — full system overview and a
 walkthrough of how the firmware works, with links to:
 
-* [Hardware architecture](docs/hardware/Hardware_Architecture.md) and the
-  [pin-level BSP reference](docs/hardware/BSP_reference.md)
-* [Firmware architecture](docs/firmware/Firmware_Architecture.md),
-  the [power-state FSM](docs/firmware/FSM.md) and
-  [charge management](docs/firmware/Charge_Management.md)
-* [Boot initialization & IC provisioning](docs/firmware/Boot_and_Provisioning.md)
-  and the [UI / display reference](docs/firmware/UI_and_Display.md)
+* [Hardware architecture](docs/hardware/Hardware_Architecture.md) · [pin-level BSP reference](docs/hardware/BSP_reference.md)
+* [Firmware architecture](docs/firmware/Firmware_Architecture.md) · [power-state FSM](docs/firmware/FSM.md) · [charge management](docs/firmware/Charge_Management.md)
+* [Boot & IC provisioning](docs/firmware/Boot_and_Provisioning.md) · [UI / display reference](docs/firmware/UI_and_Display.md)
 * [KiCad projects & block diagram](PCB/README.md)
 
-## 🚧 Not Yet Completed
-
-This is an active, in-progress project. 
-
-Take any info here at your own risk until the design is validated.
-
-## Contributing
+## 🤝 Contributing
 
 Issues, suggestions, and pull requests are momentarily suspended, as this is a university course project.
 
-## License
+## 📜 License
 
 Released under the [Creative Commons Attribution-NonCommercial 4.0 International
 License (CC BY-NC 4.0)](LICENSE). © 2026 Angelo Perotti.
@@ -104,4 +125,3 @@ License (CC BY-NC 4.0)](LICENSE). © 2026 Angelo Perotti.
 You are free to use, modify, and build upon this work for **non-commercial**
 purposes, as long as you **credit the author**. See [NOTICE](NOTICE) for
 attribution details.
-
