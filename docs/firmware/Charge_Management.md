@@ -67,13 +67,11 @@ Then we need to convert the obtained voltage value (expressed in `mV`) according
 $$
 R_{PULLUP} \cdot \frac{V_{out}}{(V_{REF} - V_{out})}
 $$
-
 	- Convert from resistance to K using the Beta equation:
 
 $$
 T = \left( \frac{1}{T_0} + \frac{1}{\beta} \cdot \ln\left(\frac{R}{R_0}\right) \right)^{-1}
 $$
-
 	- Convert from K to ºC:
 
 $$
@@ -91,7 +89,6 @@ $$
 $$
 P = \frac{V_{out}}{1000} \cdot 60
 $$
-
 	- Where 60 is a hardware-derived gain constant (R72/R69 ratio)
 
 ### GPIO
