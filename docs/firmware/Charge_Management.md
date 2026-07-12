@@ -57,30 +57,41 @@ First of all we need to adjust the fetched, raw voltage measure, according to ou
 $$
 \frac{V_{raw}}{V_{MAX}} \cdot V_{REF}
 $$
+
 where: `VMAX` is equal to 2^nbits - 1 = 4095 (the ADC channel has 12-bit resolution); and `VREF` is equal to `VDD` = 3300mV.
 
 Then we need to convert the obtained voltage value (expressed in `mV`) accordingly to the sensor we are reading:
 - **Temperature:** obtained via NTC thermistors, in order to get the value expressed in ºC we need to:
 	- Convert from voltage to resistance by doing:
+
 $$
 R_{PULLUP} \cdot \frac{V_{out}}{(V_{REF} - V_{out})}
 $$
+
 	- Convert from resistance to K using the Beta equation:
+
 $$
 T = \left( \frac{1}{T_0} + \frac{1}{\beta} \cdot \ln\left(\frac{R}{R_0}\right) \right)^{-1}
 $$
+
 	- Convert from K to ºC:
+
 $$
 T_{ºC} = T - 273.15
 $$
+
 - **USB-C Input Current:** given the Sense Resistor of 10 mOhm and the `BQ25713` Gain = 20x, in order to get the current value expressed in `mA` we need to divide the voltage by 0.2, or, more specifically:
+
 $$
 I = \frac{V_{out}}{R \cdot Gain} \cdot 1000
 $$
+
 - **Total System Power:**
+
 $$
 P = \frac{V_{out}}{1000} \cdot 60
 $$
+
 	- Where 60 is a hardware-derived gain constant (R72/R69 ratio)
 
 ### GPIO
@@ -143,6 +154,7 @@ the lower address). The bundled [`bq34z100-r2.pdf`](../../PCB/Ducker-Charger/doc
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | High | OTC | OTD | BATHI | BATLOW | CHG_INH | XCHG | FC | CHG |
 | Low  | REST | RSVD | RSVD | CF | RSVD | SOC1 | SOCF | DSG |
+
 **Flags Legend: RSVD = Reserved**
 - **OTC:** Overtemperature in Charge condition is detected. True when set
 - **OTD:** Overtemperature in Discharge condition is detected. True when set
@@ -180,6 +192,7 @@ $$
 Where:
 - 40 µV (= 0.04 mV) is the unit in which the shunt voltage is stored in the registers
 - 10 mΩ is the resistance value for all shunt resistors
+
 
 - **`Shunt Voltage` registers bit definitions (Starting from Table 6):**
 
