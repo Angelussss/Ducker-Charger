@@ -27,7 +27,7 @@ typedef struct {
     bool DSG;           // (BIT0) Discharging detected. True when set
     bool SOCF;          // (BIT1) State of Charge below final threshold (critical low)
     bool SOC1;          // (BIT2) State of Charge at threshold 1
-    bool CF;            // (BIT4) Condition Flag — re-learning cycle needed
+    bool CF;            // (BIT4) Condition Flag, re-learning cycle needed
     bool REST;          // (BIT7) Rest condition detected
 } fuelGaugeFlags;
 
@@ -136,7 +136,7 @@ void enable_USBC2();
 void disable_USBC2();
 
 /** EN_OTG (PB15): gates whether the BQ25713 is allowed into OTG mode
- *  (C1 sourcing power). See charge.c — it's a real kill switch, not a
+ *  (C1 sourcing power). See charge.c, it's a real kill switch, not a
  *  status readback. */
 void enable_OTG();
 void disable_OTG();
@@ -170,19 +170,19 @@ int get_OTG_Status();
 int get_STPD01_Enabled();
 
 /** C2_LAB_EN (PA11): 1 while the STPD01 rail is routed to the lab output.
- *  Mutually exclusive with get_USBC2_Status() — the UI enforces the
+ *  Mutually exclusive with get_USBC2_Status(), the UI enforces the
  *  interlock, this is the physical readback. */
 int get_LAB_Status();
 
 /** Voltage / current STPD01 was last programmed to (decoded from the
- *  register encoding — the converter has no readback). 0 before the
+ *  register encoding, the converter has no readback). 0 before the
  *  first setupSTPD01() call. */
 float getSTPD01_SetpointVoltage();
 float getSTPD01_SetpointCurrent();
 
 /** Last CYPD3175 fault event (CYPD3175_EVT_OVP/OCP/OTP, 0 = none).
  *  Cleared when a new PD contract completes. The UI fault screen uses it
- *  to name the cause — FSM events don't carry one by design. */
+ *  to name the cause, FSM events don't carry one by design. */
 uint8_t getCYPD_LastFaultEvent();
 
 /** true while the fuel-gauge I2C reads succeed. false means the values in

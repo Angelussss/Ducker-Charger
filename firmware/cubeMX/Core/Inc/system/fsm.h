@@ -25,10 +25,10 @@ typedef struct {
   State_ID_t nextState;
   bool ovchargeBlock; // overcharge episode in progress: set by EVT_SOC_OVCH
                       // (gauge BATHI), cleared by EVT_SOC_OK. Informational
-                      // (UI warning / trace) — it does NOT gate transitions:
+                      // (UI warning / trace); it does NOT gate transitions:
                       // charger attached always means CHARGING, outputs off.
   bool userLock;      // SAFETY_LOCK was requested by the user (EVT_LOCK from
-                      // the menu). EVT_UNLOCK is honored only when set — a
+                      // the menu). EVT_UNLOCK is honored only when set, a
                       // low-SoC SAFETY_LOCK cannot be dismissed from the menu.
                       // Cleared on any exit from SAFETY_LOCK.
 } FSM;

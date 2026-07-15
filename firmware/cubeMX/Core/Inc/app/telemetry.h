@@ -67,12 +67,12 @@ typedef struct {
     uint8_t  over_volt;     /**< 1 while the fuel gauge BATHI flag is set (overcharge) */
     uint8_t  charge_inhibited; /**< 1 while the gauge CHG_INH/XCHG flags say the pack
                                     must not be charged (temperature outside the charge
-                                    window). The firmware cannot stop the C1 charger —
+                                    window). The firmware cannot stop the C1 charger, 
                                     the UI warns the user to unplug. */
 
     /* --- Charger data. The BQ25713 that actually runs the charge phases
      * (pre-charge/fast/taper) sits on a private I2C bus this MCU can't
-     * reach (see charge.c) — vbus_present comes from the TPS25750 PD
+     * reach (see charge.c), vbus_present comes from the TPS25750 PD
      * contract instead, and charge_phase is a coarse guess from the
      * BQ34Z100 CHG flag / current sign, not a real phase readback. */
     uint8_t  vbus_present;  /**< 1 if a USB-C power supply is connected */

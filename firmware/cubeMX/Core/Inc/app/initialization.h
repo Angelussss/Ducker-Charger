@@ -4,10 +4,10 @@
  *          configuration at power-down (Ducker-Charger main board).
  *
  * Covers, in order:
- *   1. TPS25750  — patch/config bundle streamed over I2C3 (mandatory:
+ *   1. TPS25750, patch/config bundle streamed over I2C3 (mandatory:
  *                  the device is ROM-based, RAM config is volatile)
- *   2. INA3221   — configuration register (averaging, conversion times)
- *   3. STPD01    — safe defaults (VOUT 5 V, ILIM, output disabled)
+ *   2. INA3221, configuration register (averaging, conversion times)
+ *   3. STPD01, safe defaults (VOUT 5 V, ILIM, output disabled)
  *
  * NOT handled here (by design):
  *   - BQ25713: owned by the TPS25750 through its private I2C_EX bus

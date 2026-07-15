@@ -78,7 +78,7 @@ static const State_ID_t TransitionTable[STATE_NUMBER][EVT_NUMBER] = {
         },
     // Note on EVT_SOC_OVCH: overcharge causes NO transition anywhere.
     // Invariant: charger attached <=> CHARGING (outputs off, never
-    // passthrough) — the state tracks physical reality, which the
+    // passthrough), the state tracks physical reality, which the
     // firmware cannot change anyway (BQ25713 is slaved to the TPS25750
     // on its private bus). The event only maintains ovchargeBlock
     // (informational: UI warning, trace); recovery is the user
@@ -337,7 +337,7 @@ static void Idle_Enter(FSM *fsm) {
   // edge-detected, so crossing a threshold while a protection state was
   // already active leaves no edge to fire on the way back to IDLE
   // (user unlock at 14%, ERROR acked while low, ...). voltage == 0 means
-  // the gauge has never been read yet (boot) — nothing to validate.
+  // the gauge has never been read yet (boot), nothing to validate.
   FuelGaugeSensors fg = getFuelGaugeData();
   if (fg.voltage > 0) {
     if (fg.SoC < SOC_LOWV_THRESHOLD)
@@ -375,7 +375,7 @@ static void SafetyLock_Run(FSM *fsm) {
 
 static void SafetyLock_Exit(FSM *fsm) {
   // whatever the exit path (unlock, charger, SoC recovery), the user-lock
-  // episode is over — a fresh EVT_LOCK is needed to lock again
+  // episode is over, a fresh EVT_LOCK is needed to lock again
   fsm->userLock = false;
 }
 
@@ -435,7 +435,7 @@ static void Charging_Exit(FSM *fsm) {
   (void)fsm;
   // No blanket re-enable here: the destination state decides. Idle_Enter
   // turns A1/A2 back on; CHARGING -> SLEEP (inactivity while charging)
-  // must keep them OFF — charging continues in SLEEP and outputs stay
+  // must keep them OFF, charging continues in SLEEP and outputs stay
   // closed, same policy as CHARGING itself.
 }
 

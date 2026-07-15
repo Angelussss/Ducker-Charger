@@ -4,7 +4,7 @@
  *          over I2C at every boot (the TPS25750 has no user NVM).
  *
  * Generated from firmware/TPS25750/TPS25750D_DuckerCharger.bin
- * (32000 bytes) — the binary produced by TI's USB-C Application
+ * (32000 bytes), the binary produced by TI's USB-C Application
  * Customization web tool already present in the repository.
  * Regenerate with tools/bin2c.py if the .bin changes.
  */

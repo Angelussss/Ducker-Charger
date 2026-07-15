@@ -368,7 +368,7 @@ int main(void) {
 
     // 20. CONTRACT_COMPLETE while the FSM is in SAFETY_LOCK: the event is
     //     acked and the contract stored, but STPD01/USB-C2 must NOT be
-    //     re-enabled — the state just shut every output to protect the pack.
+    //     re-enabled, the state just shut every output to protect the pack.
     test_setup();
     {
         FSM fsm;
@@ -386,7 +386,7 @@ int main(void) {
         ASSERT(!event_pop(&e));
         ASSERT(getSecondaryUSBC_Contract().isPlugged);        // contract remembered
         ASSERT(!getSecondaryUSBC_Contract().isNegotiationDone); // but output not opened
-        // INTR ack only — no STPD01 VOUT/ILIM writes, no GPIO enables
+        // INTR ack only, no STPD01 VOUT/ILIM writes, no GPIO enables
         ASSERT(stub_i2c_write_count == 1);
         ASSERT(stub_i2c_write_log[0].mem_addr == CYPD3175_INTR_REG);
         for (int i = 0; i < stub_gpio_write_count; i++)

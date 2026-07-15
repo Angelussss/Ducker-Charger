@@ -1,5 +1,5 @@
 #!/bin/sh
-# record.sh [output.gif] — interactive gif recorder for the UI demo.
+# record.sh [output.gif]: interactive gif recorder for the UI demo.
 #
 # Opens the SDL emulator with frame recording enabled: drive the demo
 # yourself with the normal keys (see README), then press ESC or close

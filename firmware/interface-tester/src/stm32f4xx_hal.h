@@ -1,4 +1,4 @@
-/* Fake HAL for native UI simulation — replaces the real STM32 HAL. */
+/* Fake HAL for native UI simulation, replaces the real STM32 HAL. */
 #ifndef SIM_STM32F4XX_HAL_H
 #define SIM_STM32F4XX_HAL_H
 

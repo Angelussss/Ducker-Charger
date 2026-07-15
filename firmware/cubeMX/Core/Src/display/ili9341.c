@@ -208,7 +208,7 @@ static TIM_HandleTypeDef _htim_bckl;
 static uint8_t _brightness = 100u;
 static uint8_t _pwm_ready  = 0u;   /* 0 = fall back to plain on/off GPIO */
 
-/* Runtime promotion of PB8 from the .ioc's plain GPIO to TIM10_CH1 —
+/* Runtime promotion of PB8 from the .ioc's plain GPIO to TIM10_CH1, 
  * same pattern as encoder.c re-configuring PC0 as EXTI, so no CubeMX
  * regeneration is needed. Called once from ILI9341_Init(); on any HAL
  * failure _pwm_ready stays 0 and the backlight degrades to on/off. */

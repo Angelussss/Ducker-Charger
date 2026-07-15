@@ -145,7 +145,7 @@ so what gets polled follows the power state automatically.
 The telemetry module makes **no I2C calls of its own**: the fuel gauge,
 INA3221 and PD contracts are already polled every FSM tick by the charge
 layer. `do_poll()` reads that layer's getters and reshapes the data into
-UI-facing structs — `telemetry` (battery snapshot), `port_stats[5]`
+UI-facing structs, `telemetry` (battery snapshot), `port_stats[5]`
 (per-port V/I + 60-sample history ring for the PORTS screen), `sys_stats`
 (lifetime + session counters, including a discharge-energy integral with a
 sub-mWh remainder accumulator), and `tte_min`/`ttf_min`.
@@ -166,7 +166,7 @@ extern SystemTelemetry_t telemetry;
 | `is_charging` | `uint8_t` | BQ34Z100 flags `CHG` bit | 1 when current > 0 |
 | `over_temp` | `uint8_t` | BQ34Z100 flags `OT` bit | 1 on over-temperature fault |
 | `vbus_present` | `uint8_t` | TPS25750 PD contract | 1 when the primary USB-C port is plugged and sinking |
-| `charge_phase` | `uint8_t` | BQ34Z100 `CHG` flag / current sign | 0=idle, 1=charging. The BQ25713 register that would distinguish pre-charge/fast/taper (`CHGSTATUS1`) sits on a private I2C bus this MCU can't reach — see `Charge_Management.md`. |
+| `charge_phase` | `uint8_t` | BQ34Z100 `CHG` flag / current sign | 0=idle, 1=charging. The BQ25713 register that would distinguish pre-charge/fast/taper (`CHGSTATUS1`) sits on a private I2C bus this MCU can't reach, see `Charge_Management.md`. |
 | `power_mW` | `int32_t` | Computed | `voltage_mV × current_mA / 1000` |
 | `current_history[]` | `int16_t[60]` | Ring buffer | Last 60 current samples (30 s) |
 | `sensor_ok` | `uint8_t` | Internal | 1 if last poll succeeded on all chips |
@@ -187,7 +187,7 @@ void    Telemetry_ForcePoll(void);
 | I2C1 | `hi2c1` | CYPD3175 · STPD01 · INA3221 · BQ34Z100 (via ISO1540) | `0x08` · `0x05` · `0x40` · `0x55` |
 | I2C3 | `hi2c3` | TPS25750 (length-prefixed host interface, `tps25750_io.c`) | `0x20` |
 
-> **Note:** the BQ25713 charger is *not* on any MCU bus — it sits on the
+> **Note:** the BQ25713 charger is *not* on any MCU bus, it sits on the
 > TPS25750's private I2C_EX bus. Its only MCU-visible outputs are the
 > analog telemetry pins (IADPT/IBAT/PSYS on ADC1) and CHRG_OK/EN_OTG GPIOs.
 
@@ -253,9 +253,9 @@ command/data distinction via the DC pin, and raw pixel operations.
 | SPI1 SCK | PA5 |
 | SPI1 MOSI | PB5 |
 | CS | PB0 (`DISP_CS_Pin`) |
-| DC | PB1 (`DISP_DC_Pin`) — LOW = command, HIGH = data |
+| DC | PB1 (`DISP_DC_Pin`), LOW = command, HIGH = data |
 | RST | PB2 (`DISP_RST_Pin`) |
-| Backlight | PB8 (`BCKL_CTRL_Pin`) — via `ILI9341_Backlight()`, polarity per JP402 |
+| Backlight | PB8 (`BCKL_CTRL_Pin`), via `ILI9341_Backlight()`, polarity per JP402 |
 
 Display resolution: **240 × 320 pixels, portrait mode.**
 Pixel format: **RGB565** (5 bits red, 6 bits green, 5 bits blue, 2 bytes per pixel).
@@ -268,9 +268,9 @@ Pixel format: **RGB565** (5 bits red, 6 bits green, 5 bits blue, 2 bytes per pix
 | Constant | RGB565 | Usage |
 | --- | --- | --- |
 | `COLOR_BG` | `0x0841` | Near-black background |
-| `COLOR_ACCENT` | `0x04FF` | Teal — active elements, selection |
-| `COLOR_WARN` | `0xFD00` | Orange — warnings |
-| `COLOR_DANGER` | `0xF800` | Red — errors, low battery |
+| `COLOR_ACCENT` | `0x04FF` | Teal, active elements, selection |
+| `COLOR_WARN` | `0xFD00` | Orange, warnings |
+| `COLOR_DANGER` | `0xF800` | Red, errors, low battery |
 
 ### 5.2 GFX Layer (`gfx.h / gfx.c`)
 
@@ -317,7 +317,7 @@ void       UI_Tick(void);                    // call in while(1)
 void       UI_NavigateTo(UIScreen_t screen);
 ```
 
-**`UIScreen_t` enum:** see `ui/ui_state.h` — BOOT, MAIN, DETAIL, GRAPH,
+**`UIScreen_t` enum:** see `ui/ui_state.h`, BOOT, MAIN, DETAIL, GRAPH,
 PORTS, STATS, SETTINGS, OUTPUT, DISPLAYPG, CALPG, TESTPG, CONFIRM, WARNING,
 SLEEP, FAULT.
 
@@ -325,9 +325,9 @@ SLEEP, FAULT.
 
 Each screen exposes two functions:
 
-- `Screen_XXX_Draw()` — draws everything (background, labels, current
+- `Screen_XXX_Draw()`, draws everything (background, labels, current
   values). Called once when entering the screen.
-- `Screen_XXX_Update()` — redraws **only** the dynamic parts (numbers,
+- `Screen_XXX_Update()`, redraws **only** the dynamic parts (numbers,
   graph). Called periodically by `UI_Tick()`.
 
 This two-phase approach eliminates flickering: the background and static
@@ -364,10 +364,10 @@ row is highlighted with `COLOR_ACCENT`.
 
 | Row | Action | Backing signal / path |
 | --- | --- | --- |
-| 0 | USB-A Port 1 toggle | `USB_A1_CTRL_Pin` (PC1) — row reads the live pin |
-| 1 | USB-A Port 2 toggle | `USB_A2_CTRL_Pin` (PC2) — row reads the live pin |
+| 0 | USB-A Port 1 toggle | `USB_A1_CTRL_Pin` (PC1), row reads the live pin |
+| 1 | USB-A Port 2 toggle | `USB_A2_CTRL_Pin` (PC2), row reads the live pin |
 | 2 | Lab output → OUTPUT page | `C2_LAB_EN_Pin` (PA11) via FSM MANUAL state |
-| 3 | USB-C Port 2 → OUTPUT page | `C2_PORT_EN_Pin` (PA12) — row reads the live pin (the port auto-enables on PD negotiation) |
+| 3 | USB-C Port 2 → OUTPUT page | `C2_PORT_EN_Pin` (PA12), row reads the live pin (the port auto-enables on PD negotiation) |
 | 4 | Lock all (confirm modal) | `EVT_LOCK`/`EVT_UNLOCK` → FSM SAFETY_LOCK |
 | 5 | DISPLAY page | brightness, auto-sleep, screen off, shutdown |
 | 6 | CALIBRATION page | nine-step gauge calibration wizard (`app/calibration.c`), behind a CONFIRM modal |

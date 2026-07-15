@@ -1,4 +1,4 @@
-# Ducker-Charger — Project Documentation
+# Ducker-Charger: Project Documentation
 
 Entry point of the Ducker-Charger documentation: what the project is, how the
 hardware is organized, how the firmware works, and which tools exist to develop
@@ -38,12 +38,12 @@ Related documentation outside `docs/`:
 ## 1. What the Ducker-Charger is
 
 A custom, open-source smart power bank built around a 4S3P pack of twelve 18650
-cells (Sony Murata VTC5 — 14.4 V nominal / 16.8 V max / ~115 Wh). It exposes:
+cells (Sony Murata VTC5, 14.4 V nominal / 16.8 V max / ~115 Wh). It exposes:
 
-- **USB-C1 (primary)** — bidirectional USB-PD: charges the pack *and* powers loads (OTG).
-- **USB-C2 (secondary)** — source-only USB-PD output, with a user-settable output ceiling.
-- **2× USB-A** — fixed 5 V outputs, individually switchable.
-- **Lab output** — banana-jack pins driven like a bench supply (shares the STPD01 rail with USB-C2, interlocked).
+- **USB-C1 (primary)**: bidirectional USB-PD: charges the pack *and* powers loads (OTG).
+- **USB-C2 (secondary)**: source-only USB-PD output, with a user-settable output ceiling.
+- **2× USB-A**: fixed 5 V outputs, individually switchable.
+- **Lab output**: banana-jack pins driven like a bench supply (shares the STPD01 rail with USB-C2, interlocked).
 
 HMI: ILI9341 TFT (SPI) + rotary encoder with push-button.
 
@@ -58,13 +58,13 @@ Full analysis: [`hardware/Hardware_Architecture.md`](hardware/Hardware_Architect
 Pin-level reference: [`hardware/BSP_reference.md`](hardware/BSP_reference.md).
 
 **NVDC topology**: the system load hangs on `VSYS`, regulated by the buck-boost
-charger from either VBUS or the battery — the device is "instant-on" from USB-C
+charger from either VBUS or the battery, the device is "instant-on" from USB-C
 even with a dead pack.
 
 | Subsystem | IC | Role |
 | --- | --- | --- |
 | Cell protection | TI **BQ77915** | Autonomous hardware OV/UV/OC/SC cutoff + passive balancing (4S, always-on). No firmware involved. |
-| Charger | TI **BQ25713** | 4-switch buck-boost NVDC charger. On the TPS25750's **private** I2C bus — the MCU cannot reach it; it only sees the analog IADPT/IBAT/PSYS pins and CHRG_OK / EN_OTG GPIOs. |
+| Charger | TI **BQ25713** | 4-switch buck-boost NVDC charger. On the TPS25750's **private** I2C bus, the MCU cannot reach it; it only sees the analog IADPT/IBAT/PSYS pins and CHRG_OK / EN_OTG GPIOs. |
 | Primary PD (USB-C1) | TI **TPS25750** | PD controller; ROM-based, receives its 32 KB patch bundle from the STM32 at every boot. |
 | Secondary PD (USB-C2) | Infineon **CYPD3175** (CCG3PA) | Autonomous PD negotiation, monitored by the MCU over HPI. Replaced the EOL STUSB4710. Own firmware, flashed independently. |
 | Aux programmable rail | ST **STPD01** | Generates the voltage negotiated on USB-C2 / set for the lab output. |
@@ -84,10 +84,10 @@ even with a dead pack.
 | TIM3 | PC6 / PC7 | Quadrature encoder (button on PC0 / EXTI0) |
 
 **Grounds:** system `GND` and battery `-BATT` join only through the protection
-FETs and the sense resistor; when protection trips, `-BATT` floats — hence the
+FETs and the sense resistor; when protection trips, `-BATT` floats, hence the
 ISO1540 isolator in front of the gauge.
 
-## 3. Firmware — how the code works
+## 3. Firmware: how the code works
 
 Full detail: [`firmware/Firmware_Architecture.md`](firmware/Firmware_Architecture.md).
 
@@ -110,7 +110,7 @@ touches sensors and pushes events.
 Doc: [`firmware/Boot_and_Provisioning.md`](firmware/Boot_and_Provisioning.md).
 
 1. HAL + clock (HSE/PLL, 84 MHz) and `MX_*_Init()` peripherals.
-2. **`System_Initialization()`** — every-boot bring-up of ICs with volatile config:
+2. **`System_Initialization()`**: every-boot bring-up of ICs with volatile config:
    - **TPS25750**: streams the 32 KB patch bundle (`app/tps25750_bundle.c`,
      generated from `firmware/TPS25750/*.bin`) over I2C3, verifies `PTCH → APP`
      transition. Skipped on warm reboot. No bundle → no PD, no charging.
@@ -118,7 +118,7 @@ Doc: [`firmware/Boot_and_Provisioning.md`](firmware/Boot_and_Provisioning.md).
      (5 V / 3 A, output **off**).
    - 50 ms bounded timeouts, one retry per step; failures degrade the boot
      (`Init_GetReport()` feeds the boot screen) but never block it.
-3. **Gauge provisioning** — one-time, marker-guarded write of pack parameters
+3. **Gauge provisioning**: one-time, marker-guarded write of pack parameters
    into the BQ34Z100 data flash; runs only on a verified device, at rest.
 4. `Encoder_Init` · `Telemetry_Init` · `ILI9341_Init` · `UI_Init` · charge-layer
    `init()` · `PB_FSM_Init()` → IDLE.
@@ -156,7 +156,7 @@ module that touches sensors/actuators:
   (EN_OTG raised only in IDLE/SLEEP; the pin is an independent kill switch on C1 sourcing).
 - **Secondary port**: on `C2_RDY`, read the CYPD3175 HPI event (contract complete,
   disconnect, OVP/OCP/OTP, hard reset), then program the STPD01 through
-  `secondaryUSBC_ApplyOutput()` — which clamps the negotiated contract to the
+  `secondaryUSBC_ApplyOutput()`, which clamps the negotiated contract to the
   user-set ceiling, verifies no post-setup fault, and only then enables the port.
 - Pushes all FSM events; exposes getters for telemetry/UI.
 
@@ -165,7 +165,7 @@ module that touches sensors/actuators:
 Docs: [`firmware/Firmware_Architecture.md`](firmware/Firmware_Architecture.md),
 [`firmware/UI_and_Display.md`](firmware/UI_and_Display.md).
 `app/telemetry.c` reshapes charge-layer getters into UI structs (battery snapshot,
-per-port V/I with 60-sample histories, lifetime/session stats) — no I2C of its own.
+per-port V/I with 60-sample histories, lifetime/session stats), no I2C of its own.
 Display stack: `ili9341.c` (SPI, RGB565, 240×320) + `gfx.c` (text/primitives).
 UI: screen carousel MAIN ↔ DETAIL ↔ GRAPH ↔ PORTS ↔ STATS, SETTINGS overlay
 (long-press/double-click) with OUTPUT / DISPLAY / CALIBRATION / TEST sub-pages, CONFIRM/WARNING
@@ -179,7 +179,7 @@ modals, FAULT takeover, SLEEP page. Two-phase draw (full `Draw` on entry, partia
 - **CYPD3175** (`firmware/CYPD3175/`): built with Infineon CCGx Power SDK /
   PSoC Creator; flashed once over SWD or CC bootloader. Repo keeps the built hex,
   a status-LED driver, SDK patches and the PD config (PDOs 5/9/12/15/20 V @ 3 A).
-- **BQ25713**: no firmware — configured at runtime by the TPS25750.
+- **BQ25713**: no firmware, configured at runtime by the TPS25750.
 
 ## 4. Development tooling (host-side, no hardware needed)
 
@@ -200,7 +200,7 @@ cd firmware/interface-tester && ./build.sh && ./run.sh  # UI simulator (SDL2)
 
 STM32 flashes over SWD (ST-Link). Per-IC programming paths are mapped in
 [`firmware/Boot_and_Provisioning.md`](firmware/Boot_and_Provisioning.md).
-**Caveat:** CubeMX regeneration rewrites the Makefile — re-check the application
+**Caveat:** CubeMX regeneration rewrites the Makefile, re-check the application
 entries in `C_SOURCES` afterwards.
 
 ## 6. Mechanical
@@ -210,13 +210,13 @@ source (`.f3d`), STEP, STLs (body, upper lid, short-side lid) and renders.
 
 ## 7. Status & open points
 
-- Work in progress; hardware not yet validated — see the root [README](../README.md) disclaimer.
+- Work in progress; hardware not yet validated, see the root [README](../README.md) disclaimer.
 - Open `CHECK:` items (TPS burst chunking/address, gauge data-flash offsets,
   design capacity vs final pack, CYPD3175 LED pin) tracked in
   [`firmware/Boot_and_Provisioning.md`](firmware/Boot_and_Provisioning.md#open-verification-points).
 - Fuel-gauge calibration is done **on-device**: SETTINGS → Calibration, a
   nine-step multimeter-assisted wizard (electrical cal, pack config, IT
-  enable, learning-cycle monitor) — see
+  enable, learning-cycle monitor), see
   [`firmware/Gauge_Calibration.md`](firmware/Gauge_Calibration.md). Until it
   is run on the real pack, SoC readings are indicative and the UI shows a
   NOT CALIBRATED warning at every wake. ChemID selection (optional accuracy

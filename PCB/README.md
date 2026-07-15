@@ -1,4 +1,4 @@
-# PCB — KiCad Projects
+# PCB: KiCad Projects
 
 Two KiCad projects make up the Ducker-Charger hardware:
 
@@ -17,7 +17,7 @@ Two KiCad projects make up the Ducker-Charger hardware:
 | Logic | `Logic.kicad_sch` | STM32F401RBT6, display/encoder interface, logic supply |
 | BMS | `BMS.kicad_sch` | BQ77915 protection, BQ34Z100-R2 fuel gauge, ISO1540 I2C isolator, protection FETs |
 
-> The secondary PD controller is the Infineon **CYPD3175** — it replaced the
+> The secondary PD controller is the Infineon **CYPD3175**: it replaced the
 > ST **STUSB4710** (EOL).
 
 Component datasheets and technical reference manuals used during the design are
@@ -82,4 +82,4 @@ Bus-level detail (pins, addresses):
 
 `*/production/` holds the fabrication outputs (gerber zip + IPC netlist)
 generated with the JLCPCB fabrication toolkit. Regenerate after any layout
-change — do not hand-edit.
+change; do not hand-edit.

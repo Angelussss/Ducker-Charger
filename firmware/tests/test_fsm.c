@@ -147,7 +147,7 @@ int main(void) {
     PB_FSM_FireEvent(&fsm, EVT_ERROR_CLEAR);
     ASSERT(fsm.nextState == STATE_IDLE);
 
-    // EMERGENCY — no transitions out
+    // EMERGENCY, no transitions out
     setup(); set_state(STATE_EMERGENCY);
     PB_FSM_FireEvent(&fsm, EVT_BUTTON_SHORT);
     ASSERT(fsm.nextState == STATE_EMERGENCY);

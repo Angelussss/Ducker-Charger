@@ -21,7 +21,7 @@
 #include <pd.h>          /* app_evt_t values for ducker_led_on_event() */
 
 /* ------------------------------------------------------------------ */
-/* Board / SDK bindings — review each CHECK before the first build.    */
+/* Board / SDK bindings, review each CHECK before the first build.    */
 /* ------------------------------------------------------------------ */
 
 /* CHECK (the only one left): LED pin, to be fixed when the CCG3PA

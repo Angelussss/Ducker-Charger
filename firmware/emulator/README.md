@@ -1,4 +1,4 @@
-# emulator — full-PCB emulator for the Ducker-Charger firmware
+# emulator: full-PCB emulator for the Ducker-Charger firmware
 
 Runs the **unmodified firmware** (`main.c`, FSM, charge management,
 boot-camp init, gauge provisioning, telemetry, encoder, ILI9341 driver,
@@ -7,7 +7,7 @@ UI) natively on the PC against register-level models of the board's ICs.
 Where `interface-tester/` fakes the telemetry and replaces the display
 API, this emulator models **the PCB**: the ICs behave as their
 datasheets/TRMs say, not as the firmware expects. Firmware bugs are
-supposed to surface here — that is the point.
+supposed to surface here; that is the point.
 
 ```
 firmware thread (real, unmodified code)          emulator
@@ -76,23 +76,23 @@ assembles the gif with ffmpeg (`REC_MS=50` for 20 fps).
 ## Gauge calibration model
 
 The BQ34Z100 model exercises the on-device calibration wizard end to
-end: the DF calibration block (subclass 104) is live — reported V/I/T
+end: the DF calibration block (subclass 104) is live, reported V/I/T
 are distorted by the stored divider/gain/offset, seeded with deliberate
-errors at attach — the internal offset routines run with realistic
+errors at attach, the internal offset routines run with realistic
 CCA/BCA timing, and IT_ENABLE sets QEN + Update Status 0x04. A correct
 wizard run visibly converges the readings.
 
 Every log line carries the firmware FSM state as a column, and every
 event fired into the FSM is traced as a `[FSM ]` line with the
 transition it caused (`CHARGER_CONNECTED: IDLE -> CHARGING`), including
-events that were ignored or refused by a guard — the log alone tells the
+events that were ignored or refused by a guard, the log alone tells the
 whole story of a scenario. The hook is `PB_FSM_TraceEvent()`, a weak
 no-op in fsm.c that the emulator overrides; the target build pays
 nothing for it.
 
 ## Fidelity notes / limits
 - STPD01 `DIGITAL_ENABLE` (0x06) is stored but does not gate the output
-  in the model (power-on follows the EN pin only) — verify on hardware
+  in the model (power-on follows the EN pin only), verify on hardware
   before trusting either.
 - Timing is wall-clock: I2C/SPI transfers are instantaneous, HAL_Delay
   sleeps for real. `time_scale` compresses battery time only.

@@ -3,7 +3,7 @@
  * @brief   Every-boot IC initialization. See initialization.h.
  *
  * All device I2C addresses and register offsets come from
- * system/defines.h — the single source of truth also used by
+ * system/defines.h, the single source of truth also used by
  * system/charge.c and app/provisioning.c. Do not redefine them here;
  * a prior revision of this file kept its own copies and they drifted
  * out of sync with defines.h for both STPD01 and TPS25750.
@@ -12,7 +12,7 @@
  *   - TPS25750 I2C address (TPS25750_PD_CONTROLLER_ADDR in defines.h):
  *     charge.c's runtime PD-negotiation path already uses 0x20; this
  *     file now uses the same constant. A netlist read (ADCIN1/2 = GND)
- *     had suggested 0x21 — confirm against the TPS25750 TRM table
+ *     had suggested 0x21, confirm against the TPS25750 TRM table
  *     "I2C address selection" before relying on either value.
  *   - The PBMs data layout and burst-write chunking against the TRM
  *     section "Patch Bundle Burst Mode" (document already in the repo).
@@ -31,7 +31,7 @@
 
 #include <string.h>
 
-/* Patch bundle: the const array is NOT part of this branch — it gets
+/* Patch bundle: the const array is NOT part of this branch; it gets
  * generated from firmware/TPS25750/TPS25750D_DuckerCharger.bin (already
  * in the repo) at integration time, e.g.:
  *   python3 -c "d=open('TPS25750D_DuckerCharger.bin','rb').read(); ..."
@@ -65,7 +65,7 @@ extern const uint32_t tps25750_bundle_size;
 #define TPS_BURST_CHUNK         (256u)    /* bytes per burst I2C write */
 
 /* CHECK: burst target address is returned by PBMs; this is the default
- * suggested in the TRM examples. Distinct from TPS25750_PD_CONTROLLER_ADDR —
+ * suggested in the TRM examples. Distinct from TPS25750_PD_CONTROLLER_ADDR, 
  * burst mode targets a separate alternate address, not a duplicate of it. */
 #define TPS_BURST_ADDR_DEFAULT  (0x22u << 1)
 
@@ -75,7 +75,7 @@ extern const uint32_t tps25750_bundle_size;
 #define INA3221_CONFIG_VALUE    (0x6527u)
 
 /* STPD01 safe-default encodings (VOUT: 3.0 V + 20 mV/LSB, ILIM: 100 mA +
- * 100 mA/LSB — see datasheet tables). Address/register-offset macros come
+ * 100 mA/LSB, see datasheet tables). Address/register-offset macros come
  * from system/defines.h. */
 #define STPD01_VOUT_5V          ((uint8_t)((5000u - 3000u) / 20u))
 #define STPD01_ILIM_3A          ((uint8_t)((3000u - 100u) / 100u))

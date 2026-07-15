@@ -68,7 +68,7 @@ static void test_setup(CYPD3175_Model *cypd, STPD01_Model *stpd) {
     stub_reset(); // clears queue, write logs, GPIO, AND model registry
     drain();
 
-    // Register device models — all CYPD3175/STPD01 I2C traffic goes through these.
+    // Register device models, all CYPD3175/STPD01 I2C traffic goes through these.
     memset(cypd, 0, sizeof(*cypd));
     cypd_model_init(cypd);
 
@@ -250,7 +250,7 @@ int main(void) {
     // 10. Stale interrupt (intr_reg=0 on read): handler writes 0x00 back, ALERT# stays high.
     //     Simulates the MCU waking from STOP with NVIC pending but no new event.
     test_setup(&cypd, &stpd);
-    // Do NOT inject — intr_reg stays 0, ALERT# stays high.
+    // Do NOT inject, intr_reg stays 0, ALERT# stays high.
     secondaryUSBC_ConnectionINT(); // called with no pending interrupt
     ASSERT(alert_is_high());
     ASSERT(cypd.intr_reg == 0);

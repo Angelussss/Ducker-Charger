@@ -9,9 +9,9 @@ user interface, including input handling and the state machine.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  main()  — calls UI_Init() once, UI_Tick() every loop   │
+│  main()  : calls UI_Init() once, UI_Tick() every loop   │
 ├─────────────────────────────────────────────────────────┤
-│  ui_state.c   — state machine: which screen, navigation │
+│  ui_state.c   : state machine: which screen, navigation │
 ├──────────────────────┬──────────────────────────────────┤
 │  screens.c           │  encoder.c                       │
 │  (draw every screen) │  (rotary knob + button)          │
@@ -20,9 +20,9 @@ user interface, including input handling and the state machine.
 │  (battery, graphs,   │  (BQ34Z100 I2C1, 500 ms poll)    │
 │   icons, rows)       │                                  │
 ├──────────────────────┴──────────────────────────────────┤
-│  gfx.c  — text, lines, rectangles, circles              │
+│  gfx.c  : text, lines, rectangles, circles              │
 ├─────────────────────────────────────────────────────────┤
-│  ili9341.c  — SPI driver (ILI9341 / ST7789V)            │
+│  ili9341.c  : SPI driver (ILI9341 / ST7789V)            │
 ├─────────────────────────────────────────────────────────┤
 │  SPI1  PA5(SCK) PB5(MOSI)  +  PB0(CS) PB1(DC) PB2(RST) │
 │  Backlight: PB8 (BCKL_CTRL, on/off via ILI9341_Backlight)│
@@ -31,7 +31,7 @@ user interface, including input handling and the state machine.
 
 ---
 
-## Layer 1 — ILI9341/ST7789 driver (`ili9341.c`)
+## Layer 1: ILI9341/ST7789 driver (`ili9341.c`)
 
 Handles everything below the pixel level: hardware reset, init sequence,
 and moving bytes to the panel over SPI1.
@@ -42,10 +42,10 @@ and moving bytes to the panel over SPI1.
 3. Sleep Out (0x11) + 120 ms
 4. Pixel format 0x3A/0x55 → 16 bpp RGB565
 5. MADCTL 0x36/0x00 → portrait, RGB order
-6. Display inversion ON (0x21) — required by the generic 2" ST7789V
+6. Display inversion ON (0x21), required by the generic 2" ST7789V
    modules; if a real ILI9341 panel shows inverted colours, drop this
 7. Display On (0x29)
-8. `ILI9341_SetBrightness(100)` — backlight on
+8. `ILI9341_SetBrightness(100)`, backlight on
 
 **SPI protocol**: every transaction is `CS low → DC low/high → byte(s) → CS high`.
 DC low = command register, DC high = pixel data.
@@ -56,19 +56,19 @@ little-endian.
 
 **Backlight** (`BCKL_CTRL` / PB8): jumper JP402 selects PMOS or NMOS FET.
 Current config assumes PMOS (active-low). Only this driver knows the
-polarity — everyone else (FSM sleep states included) goes through
+polarity, everyone else (FSM sleep states included) goes through
 `ILI9341_Backlight(on)`, never a raw pin write. Dimming is real PWM on
 TIM10_CH1 at 20 kHz (above flicker and audibility), the jumper polarity
 folded into the timer's OC polarity; the pin is promoted to AF at runtime
 (no CubeMX regen, same pattern as encoder.c's PC0 EXTI). On backlight-off
-the pin is demoted back to plain GPIO at a definite level — mandatory
+the pin is demoted back to plain GPIO at a definite level, mandatory
 before DEEP_SLEEP, where STOP mode freezes timer clocks and an AF pin
 would stick at an arbitrary PWM phase. If the timer bring-up fails, the
 driver degrades to plain on/off.
 
 ---
 
-## Layer 2 — GFX primitives (`gfx.c`)
+## Layer 2: GFX primitives (`gfx.c`)
 
 Sits above the driver. Knows about geometry and text; knows nothing about
 battery bars or menus.
@@ -92,7 +92,7 @@ horizontal/vertical line optimised variants.
 
 ---
 
-## Layer 3 — Widgets (`widgets.c`)
+## Layer 3: Widgets (`widgets.c`)
 
 Reusable compound drawings that multiple screens share.
 
@@ -111,7 +111,7 @@ Icon types: `ICON_USB_C`, `ICON_CHARGING` (bolt), `ICON_FULL` (check),
 
 ---
 
-## Layer 4 — Screens (`screens.c`)
+## Layer 4: Screens (`screens.c`)
 
 One `Draw` + one `Update` function per screen. `Draw` redraws the whole
 screen (called once on transition). `Update` redraws only the parts that
@@ -145,58 +145,58 @@ change with new telemetry data (called every 250 ms).
 
 ### Screen descriptions
 
-**BOOT** — logo + title, shown 1.5 s at power-on; also shown briefly
+**BOOT**: logo + title, shown 1.5 s at power-on; also shown briefly
 (1.2 s) when waking from DEEP_SLEEP (`UI_OnDeepSleepWake`).
 
-**MAIN** — battery shape (Widget_BatteryBar), giant SoC %, time-to-empty or
+**MAIN**: battery shape (Widget_BatteryBar), giant SoC %, time-to-empty or
 time-to-full under it, pack voltage and current at 2× scale, 30-sample
 current graph.
 
-**DETAILS** — 2 × 3 grid of value labels (SoC, voltage, current, power,
+**DETAILS**: 2 × 3 grid of value labels (SoC, voltage, current, power,
 temperature, charge phase). There is no per-cell voltage row: the current
 PCB has no per-cell path to the MCU (the BQ7791500 protector is a fully
-analog part — no digital interface at all, see `Hardware_Architecture.md`),
+analog part, no digital interface at all, see `Hardware_Architecture.md`),
 so a real reading is not possible without a different gauge; showing
 `pack_mv / 4` in its place would misrepresent balanced cells, so the row
 was removed rather than faked.
 
-**GRAPH** — full-screen current graph. Short press cycles the Y-axis full
+**GRAPH**: full-screen current graph. Short press cycles the Y-axis full
 scale: 1 A → 5 A → 15 A → back to 1 A.
 
-**PORTS** — one graph area, up to 5 overlaid traces (USB-A1 cyan, USB-A2
+**PORTS**: one graph area, up to 5 overlaid traces (USB-A1 cyan, USB-A2
 lime, USB-C1/OTG white, USB-C2 magenta, Lab yellow) + legend with live V/I
 per port. Port data comes from `port_stats[]` in telemetry; A1/A2 have real
-INA3221 shunts; C2/Lab share the STPD01 rail (no shunt — INA3221 ch3 is
+INA3221 shunts; C2/Lab share the STPD01 rail (no shunt, INA3221 ch3 is
 grounded) and their current is derived from the total-system-power ADC
 channel minus the measured USB-A power, which works because the UI
 interlock keeps at most one of the two enabled. C1 is active whenever the
-port is plugged, sink or source — the BQ25713 sits on the TPS25750
+port is plugged, sink or source, the BQ25713 sits on the TPS25750
 private bus, so neither direction has a dedicated MCU sense on the C1
 side, but current is still shown: charging (sink) reads IADPT
 (`sensor_data.usbCInputCurrent`, the one analog telemetry pin exposed for
 that direction); OTG (source) is isolated from A1/A2 (INA3221) and the
 C2/Lab rail (PSYS-derived) by subtracting their power from total pack
 discharge (fuel gauge current × voltage) and converting the remainder to
-current at C1's own contract voltage — so it stays accurate to C1's own
+current at C1's own contract voltage, so it stays accurate to C1's own
 share even while other outputs draw at the same time, not just when C1
 is the only thing active. The subtraction crosses a domain boundary
 (battery-side power vs. already-converted output-side power for the
 other channels), skipping each of their regulators' own conversion loss,
-so the reading runs a little high — good enough to size the draw, not a
+so the reading runs a little high, good enough to size the draw, not a
 calibrated measurement.
 
-**STATS** — lifetime data from BQ34Z100 (cycle count, SoH, capacity) and
+**STATS**: lifetime data from BQ34Z100 (cycle count, SoH, capacity) and
 per-boot session counters (charges, max temp/current, energy out, uptime).
 
-**SETTINGS** — overlay, 8 scrollable rows. USB-A1/A2 are plain GPIO toggles
+**SETTINGS**: overlay, 8 scrollable rows. USB-A1/A2 are plain GPIO toggles
 (PC1/PC2). Lab and USB-C2 open their own OUTPUT sub-page.
 
-**OUTPUT** — two channels sharing one STPD01 rail; interlock (enabling one
+**OUTPUT**: two channels sharing one STPD01 rail; interlock (enabling one
 disables the other, PA11/PA12). Lab page: bench-PSU face with live V/A/W
 readout (current derived from the system-power ADC channel), voltage
-3–20 V in 100 mV steps, current limit 100 mA–3 A in 100 mA steps —
+3–20 V in 100 mV steps, current limit 100 mA–3 A in 100 mA steps,
 confirming a value reprograms the STPD01 live through `setupSTPD01()`.
-USB-C2 page: a **ceiling** on the delivered output, not a PDO selection —
+USB-C2 page: a **ceiling** on the delivered output, not a PDO selection,
 the CYPD3175 negotiates the PD contract autonomously and the STPD01
 produces the rail, so confirming a value calls
 `setSecondaryUSBC_VoltageCeiling/CurrentCeiling()` and the charge layer
@@ -204,13 +204,13 @@ delivers `min(ceiling, contract)`, reprogramming live if a device is
 already connected (only ever lowering, never above the negotiated
 contract). The Enable row and the SETTINGS summary read the **live** port
 state (`get_USBC2_Status()` + `getSTPD01_SetpointVoltage()`), not a cached
-UI flag — the connection interrupt enables this port autonomously, so a
+UI flag, the connection interrupt enables this port autonomously, so a
 cached flag would lag behind reality.
 
-**DISPLAY** — brightness (10–100 %, maps to `ILI9341_SetBrightness`),
+**DISPLAY**: brightness (10–100 %, maps to `ILI9341_SetBrightness`),
 auto-sleep timeout (Off / 1 / 2 / 15 min, default 2 min to match the FSM's
 `INACTIVITY_TIMEOUT_MS`), screen off (UI-level sleep screen), and
-Shutdown — a confirm modal that pushes `EVT_BUTTON_LONG`, the same
+Shutdown, a confirm modal that pushes `EVT_BUTTON_LONG`, the same
 primitive as the physical 3 s hold, driving the FSM to DEEP_SLEEP subject
 to the same transition-table gate (only honored from IDLE/SLEEP).
 
@@ -219,14 +219,14 @@ flag in the gauge), an orange `CAL` icon sits in the header and a
 NOT CALIBRATED warning modal greets every boot, light-sleep wake and
 deep-sleep wake (re-armed on each sleep entry, acked with OK).
 
-**CALIBRATION** — nine-step fuel-gauge calibration wizard (offsets,
+**CALIBRATION**: nine-step fuel-gauge calibration wizard (offsets,
 voltage divider, current gain, temperature offset, pack config/VOLTSEL,
 IT enable, learning-cycle monitor), multimeter-assisted; opens behind a
 confirm modal (previous calibration data gets overwritten);
 DF written only on explicit APPLY/SAVE. Backend in `app/calibration.c`,
 full procedure in [Gauge_Calibration.md](Gauge_Calibration.md).
 
-**TEST** — forces telemetry values for UI stress scenarios: low voltage,
+**TEST**: forces telemetry values for UI stress scenarios: low voltage,
 critical voltage, low temperature, high temperature, overcurrent, reset
 (calls `Telemetry_ForcePoll`). Useful during development.
 
@@ -240,7 +240,7 @@ critical voltage, low temperature, high temperature, overcurrent, reset
 | `TH_TEMP_CRIT` | 60 °C | WARNING modal (over-temp) |
 | `TH_TEMP_LOW` | 10 °C | WARNING modal (cold) |
 | `TH_VLOW` | ~13 V | VLOW warning |
-| `TH_VCRIT` | ~12 V | VCRIT warning modal (informational — the FSM enters EMERGENCY on its own) |
+| `TH_VCRIT` | ~12 V | VCRIT warning modal (informational, the FSM enters EMERGENCY on its own) |
 
 Voltage band colours on MAIN: 14–17 V green, 13–14 V orange, 12–13 V red,
 < 12 V red blinking.
@@ -253,7 +253,7 @@ USB-C plug (vbus), bolt/check/arrow (charging state), thermometer
 
 ---
 
-## Layer 5 — Encoder input (`encoder.c`)
+## Layer 5: Encoder input (`encoder.c`)
 
 Hardware: EC11E15244G1 on-board encoder, 15 pulses / 30 detents per
 revolution. External RC debounce + pull-ups on R401/403/404.
@@ -263,17 +263,17 @@ CPU for counting). **The `.ioc` must have `EncoderMode = TIM_ENCODERMODE_TI12`**
 (counts both A and B edges). The default TI1 mode gives 1 count/detent
 and `delta/4` loses slow rotations entirely.
 
-- `Encoder_Init(&htim3)` — starts TIM3, records initial counter
-- `Encoder_GetDelta()` — reads `TIM3->CNT`, computes `delta / 2` (2 counts
+- `Encoder_Init(&htim3)`, starts TIM3, records initial counter
+- `Encoder_GetDelta()`; reads `TIM3->CNT`, computes `delta / 2` (2 counts
   per detent in TI12), clears accumulator for next call
-- `Encoder_IsPressed()` — falling-edge detection on PC0 (ENCOD_BUTT),
+- `Encoder_IsPressed()`, falling-edge detection on PC0 (ENCOD_BUTT),
   50 ms software debounce, one-shot flag
-- `Encoder_IsHeld()` — raw pin read (no debounce, no consume); used by
+- `Encoder_IsHeld()`, raw pin read (no debounce, no consume); used by
   the state machine for long-press detection
 
 ---
 
-## Layer 6 — Telemetry (`telemetry.c`)
+## Layer 6: Telemetry (`telemetry.c`)
 
 Reads BQ34Z100 fuel gauge via I2C1 (I2C_LP / ISO1540 / battery side)
 every 500 ms. Results go into the global `SystemTelemetry_t telemetry`
@@ -300,7 +300,7 @@ from BQ34Z100 current sign and flags instead.
 
 `port_stats[]` and `sys_stats` are fully populated by `do_poll()` (which
 the main loop calls every 500 ms, including in SLEEP). `telemetry.charge_phase`
-only ever reports IDLE or CHARGING — PRE-charge and TAPER are real BQ25713
+only ever reports IDLE or CHARGING, PRE-charge and TAPER are real BQ25713
 phases, but that chip is unreachable from this MCU, so they are not
 representable and the field only carries the distinction this board can
 actually make.
@@ -310,26 +310,26 @@ actually make.
 ## UI state machine (`ui_state.c`)
 
 `UI_Tick()` is called every main loop iteration (skipped while the FSM is
-in SLEEP or DEEP_SLEEP — the backlight is off, drawing would be wasted
+in SLEEP or DEEP_SLEEP, the backlight is off, drawing would be wasted
 work; telemetry keeps flowing because `Telemetry_Poll()` lives in the main
 loop, not here). It runs in order:
 
-1. **Boot timeout** — if on BOOT screen and 1.5 s elapsed → navigate to MAIN
-2. **FAULT takeover** — if the FSM is in ERROR/EMERGENCY, force the FAULT screen
-3. **Sleep wake** — if on SLEEP screen and button pressed → return to the
+1. **Boot timeout**: if on BOOT screen and 1.5 s elapsed → navigate to MAIN
+2. **FAULT takeover**: if the FSM is in ERROR/EMERGENCY, force the FAULT screen
+3. **Sleep wake**: if on SLEEP screen and button pressed → return to the
    pre-sleep screen
-4. **Auto-sleep** — if idle longer than the configured timeout → `UI_EnterSleep()`
-5. **Warning check** — check telemetry against thresholds; raise unacked
+4. **Auto-sleep**: if idle longer than the configured timeout → `UI_EnterSleep()`
+5. **Warning check**: check telemetry against thresholds; raise unacked
    warnings as a modal
-6. **Long-press detection** — button held ≥ 1000 ms → open SETTINGS overlay;
+6. **Long-press detection**: button held ≥ 1000 ms → open SETTINGS overlay;
    stores the origin screen to return to on Exit
-7. **Click arbiter** — single press is held pending for 400 ms (`UI_DOUBLE_CLICK_MS`);
+7. **Click arbiter**: single press is held pending for 400 ms (`UI_DOUBLE_CLICK_MS`);
    if a second press arrives → double-click (jump to SETTINGS); if the window
    expires → clean single click delivered to the screen handler;
    a long press cancels any pending click
-8. **Per-screen navigation** — encoder delta and clean click are dispatched
+8. **Per-screen navigation**: encoder delta and clean click are dispatched
    to the current screen handler
-9. **Periodic redraw** — every 250 ms: `needs_full_redraw` flag → full `Draw()`;
+9. **Periodic redraw**: every 250 ms: `needs_full_redraw` flag → full `Draw()`;
    otherwise `Update()` for data-only regions + `Screen_Header_RefreshIcons()`
 
 ### Navigation summary
@@ -356,19 +356,19 @@ Five warning types (`WARN_TEMP`, `WARN_VLOW`, `WARN_VCRIT`, `WARN_OVCH`,
 `WARN_CHGINH`). TEMP/VLOW/VCRIT are shown at most once per boot; OVCH and
 CHGINH re-arm when their condition clears (they describe recoverable
 episodes). The modal auto-acks after 30 s with no input. **Warnings only
-inform — they never actuate.** The FSM is the single authority on outputs:
+inform; they never actuate.** The FSM is the single authority on outputs:
 at the VCRIT threshold it enters EMERGENCY on its own (and the BQ7791500
 BMS backs it up in hardware), so the ack does nothing but dismiss the modal.
 
 ### Sleep modes
 
-- **Screen off** (`UI_EnterSleep`) — UI-level only: dark screen page, any
+- **Screen off** (`UI_EnterSleep`), UI-level only: dark screen page, any
   encoder press returns to the screen that was active before. The FSM and
   ports are untouched.
-- **FSM SLEEP** — entered by the FSM on inactivity; the main loop stops
+- **FSM SLEEP**: entered by the FSM on inactivity; the main loop stops
   calling `UI_Tick()` and the FSM turns the backlight off. Telemetry keeps
   running (polled from the main loop).
-- **Shutdown / DEEP_SLEEP** — the DISPLAY page's Shutdown row (or a 3 s
+- **Shutdown / DEEP_SLEEP**: the DISPLAY page's Shutdown row (or a 3 s
   physical hold) pushes `EVT_BUTTON_LONG`; the FSM enters STOP mode. Wake
   requires an encoder press *while a charger is attached* (see `FSM.md`,
   DEEP_SLEEP wake gate); `UI_OnDeepSleepWake()` then restarts the UI from
@@ -423,7 +423,7 @@ and `Telemetry_Poll()` rate-limits itself to 500 ms.
 
 ---
 
-## Development — interface-tester
+## Development: interface-tester
 
 `firmware/interface-tester/` contains a native desktop simulator that
 compiles the real `gfx.c`, `widgets.c`, `screens.c` and `ui_state.c`

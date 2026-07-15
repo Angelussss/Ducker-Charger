@@ -1,4 +1,4 @@
-/* Fake main.h for native UI simulation — pin names match current firmware main.h. */
+/* Fake main.h for native UI simulation, pin names match current firmware main.h. */
 #ifndef SIM_MAIN_H
 #define SIM_MAIN_H
 #include "stm32f4xx_hal.h"

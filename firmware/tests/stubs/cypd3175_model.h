@@ -14,7 +14,7 @@ typedef struct {
     uint8_t type_c_status;  // CYPD3175_PORT0_TYPE_C_STATUS (0x100C)
     uint8_t pdo[4];         // CYPD3175_PORT0_CURRENT_PDO (0x1010)
     uint8_t rdo[4];         // CYPD3175_PORT0_CURRENT_RDO (0x1014)
-    I2cDeviceModel _ifc;    // must be last — registered pointer into this struct
+    I2cDeviceModel _ifc;    // must be last, registered pointer into this struct
 } CYPD3175_Model;
 
 // Zero-fill m, wire up I2C dispatch, and register on the bus.

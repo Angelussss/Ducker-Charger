@@ -2,7 +2,7 @@
  * @file    encoder.c
  * @brief   Rotary encoder + push-button via TIM3 encoder mode.
  *
- * EC11E15244G1 gives 2 counts/detent in TI12 (x4) mode — divide by 2.
+ * EC11E15244G1 gives 2 counts/detent in TI12 (x4) mode, divide by 2.
  * Requires .ioc: TIM3 EncoderMode = TIM_ENCODERMODE_TI12.
  *
  * The push-button (PC0) is edge-driven via EXTI0: the .ioc still declares
@@ -32,7 +32,7 @@ void Encoder_Init(TIM_HandleTypeDef *htim_ptr)
 
     /* Override MX_GPIO_Init(): PC0 becomes an EXTI line on both edges.
      * Both edges are needed so the debounce timestamp also tracks the
-     * release — otherwise release bounce would register as a new press. */
+     * release, otherwise release bounce would register as a new press. */
     GPIO_InitTypeDef gpio = {0};
     gpio.Pin  = ENCOD_BUTT_Pin;
     gpio.Mode = GPIO_MODE_IT_RISING_FALLING;

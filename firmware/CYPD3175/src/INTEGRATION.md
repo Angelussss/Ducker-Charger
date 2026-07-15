@@ -12,7 +12,7 @@ project (right-click project → *Add → Existing Item*).
 ## 2. Initialise
 
 In the solution init path (the reference calls it from `main()` after
-`system_init()` — look for where other one-time init like
+`system_init()`, look for where other one-time init like
 `app_init()` happens) add:
 
 ```c
@@ -24,7 +24,7 @@ ducker_led_init();
 ## 3. Hook the PD events
 
 In `app.c`, inside `app_event_handler(uint8_t port, app_evt_t evt, ...)`,
-add to the existing `switch (evt)` (case names below exist in the SDK —
+add to the existing `switch (evt)` (case names below exist in the SDK,
 keep the reference's own code in each case, just append the LED call):
 
 ```c
@@ -42,7 +42,7 @@ case APP_EVT_HARD_RESET_COMPLETE:
     ducker_led_set(DUCKER_LED_OFF);
     break;
 
-/* fault events: exact names vary slightly per SDK revision — grep
+/* fault events: exact names vary slightly per SDK revision; grep
  * app_evt_t for VBUS_OVP / VBUS_OCP / VBUS_SCP / OTP */
 case APP_EVT_VBUS_OVP_FAULT:
 case APP_EVT_VBUS_OCP_FAULT:
@@ -50,15 +50,15 @@ case APP_EVT_VBUS_OCP_FAULT:
     break;
 ```
 
-## 4. Before the first build — the three CHECKs
+## 4. Before the first build: the three CHECKs
 
-1. **`DUCKER_LED_GPIO`** — set from the final schematic. Free pins only:
+1. **`DUCKER_LED_GPIO`**: set from the final schematic. Free pins only:
    stay clear of CC1/CC2, VBUS_MON/VBUS_FB, and the I2C pair if HPI to
    the STM32 is enabled.
-2. **`DUCKER_LED_TIMER_ID`** — pick from the app/user range in
+2. **`DUCKER_LED_TIMER_ID`**: pick from the app/user range in
    `src/system/timer_id.h` and grep the workspace to confirm no
    collision.
-3. **GPIO API signatures** — `gpio_hsiom_set_config()` /
+3. **GPIO API signatures**: `gpio_hsiom_set_config()` /
    `gpio_set_value()` against `src/system/gpio.h` of the SDK revision
    you installed (written against the documented CCGx Power SDK API;
    minor signature drift between SDK releases is possible).
@@ -73,7 +73,7 @@ case APP_EVT_VBUS_OCP_FAULT:
 
 ## Not covered here (separate work items)
 
-- **PDO / voltage / protection values**: no code — set them in the
+- **PDO / voltage / protection values**: no code; set them in the
   config table, see `../config/c2_pd_config.md`.
 - **Power-stage adaptation**: the `pa_direct_fb` reference drives the
   regulator through CCG3PA's direct-feedback path. If the new PCB

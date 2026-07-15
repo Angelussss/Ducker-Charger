@@ -4,7 +4,7 @@
  *
  * This module sits above the ILI9341 driver and below the widget layer.
  * It knows how to draw geometric shapes and text, but has no concept of
- * "battery bar" or "graph" — that is the job of the widgets.
+ * "battery bar" or "graph"; that is the job of the widgets.
  *
  * BITMAP FONTS:
  *   Fixed-size bitmap fonts are included. A bitmap font is a C array where

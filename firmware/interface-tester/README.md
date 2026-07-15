@@ -15,7 +15,7 @@ the SPI display, so you can see and interact with every screen without hardware.
 ./run.sh     # launch sim_ui, compiles it first if missing
 ```
 
-The window is 240×320 — the same resolution as the real display.
+The window is 240×320, the same resolution as the real display.
 
 ## Controls
 
@@ -28,10 +28,10 @@ The window is 240×320 — the same resolution as the real display.
 | Double space within 400 ms | Jump straight to SETTINGS |
 | ESC | Quit |
 
-## Fake sensor data — sim_config.ini
+## Fake sensor data: sim_config.ini
 
 Edit `sim_config.ini` and relaunch to change what the UI displays.
-No rebuild needed — the file is read every time at startup.
+No rebuild needed, the file is read every time at startup.
 
 Key fields:
 
@@ -43,11 +43,11 @@ Key fields:
 | `batt_ripple` | Sine amplitude on `batt_ma` (0 = flat line on graph) |
 | `temp_c` | Battery temperature in °C |
 | `vbus` | 1 = USB-C charger plugged in |
-| `phase` | Charger phase: 0 idle · 1 charging (the real UI can't tell pre-charge/taper apart — the chip that knows sits on a bus this MCU can't reach) |
+| `phase` | Charger phase: 0 idle · 1 charging (the real UI can't tell pre-charge/taper apart, the chip that knows sits on a bus this MCU can't reach) |
 | `a1/a2/c1/c2/lab_active` | Port enabled/disabled |
 | `*_mv` / `*_ma` / `*_ripple` | Per-port voltage, current, graph ripple |
 | `tte_min` / `ttf_min` | Time-to-empty / time-to-full shown under SoC |
-| `cycles`, `health`, `cap_*` | OVERALL DATA screen — lifetime gauge stats |
+| `cycles`, `health`, `cap_*` | OVERALL DATA screen, lifetime gauge stats |
 
 Set `batt_ma` negative and `vbus = 0` to simulate discharging.
 Set `temp_c = 65` to trigger the over-temperature warning.
@@ -70,7 +70,7 @@ Set `soc = 4` to trigger the critical low-battery warning + sleep.
 
 ## How it links to the firmware
 
-The Makefile compiles these files **directly from the firmware tree** —
+The Makefile compiles these files **directly from the firmware tree**:
 no copies:
 
 ```
@@ -84,4 +84,4 @@ no copies:
 shadow the real HAL. Everything else comes from `../cubeMX/Core/Inc`.
 
 After editing any UI file, run `./build.sh` then `./run.sh` to see the result.
-`sim_ui` is not committed to git — it is always generated locally.
+`sim_ui` is not committed to git; it is always generated locally.

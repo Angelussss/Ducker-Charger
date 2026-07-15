@@ -107,7 +107,7 @@ HAL_StatusTypeDef HAL_I2C_Mem_Read(I2C_HandleTypeDef *hi2c, uint16_t DevAddress,
     // Device model takes priority over the FIFO queue.
     I2cDeviceModel *dev = i2c_model_find(DevAddress);
     if (dev) return dev->on_read(MemAddress, pData, Size, dev->ctx);
-    // Queue fallback — used by unmodelled devices (BQ34Z100, INA3221).
+    // Queue fallback, used by unmodelled devices (BQ34Z100, INA3221).
     if (i2c_count == 0) {
         memset(pData, 0, Size);
         return HAL_OK;

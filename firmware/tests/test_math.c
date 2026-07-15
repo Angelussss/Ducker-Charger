@@ -3,7 +3,7 @@
 #include <math.h>
 #include <stdint.h>
 
-// Not declared in charge.h — internal helpers exercised directly here
+// Not declared in charge.h, internal helpers exercised directly here
 float toResistance(float vout);
 float voltageToCurrentChannel(const uint8_t buffer[2]);
 

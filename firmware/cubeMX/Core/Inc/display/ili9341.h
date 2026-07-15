@@ -103,7 +103,7 @@ uint8_t ILI9341_GetBrightness(void);
 /**
  * @brief  Backlight on/off, preserving the stored brightness.
  * @note   Only this driver knows the BCKL_CTRL polarity (JP402 jumper,
- *         see DISP_BCKL_ACTIVE_LOW) — never write the pin directly.
+ *         see DISP_BCKL_ACTIVE_LOW); never write the pin directly.
  * @param  on 0 = backlight off, nonzero = backlight on
  */
 void ILI9341_Backlight(uint8_t on);

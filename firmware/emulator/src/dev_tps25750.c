@@ -7,7 +7,7 @@
  *   - every register access is length-prefixed on the wire: a read
  *     returns [len][data...], a write payload is [len][data...] after
  *     the register byte. The device cannot distinguish HAL_I2C_Mem_*
- *     from Master_Transmit/Receive — same bus traffic.
+ *     from Master_Transmit/Receive, same bus traffic.
  *   - boots in 'PTCH' mode; Patch Bundle Burst Mode (PBMs -> burst
  *     writes to the alternate address -> PBMc) moves it to 'APP '.
  *   - I2Cs_IRQ (PB14, active low) asserted while INT_EVENT1 != 0,

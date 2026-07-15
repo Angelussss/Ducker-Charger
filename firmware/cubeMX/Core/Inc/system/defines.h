@@ -3,19 +3,19 @@
 
 #include "stm32f4xx.h"
 
-// ---- SoC / voltage thresholds — 4S3P Sony VTC5, BQ7791500 UV=2900mV/cell
+// ---- SoC / voltage thresholds, 4S3P Sony VTC5, BQ7791500 UV=2900mV/cell
 // OV=4200mV/cell ----
-#define SOC_SAFETY_THRESHOLD 15.0f // % — IDLE → SAFETY_LOCK
-#define SOC_LOWV_THRESHOLD 10.0f   // % — SAFETY_LOCK → LOW_V
-#define SOC_OK_THRESHOLD 15.0f     // % — recovery back to IDLE
+#define SOC_SAFETY_THRESHOLD 15.0f // %, IDLE → SAFETY_LOCK
+#define SOC_LOWV_THRESHOLD 10.0f   // %, SAFETY_LOCK → LOW_V
+#define SOC_OK_THRESHOLD 15.0f     // %, recovery back to IDLE
 #define UNDERV_VOLTAGE_MV                                                      \
-  12000.0f // mV pack — 3000 mV/cell, 100 mV above BQ7791500 UV cutoff (2900
+  12000.0f // mV pack, 3000 mV/cell, 100 mV above BQ7791500 UV cutoff (2900
            // mV/cell)
 #define BATHI_VOLTAGE_MV                                                       \
-  16400.0f // mV pack — 4100 mV/cell × 4S, mirrors BQ34Z100 BATHI data flash
+  16400.0f // mV pack, 4100 mV/cell × 4S, mirrors BQ34Z100 BATHI data flash
            // threshold
 
-// ms — IDLE/CHARGING/LOW_V -> SLEEP. Matches the UI DISPLAY page's default
+// ms, IDLE/CHARGING/LOW_V -> SLEEP. Matches the UI DISPLAY page's default
 // "Auto sleep" setting (screens.c _asleep_min[]) so the two inactivity
 // timers agree instead of the FSM silently pre-empting the UI's own option.
 #define INACTIVITY_TIMEOUT_MS 120000
@@ -23,7 +23,7 @@
 // CHRG_OK falling while a charger contract is active is an adapter failure
 // only if the contract is STILL active once this grace expires: on a plain
 // unplug the BQ25713 drops CHRG_OK microseconds after VBUS dies, while the
-// TPS25750 plug-removal interrupt follows milliseconds later — without the
+// TPS25750 plug-removal interrupt follows milliseconds later, without the
 // grace every unplug would be reported as an error.
 #define CHRGOK_GRACE_MS 100
 

@@ -1,4 +1,4 @@
-/* fake-data config for simulator — loaded from sim_config.ini */
+/* fake-data config for simulator, loaded from sim_config.ini */
 #ifndef SIM_CONFIG_H
 #define SIM_CONFIG_H
 
@@ -11,7 +11,7 @@ typedef struct {
     int temp_c;
     int vbus;           /* charger plugged 0/1 */
     int full;           /* battery full flag 0/1 */
-    int phase;          /* 0=idle 1=charging (that's all the real UI shows —
+    int phase;          /* 0=idle 1=charging (that's all the real UI shows, 
                             PRE/TAPER aren't observable, see telemetry.h) */
     /* ports: 0=A1 1=A2 2=C1(OTG) 3=C2 4=LAB */
     struct { int active; int mv; int ma; int ripple; } port[5];

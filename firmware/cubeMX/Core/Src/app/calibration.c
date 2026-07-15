@@ -408,7 +408,7 @@ CalStatus_t Calibration_CommitCurrent(void)
 /* Pack Configuration: subclass 64 "Registers", offset 0, VOLTSEL is
  * bit 3 of the MSB (TRM 2.2 walk-through example). Series cells at
  * offset 7 of the same subclass; Design Capacity subclass 48 offset 11
- * (2 bytes big-endian) — same values provisioning.c programs. */
+ * (2 bytes big-endian), same values provisioning.c programs. */
 #define SUBCLASS_REGISTERS      (64u)
 #define OFF_PACK_CONFIG_MSB     (0u)
 #define PACK_CFG_VOLTSEL_BIT    (1u << 3)

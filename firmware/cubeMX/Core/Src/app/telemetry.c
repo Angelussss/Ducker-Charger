@@ -9,7 +9,7 @@
  * PortStats_t / SystemStats_t structs (plus locally-computed history and
  * lifetime stats that the charge layer has no reason to know about).
  *
- * BQ25713 is on TPS25750's private I2C_EX bus — not reachable from STM32.
+ * BQ25713 is on TPS25750's private I2C_EX bus, not reachable from STM32.
  * Charge state is derived from the BQ34Z100 CHG flag and the primary
  * USB-C PD contract (sink = charger connected).
  */
@@ -24,7 +24,7 @@
  * ----------------------------------------------------------------------- */
 
 SystemTelemetry_t telemetry;
-PortStats_t       port_stats[5];   /* A1/A2/C1(OTG)/C2/Lab — see do_poll() */
+PortStats_t       port_stats[5];   /* A1/A2/C1(OTG)/C2/Lab, see do_poll() */
 uint16_t          tte_min;
 uint16_t          ttf_min;
 SystemStats_t     sys_stats;
@@ -40,7 +40,7 @@ static uint8_t _was_charging; /* detect charge-session starts */
 static uint32_t _energy_mW_ms;
 
 /* Commit one sample to a port row and advance its ring buffer. The PORTS
- * screen reads history[]/idx directly, so every poll must push — including
+ * screen reads history[]/idx directly, so every poll must push, including
  * a zero for an idle port, otherwise its trace freezes on stale samples. */
 static void port_push(uint8_t i, uint16_t mv, int16_t ma, uint8_t active)
 {
@@ -67,7 +67,7 @@ static void do_poll(void)
     telemetry.voltage_mV    = (uint16_t)fg.voltage;
     telemetry.current_mA    = (int16_t)fg.current;
     /* Battery-pack NTC is read via the gauge's "external temperature"
-     * command (0x0C) — see charge.c readSensors(). */
+     * command (0x0C), see charge.c readSensors(). */
     telemetry.temp_celsius  = (int16_t)fg.externalTemperature;
     telemetry.is_full       = fg.flags.FC  ? 1u : 0u;
     telemetry.over_temp     = (fg.flags.OTC || fg.flags.OTD) ? 1u : 0u;
@@ -124,7 +124,7 @@ static void do_poll(void)
     sys_stats.cycle_count      = (uint16_t)fg.cycleCount;
     sys_stats.state_of_health  = (uint8_t)fg.stateOfHealth;
     sys_stats.design_cap_mAh   = 7800u;   /* 3P Murata VTC5, see provisioning.c */
-    /* Charge layer doesn't track full-charge capacity (FCC) separately —
+    /* Charge layer doesn't track full-charge capacity (FCC) separately, 
      * approximate today's capacity from design capacity and SoH. */
     sys_stats.full_cap_mAh     = (uint16_t)(sys_stats.design_cap_mAh * fg.stateOfHealth / 100u);
 
@@ -154,7 +154,7 @@ static void do_poll(void)
      * from total pack discharge (gauge current x voltage), then convert
      * the remainder to current at C1's own contract voltage. Crosses a
      * domain boundary (skips the other channels' own conversion loss),
-     * so it runs a bit high — sizing, not calibration. */
+     * so it runs a bit high, sizing, not calibration. */
     int16_t c1_mA = 0;
     if (primary.isSink) {
         c1_mA = (int16_t)sd.usbCInputCurrent;
@@ -176,7 +176,7 @@ static void do_poll(void)
 
     telemetry.last_poll_tick = now_tick;
     /* Honest freshness: charge.c tracks the gauge I2C status per cycle.
-     * 0 means every battery number above is the LAST GOOD read, not live —
+     * 0 means every battery number above is the LAST GOOD read, not live, 
      * the UI flags it and the warning arbiter stays quiet. */
     telemetry.sensor_ok = getFuelGaugeReadOK() ? 1u : 0u;
 }

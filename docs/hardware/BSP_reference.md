@@ -63,16 +63,16 @@ The system uses two separate I2C buses to isolate High Power (PD) negotiation fr
 
 ### 3.1 High Power Bus (I2C_PD) - "Monitor Mode"
 
-**Peripheral:** I2C3 — **Pins:** SCL = **PA8**, SDA = **PC9**
+**Peripheral:** I2C3, **Pins:** SCL = **PA8**, SDA = **PC9**
 
 | Device | IC | Address (7-bit) | Firmware Role |
 | --- | --- | --- | --- |
-| **PD Controller** | **TPS25750** | **0x20** | **Primary Target.** Query for PD Contracts & Status. Length-prefixed host interface — access via `system/tps25750_io.c` only. |
-| **Charger** | **BQ25713** | — | **Not on this bus.** Slaved to the TPS25750 on their private `I2C_EX`; unreachable from the MCU. Its MCU-visible signals are the analog IADPT/IBAT/PSYS pins (ADC1) and the CHRG_OK / EN_OTG GPIOs. |
+| **PD Controller** | **TPS25750** | **0x20** | **Primary Target.** Query for PD Contracts & Status. Length-prefixed host interface, access via `system/tps25750_io.c` only. |
+| **Charger** | **BQ25713** | N/A | **Not on this bus.** Slaved to the TPS25750 on their private `I2C_EX`; unreachable from the MCU. Its MCU-visible signals are the analog IADPT/IBAT/PSYS pins (ADC1) and the CHRG_OK / EN_OTG GPIOs. |
 
 ### 3.2 Low Power Bus (I2C_LP) - "Control Mode"
 
-**Peripheral:** I2C1 — **Pins:** SCL = **PB6**, SDA = **PB7**
+**Peripheral:** I2C1, **Pins:** SCL = **PB6**, SDA = **PB7**
 
 | Device | IC | Address (7-bit) | Function & Configuration |
 | --- | --- | --- | --- |
@@ -87,7 +87,7 @@ These are the standard/extended commands the firmware reads from the fuel gauge.
 Addresses, byte order, and units verified against the **BQ34Z100-R2 Technical
 Reference Manual (SLUUCO5A)**. Multi-byte values are **little-endian** (low byte at
 the lower address). The bundled `docs/bq34z100-r2.pdf` is the *datasheet* and does
-**not** contain this table — it is sourced from the TRM.
+**not** contain this table; it is sourced from the TRM.
 
 | Command | Addr (LSB/MSB) | Bytes | Unit | Firmware field (`FuelGaugeSensors`) |
 | :--- | :--- | :---: | :--- | :--- |
@@ -99,8 +99,8 @@ the lower address). The bundled `docs/bq34z100-r2.pdf` is the *datasheet* and do
 | `Current()`            | 0x10/0x11  | 2 | mA      | `current` |
 | `AverageTimeToEmpty()` | 0x18/0x19  | 2 | minutes | `avgTimeToEmpty` |
 | `AverageTimeToFull()`  | 0x1A/0x1B  | 2 | minutes | `avgTimeToFull` |
-| `VoltScale()`          | 0x20       | 1 | —       | `voltageScale` |
-| `CurrScale()`          | 0x21       | 1 | —       | `currentScale` |
+| `VoltScale()`          | 0x20       | 1 | N/A | `voltageScale` |
+| `CurrScale()`          | 0x21       | 1 | N/A | `currentScale` |
 | `InternalTemperature()`| 0x2A/0x2B  | 2 | 0.1 K   | `internalTemperature` |
 | `CycleCount()`         | 0x2C/0x2D  | 2 | counts  | `cycleCount` |
 | `StateOfHealth()`      | 0x2E/0x2F  | 2 | %       | `stateOfHealth` |
@@ -131,7 +131,7 @@ Signals used to enable power rails and modes.
 | --- | --- | --- | --- |
 | **USB_A1_CTRL** | **PC1** | Q10 (Load Switch) | Enable USB-A Port 1 Output (5V) |
 | **USB_A2_CTRL** | **PC2** | Q11 (Load Switch) | Enable USB-A Port 2 Output (5V) |
-| **HP.EN_OTG** | **PB15** | BQ25713 EN_OTG | Enable OTG (Reverse Power) on C1. ANDed by the charger with the I2C bit the TPS25750 sets — the MCU holding this low is an independent kill switch on C1 sourcing. |
+| **HP.EN_OTG** | **PB15** | BQ25713 EN_OTG | Enable OTG (Reverse Power) on C1. ANDed by the charger with the I2C bit the TPS25750 sets, the MCU holding this low is an independent kill switch on C1 sourcing. |
 | **STPD01_EN** | **PC11** | STPD01 Enable Pin | Enable the C2/Lab buck converter |
 | **C2_PORT_EN** | **PA12** | Port FET | Route the STPD01 rail to the USB-C2 connector |
 | **C2_LAB_EN** | **PA11** | Lab FET | Route the STPD01 rail to the Lab output (FSM MANUAL state; interlocked with C2_PORT_EN) |
@@ -155,7 +155,7 @@ on PC0/EXTI0 is the only line configured as a true interrupt).
 
 1. **Boot & Safety Sequence:**
 * Check `HP.CHRG_OK` (PB13) before enabling high-current paths.
-* `STPD01_EN` (PC11) stays low at boot — `initialization.c` programs the STPD01 with safe defaults (5 V / 3 A, output disabled) and enabling remains the runtime logic's job.
+* `STPD01_EN` (PC11) stays low at boot, `initialization.c` programs the STPD01 with safe defaults (5 V / 3 A, output disabled) and enabling remains the runtime logic's job.
 * Initialize `INA3221` (I2C_LP) immediately to provide OCP (Over Current Protection) for USB-A ports.
 
 

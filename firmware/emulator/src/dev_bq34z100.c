@@ -68,7 +68,7 @@ static Bq34 gg;
 #define GAIN_TRUE      0.4768f     /* 10 mOhm shunt */
 #define DIV_TRUE       5000.0f
 
-/* F4 (Xemics) float codec — same encoding calibration.c uses */
+/* F4 (Xemics) float codec, same encoding calibration.c uses */
 static float xemics_decode(const uint8_t b[4])
 {
     float mant = (float)(b[1] & 0x7Fu) / 256.0f + (float)b[2] / 65536.0f

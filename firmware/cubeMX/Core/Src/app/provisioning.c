@@ -56,7 +56,7 @@
  * ========================================================= */
 
 /* Subclass 48 "Data": Design Capacity (mAh, big endian in DF).
- * 3P of Murata VTC5 (2600 mAh) = 7800 mAh — adjust if cells change. */
+ * 3P of Murata VTC5 (2600 mAh) = 7800 mAh, adjust if cells change. */
 #define SUBCLASS_DATA           (48u)
 #define OFF_DESIGN_CAPACITY     (11u)     /* CHECK: TRM offset */
 static const uint8_t design_capacity[2] = { (7800u >> 8) & 0xFFu,
@@ -72,7 +72,7 @@ static const uint8_t series_cells[1] = { 4u };
 /* "Manufacturer Info Block A": we use the first two bytes as our
  * provisioning marker ("DK" + revision). Bump the revision when the
  * patch list changes so old units re-provision.
- * CHECK: subclass id not yet cross-checked against the TRM table —
+ * CHECK: subclass id not yet cross-checked against the TRM table, 
  * 58 is a placeholder here, do not assume it is correct. */
 #define SUBCLASS_MFG_INFO_A     (58u)     /* CHECK: TRM subclass id */
 #define OFF_MARKER              (0u)

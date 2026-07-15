@@ -32,7 +32,7 @@ static HAL_StatusTypeDef cypd_on_write(uint16_t addr, const uint8_t *buf, uint16
         // HPI write-to-clear: each 1-bit in buf[0] clears the corresponding INTR_REG bit.
         m->intr_reg &= ~buf[0];
         if (m->intr_reg == 0) {
-            // All sources acknowledged — deassert ALERT# (CYPD3175_INT goes HIGH).
+            // All sources acknowledged, deassert ALERT# (CYPD3175_INT goes HIGH).
             stub_gpio_set(CYPD3175_INT_GPIO_Port, CYPD3175_INT_Pin, GPIO_PIN_SET);
         }
     }
@@ -53,6 +53,6 @@ void cypd_model_inject_event(CYPD3175_Model *m, uint8_t event_code,
     m->intr_reg     |= CYPD3175_INTR_PORT0_BIT;
     if (pdo) memcpy(m->pdo, pdo, 4);
     if (rdo) memcpy(m->rdo, rdo, 4);
-    // ALERT# goes low — in hardware this triggers the EXTI ISR which calls the handler.
+    // ALERT# goes low, in hardware this triggers the EXTI ISR which calls the handler.
     stub_gpio_set(CYPD3175_INT_GPIO_Port, CYPD3175_INT_Pin, GPIO_PIN_RESET);
 }

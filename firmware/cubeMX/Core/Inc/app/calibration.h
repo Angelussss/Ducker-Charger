@@ -7,7 +7,7 @@
  * steps, each backed by a function here. The only external tool needed
  * is a multimeter, whose readings the user enters with the encoder.
  *
- * Method: the "ratio method" — the TRM does not document the raw ADC
+ * Method: the "ratio method", the TRM does not document the raw ADC
  * registers bqStudio uses, but every measurement is linear in its DF
  * calibration parameter, so the parameter can be corrected from the
  * *reported* value instead:
@@ -22,7 +22,7 @@
  * draw does not flow through the shunt.
  *
  * All DF writes go through the same block protocol as provisioning.c
- * and are gated on an explicit call — the wizard never writes flash
+ * and are gated on an explicit call, the wizard never writes flash
  * while merely browsing.
  */
 
@@ -103,7 +103,7 @@ typedef struct {
 
 CalStatus_t Calibration_LearnStatus(LearnStatus_t *out);
 
-/** 1 when the gauge has been calibrated. Proxy: the [QEN] flag — the
+/** 1 when the gauge has been calibrated. Proxy: the [QEN] flag, the
  * wizard's IT-enable step sets it, it is one-way and persists in the
  * gauge, so it doubles as a "production calibration done" latch.
  * Returns 1 on bus error too: a dead gauge is the NO SENSOR path's

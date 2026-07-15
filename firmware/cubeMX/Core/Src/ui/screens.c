@@ -16,7 +16,7 @@
 /* Manual output enables (SETTINGS toggles, OUTPUT page) are honored only
  * while the FSM is in a state where outputs are allowed. In CHARGING and
  * in the protection states (SAFETY_LOCK / LOW_V / EMERGENCY / ERROR) the
- * FSM just closed every output on purpose — a menu click must not reopen
+ * FSM just closed every output on purpose, a menu click must not reopen
  * them behind its back. Turning an output OFF is always allowed. */
 static uint8_t fsm_allows_manual_enable(void)
 {
@@ -138,7 +138,7 @@ static uint16_t current_color(int16_t current_mA)
 }
 
 /* =========================================================
- * Colour helpers — shared with widgets.c
+ * Colour helpers, shared with widgets.c
  * ========================================================= */
 
 /* alarm thresholds, one place only, easy to poke */
@@ -154,7 +154,7 @@ static uint16_t current_color(int16_t current_mA)
 #define TH_VOLT_ORANGE_MV  13000  /* 13-14 V: orange, keep eye on it */
 #define TH_VOLT_RED_MV     12000  /* red + blink; FSM EMERGENCY fires here */
 /* UI critical-battery warning: fires ABOVE the hard limits so it is a real
- * heads-up — the gauge raises BATLOW around 12.2 V and the FSM goes
+ * heads-up, the gauge raises BATLOW around 12.2 V and the FSM goes
  * EMERGENCY (terminal, fault screen) at 12.0 V. The UI only warns;
  * the FSM is the one that acts. */
 #define TH_VOLT_CRIT_MV    12500
@@ -410,7 +410,7 @@ void Screen_Detail_Update(void)
     detail_value(DETAIL_COL_A, DETAIL_ROW_3 + val_y,
                  buf, temp_color_pub(telemetry.temp_celsius));
 
-    /* Charger state: charge_phase is only ever IDLE/FAST — the BQ25713 knows
+    /* Charger state: charge_phase is only ever IDLE/FAST, the BQ25713 knows
      * PRE/TAPER but sits on a private I2C bus this MCU can't reach. */
     const char *phase_str[] = {"IDLE", "FAST"};
     const char *state_str   = telemetry.vbus_present
@@ -485,7 +485,7 @@ void Screen_Graph_Update(void)
 }
 
 /* =========================================================
- * SCREEN: PORTS — one graph, five output traces
+ * SCREEN: PORTS: one graph, five output traces
  * (USB-A1, USB-A2, USB-C1 OTG, USB-C2, Lab) + legend below
  * ========================================================= */
 
@@ -575,7 +575,7 @@ void Screen_Ports_Update(void)
 }
 
 /* =========================================================
- * SCREEN: STATS — lifetime and session numbers
+ * SCREEN: STATS: lifetime and session numbers
  * ========================================================= */
 
 #define STATS_ROW_H     26
@@ -656,7 +656,7 @@ void Screen_Stats_Draw(void)
 }
 
 /* =========================================================
- * SCREEN: DISPLAY PAGE — brightness, screen off, light sleep
+ * SCREEN: DISPLAY PAGE, brightness, screen off, light sleep
  * ========================================================= */
 
 #define SET_LIST_START      (CONTENT_Y + 6)   /* same value as settings list */
@@ -735,7 +735,7 @@ void Screen_Display_OnPress(void)
 }
 
 /* =========================================================
- * SCREEN: TEST PAGE — pretend emergencies
+ * SCREEN: TEST PAGE, pretend emergencies
  * write fake numbers into telemetry, watch UI react
  * (colours, warnings, graphs). sim-only concept.
  * ========================================================= */
@@ -823,7 +823,7 @@ void Screen_Test_OnPress(void)
 }
 
 /* =========================================================
- * SCREEN: CALIBRATION PAGE — gauge calibration wizard
+ * SCREEN: CALIBRATION PAGE, gauge calibration wizard
  * Four steps, each backed by app/calibration.c; the multimeter
  * readings are entered with the encoder. DF is written only on
  * the explicit APPLY/SAVE actions, never while browsing.
@@ -1237,7 +1237,7 @@ void Screen_Cal_OnPress(void)
 }
 
 /* =========================================================
- * SCREEN: CONFIRM — are-you-sure gate for big actions
+ * SCREEN: CONFIRM: are-you-sure gate for big actions
  * ========================================================= */
 
 static ConfirmAction_t _confirm_action = CONFIRM_LOCKALL;
@@ -1302,7 +1302,7 @@ uint8_t Screen_Confirm_OnPress(void)
 }
 
 /* =========================================================
- * SCREEN: WARNING — something wrong, tell user once per boot
+ * SCREEN: WARNING: something wrong, tell user once per boot
  * OK to acknowledge. critical voltage also force light sleep.
  * ========================================================= */
 
@@ -1379,7 +1379,7 @@ void Screen_Warning_Draw(void)
 }
 
 /* =========================================================
- * SCREEN: SLEEP — screen dark, encoder press wake it
+ * SCREEN: SLEEP: screen dark, encoder press wake it
  * ========================================================= */
 
 void Screen_Sleep_Draw(void)
@@ -1390,7 +1390,7 @@ void Screen_Sleep_Draw(void)
 }
 
 /* =========================================================
- * SCREEN: FAULT — FSM in ERROR/EMERGENCY, cause from charge layer
+ * SCREEN: FAULT: FSM in ERROR/EMERGENCY, cause from charge layer
  * ========================================================= */
 
 /* The event does not carry the fault cause (by design, see FSM.md):
@@ -1574,7 +1574,7 @@ const char *Screen_Output_RowStatus(uint8_t channel)
     char v[8];
     if (channel == 1) {
         /* C2: live pin + what STPD01 is actually programmed to (never the
-         * cached ceiling — the connection interrupt enables this
+         * cached ceiling, the connection interrupt enables this
          * autonomously, so a cached flag would lag behind reality). */
         uint8_t on = get_USBC2_Status() ? 1u : 0u;
         out_fmt_volt(v, sizeof(v), on ? (uint16_t)getSTPD01_SetpointVoltage()
@@ -1699,14 +1699,14 @@ static void out_draw_rows(void)
     OutputChannel_t *ch = &_out_ch[_out_cur];
     char buf[32], v[8];
 
-    /* Row 0: enable — live pin, not the cached flag (only C2 reaches
+    /* Row 0: enable, live pin, not the cached flag (only C2 reaches
      * here; see Screen_Output_RowStatus). */
     snprintf(buf, sizeof(buf), "%-12s [%s]", "Enable",
              get_USBC2_Status() ? "ON " : "OFF");
     Widget_MenuRow_Draw(10, SETTINGS_ROW_START, 220, SETTINGS_ROW_H - 4,
                         buf, (_out_row == 0));
 
-    /* Row 1: voltage — in edit mode the value gets < > markers */
+    /* Row 1: voltage, in edit mode the value gets < > markers */
     out_fmt_volt(v, sizeof(v), ch->voltage_mv);
     if (_out_edit && _out_row == 1)
         snprintf(buf, sizeof(buf), "%-10s <%s>", ch->volt_label, v);
@@ -1802,7 +1802,7 @@ void Screen_Output_OnPress(void)
             else
                 event_push(EVT_ERROR);
         } else if (_out_cur == 1) {
-            /* C2 ceiling: never above what PD negotiated, only below it —
+            /* C2 ceiling: never above what PD negotiated, only below it, 
              * the charge layer clamps and, if a device is already
              * connected, re-applies immediately (see charge.c). */
             setSecondaryUSBC_VoltageCeiling(_out_ch[1].voltage_mv);
@@ -1838,7 +1838,7 @@ void Screen_Settings_LockAll(uint8_t on)
 {
     /* The FSM owns the outputs: "Lock all" is a SAFETY_LOCK injector, not
      * a pile of GPIO pokes. SafetyLock_Enter closes every port; EVT_UNLOCK
-     * brings back IDLE — but only for a user-initiated lock (the userLock
+     * brings back IDLE, but only for a user-initiated lock (the userLock
      * guard in the FSM: a low-SoC SAFETY_LOCK cannot be dismissed here). */
     _lock_all = on;
     if (on) _out_ch[0].enabled = _out_ch[1].enabled = 0;  /* menu mirrors */

@@ -1,4 +1,4 @@
-# Ducker-Charger — CYPD3175 (EZ-PD CCG3PA) firmware customisation
+# Ducker-Charger: CYPD3175 (EZ-PD CCG3PA) firmware customisation
 
 Custom bits to graft onto the **EZ-PD CCGx Power SDK** reference firmware
 for the USB-C2 PD controller (CYPD3175-24LQXQ, the STUSB4710
@@ -11,14 +11,14 @@ approval.
 src/ducker_led.c|h      status-LED driver (GPIO + SDK software timer)
 src/INTEGRATION.md      where to hook it inside the reference project
 config/c2_pd_config.md  config-table values (PDOs, protections) for the
-                        EZ-PD Configuration Utility — no code involved
+                        EZ-PD Configuration Utility: no code involved
 ```
 
 ## Status
 
 - **BUILT AND LINKED** (2026-07-04) against CCGx Power SDK 3.5 with
   PSoC Creator 4.4 in the win11 VM, zero warnings under `-Werror`.
-  Flash: 89.6% (noboot) vs 88.7% baseline — the LED costs ~600 B.
+  Flash: 89.6% (noboot) vs 88.7% baseline, the LED costs ~600 B.
   Built hex in `build/`; the patched reference files (app.c, main.c,
   both .cyprj with the ducker_led source entries) are mirrored in
   `patched-reference/` and live in the VM under `C:\ducker\fw`.

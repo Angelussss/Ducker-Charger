@@ -454,7 +454,7 @@ void MX_GPIO_Init(void)
     /* reset states as on the real board after MX_GPIO_Init():
      * IRQ inputs idle HIGH (open-drain released into pull-ups).
      * CHRG_OK is the BQ25713 power-good output: LOW until a valid
-     * adapter is present — faithful even though it means charge.c
+     * adapter is present, faithful even though it means charge.c
      * pushes EVT_ERROR on the very first readCS(). */
     sim_gpio_drive_input(1, 14, 1);  /* PB14 PD_IRQ        */
     sim_gpio_drive_input(2, 12, 1);  /* PC12 STPD01_INT    */

@@ -81,7 +81,7 @@ void UI_Tick(void)
 
     /* Telemetry is polled by the main loop, before this tick runs: UI_Tick
      * is skipped in SLEEP/DEEP_SLEEP, and polling from here froze uptime,
-     * the energy integral and every port history for the whole sleep —
+     * the energy integral and every port history for the whole sleep, 
      * which is precisely when a powerbank is feeding a device. */
 
     /* -------- Boot screen auto-transition -------- */
@@ -444,7 +444,7 @@ void UI_Tick(void)
 
         case UI_SCREEN_FAULT:
             /* OK on ERROR pushes the acknowledge event the transition
-             * matrix has always expected (ERROR + BUTTON_SHORT -> IDLE) —
+             * matrix has always expected (ERROR + BUTTON_SHORT -> IDLE), 
              * this screen IS the producer. EMERGENCY has no ack. */
             if (click && PB_FSM_ActiveState() == STATE_ERROR)
                 event_push(EVT_BUTTON_SHORT);
@@ -457,7 +457,7 @@ void UI_Tick(void)
                 click = 1;
             if (click)                          /* OK: acked for this boot */
             {
-                /* warnings only inform — they never actuate. The FSM is
+                /* warnings only inform; they never actuate. The FSM is
                  * the single authority on outputs: at 12 V it goes to
                  * EMERGENCY on its own (and the BQ77915 BMS backs it up
                  * in hardware). The old VCRIT ack used to LockAll + light

@@ -230,7 +230,7 @@ void readSensors() {
     ok &= (HAL_OK == HAL_I2C_Mem_Read(&hi2c1, FUEL_GAUGE_ADDR, 0x02, I2C_MEMADD_SIZE_8BIT, buffer, 1, HAL_MAX_DELAY));
     fuelGaugeSensors.SoC = buffer[0];
 
-    // SoC threshold events only from data actually read this cycle — a
+    // SoC threshold events only from data actually read this cycle, a
     // failed read leaves stale/garbage buffer content that must not fire
     // SAFETY/LOWV/OK transitions (the failure itself is reported below).
     static float prevSoC = 100.0f;
@@ -283,7 +283,7 @@ void readSensors() {
     fuelGaugeSensors.flags.CF   = (rawLow >> 4) & 0x01;
     fuelGaugeSensors.flags.REST = (rawLow >> 7) & 0x01;
 
-    // FSM fault events — edge-detected to avoid queue saturation, and
+    // FSM fault events, edge-detected to avoid queue saturation, and
     // gated on ok like the SoC block above (no events from stale flags)
     static bool prevOT     = false;
     static bool prevBATHI  = false;
@@ -323,7 +323,7 @@ void readSensors() {
     }
     prevGaugeOK = ok;
 
-    // Display-only status flags (CHG_INH/XCHG/FC/CHG/DSG): no FSM event —
+    // Display-only status flags (CHG_INH/XCHG/FC/CHG/DSG): no FSM event, 
     // telemetry.c copies them (charge_inhibited, is_full, is_charging) and
     // the UI renders the indicators and the CHARGE INHIBITED warning.
 }
@@ -369,7 +369,7 @@ void readINA() {
         event_push(EVT_FAULT_OCC);
     }
     prevOCC2 = ina3221_sensors.critical_alert_channel2;
-    // channel3 tied to GND — unused
+    // channel3 tied to GND, unused
 }
 
 /*
@@ -468,10 +468,10 @@ void readCS() {        // Check and update critical signals and their status (e.
     //PD_IRQ_PREV = PD_IRQ;   // Remember PD_IRQ status before updating it
     PD_IRQ = HAL_GPIO_ReadPin(USB_IRQ_CTRL_GPIO_Port, USB_IRQ_CTRL_Pin);
 
-    // Read STPD01_INT (PC12): STPD01 interrupt — converter power state change
+    // Read STPD01_INT (PC12): STPD01 interrupt, converter power state change
     STPD01_INT = HAL_GPIO_ReadPin(STPD01_INT_GPIO_Port, STPD01_INT_Pin);
 
-    // Read CYPD3175_INT (PC3): CYPD3175 interrupt — PD protocol event
+    // Read CYPD3175_INT (PC3): CYPD3175 interrupt, PD protocol event
     CYPD3175_INT = HAL_GPIO_ReadPin(CYPD3175_INT_GPIO_Port, CYPD3175_INT_Pin);
 
     // Read HP.CHRG_OK (PB13) and update CHRG_OK status
@@ -489,7 +489,7 @@ void readCS() {        // Check and update critical signals and their status (e.
         secondaryUSBC_ConnectionINT();
     }
 
-    // CHRG_OK (BQ25713) is low whenever no valid adapter is present — the
+    // CHRG_OK (BQ25713) is low whenever no valid adapter is present, the
     // normal battery-powered condition, not a fault. A falling edge while a
     // charger contract is active is suspicious, but on a plain unplug it
     // arrives milliseconds BEFORE the TPS25750 plug-removal interrupt: only
@@ -536,7 +536,7 @@ void readNCS() {        // Check and update NON-critical signals and their statu
 void primaryUSBC_ConnectionINT() {
     // Read INT_EVENT1 (0x14) [Little-endian]
     // On any read failure below: report and return WITHOUT clearing
-    // INT_CLEAR1 — I2Cs_IRQ stays asserted and the handler retries on
+    // INT_CLEAR1, I2Cs_IRQ stays asserted and the handler retries on
     // the next readCS() cycle.
     uint8_t eventBuffer[11];
     if (tps25750_read(INT_EVENT1_REG_ADDR, eventBuffer, 11) != HAL_OK) {
@@ -641,7 +641,7 @@ static void secondaryUSBC_Shutdown(bool clearPlugged) {
 }
 
 // Programs STPD01 for the current PD contract, clamped to the user's
-// ceiling (never above what PD negotiated, only below it — see the
+// ceiling (never above what PD negotiated, only below it, see the
 // ceiling variables' comment). Single source of truth: called both right
 // after a fresh contract completes and whenever the ceiling itself changes
 // live while already connected, so the two paths can't drift apart.
@@ -671,7 +671,7 @@ static void secondaryUSBC_ApplyOutput(void) {
             event_push(EVT_FAULT_OT);
         } else {
             // I2C failure, or no fault bit set but the converter never
-            // reached power-on — either way, charging didn't start.
+            // reached power-on, either way, charging didn't start.
             event_push(EVT_ERROR);
         }
     }
@@ -766,11 +766,11 @@ void secondaryUSBC_ConnectionINT() {
 
         if (voltageRaw == 0 || maxCurrentRaw == 0) {
             // PDO/RDO not populated yet (premature/spurious event before the
-            // CYPD3175 finished writing the contract) — wait for the next event
+            // CYPD3175 finished writing the contract), wait for the next event
             // instead of configuring STPD01 with a fabricated 0V/0A contract.
             // No known-good HPI attach-type register bit map is available in
             // this repo (CYPD3175_PORT0_TYPE_C_STATUS is defined but its bit
-            // layout isn't documented here) — this zero-check is the only
+            // layout isn't documented here), this zero-check is the only
             // guard against a non-PD/garbage "contract" reaching setupSTPD01().
             return;
         }
@@ -850,7 +850,7 @@ bool checkSTPD01() {
     uint8_t buffer;
     if (HAL_I2C_Mem_Read(&hi2c1, STPD01_PD_ADDR, INT_STAT_REG_ADDR,
                           I2C_MEMADD_SIZE_8BIT, &buffer, 1, HAL_MAX_DELAY) != HAL_OK) {
-        // I2C failure: status is unknown, not "no fault" — clear stale data so
+        // I2C failure: status is unknown, not "no fault"; clear stale data so
         // callers can't mistake a previous good read for a fresh confirmation.
         stpd01_status = (STPD01_Status){0};
         return false;
@@ -944,7 +944,7 @@ void disable_USBC2() {
 }
 
 // EN_OTG (PB15): OTG needs this pin HIGH *and* the I2C bit TPS25750 sets
-// (BQ25713 ChargeOption3.EN_OTG) — either alone isn't enough, so the MCU
+// (BQ25713 ChargeOption3.EN_OTG), either alone isn't enough, so the MCU
 // holding this low is a real kill switch on C1 discharging the battery.
 void enable_OTG() {
     HAL_GPIO_WritePin(USB_OTG_CTRL_GPIO_Port, USB_OTG_CTRL_Pin, GPIO_PIN_SET);

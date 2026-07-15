@@ -43,7 +43,7 @@ void Widget_BatteryBar_Draw(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint
 
 void Widget_BatteryBar_Update(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint8_t pct)
 {
-    /* redraw only inside, border stay — faster than _Draw().
+    /* redraw only inside, border stay, faster than _Draw().
      * one solid fill bar inside battery shape. */
     uint16_t inner_x = x + 4, inner_y = y + 4;
     uint16_t inner_w = w - 8 - 8;          /* -nub -border*2 */

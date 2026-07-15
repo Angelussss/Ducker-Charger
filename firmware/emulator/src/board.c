@@ -57,7 +57,7 @@ void board_tick(uint32_t wall_dms)
     board.a2_ma = (a2_en && board.a2_load_attached) ? cfg.a2_load_ma : 0.0f;
     /* C2: the sink draws its negotiated RDO current, same as Lab clamped at
      * whatever ILIM the firmware last programmed (STPD01 is a shared,
-     * current-limiting converter — see the Lab comment right below; a user
+     * current-limiting converter, see the Lab comment right below; a user
      * ceiling lower than the negotiated current, or a lower voltage ceiling
      * pushing more current at constant power, both end up here). */
     if (stpd_en && c2_en && board.c2_sink_attached) {
@@ -78,7 +78,7 @@ void board_tick(uint32_t wall_dms)
         board.lab_ma = 0.0f;
     }
     /* C1 sourcing needs both the PD contract AND EN_OTG (PB15) driven HIGH
-     * (BQ25713 ChargeOption3.EN_OTG is an AND, not an either/or) — the FSM
+     * (BQ25713 ChargeOption3.EN_OTG is an AND, not an either/or), the FSM
      * holds this low in every protection state. */
     int otg_en = sim_gpio_get(1, 15);        /* PB15                 */
     board.c1_out_ma = (otg_en && board.c1_device_attached)

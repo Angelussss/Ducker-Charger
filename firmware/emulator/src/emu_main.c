@@ -163,7 +163,7 @@ static int handle_key(char k)
         /* shutdown: push the long-press event straight in, instead of
          * scripting a 3 s hold + release through 'p'/'P'. Real firmware
          * only wires this transition from IDLE/SLEEP (fsm.c transition
-         * table) — same gate main.c's actual hold-timer is subject to, so
+         * table), same gate main.c's actual hold-timer is subject to, so
          * this is a shortcut to the event, not a bypass of the FSM rule. */
         sim_log("[EMU ] shutdown key: pushing EVT_BUTTON_LONG");
         event_push(EVT_BUTTON_LONG);

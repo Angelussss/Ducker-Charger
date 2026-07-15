@@ -22,11 +22,11 @@ This document covers the implementation of the charge management system of the D
 - Detecting faults (e.g. short circuit, over-temperature, etc...) and throwing interrupts accordingly
 - Reading status registers and flags of different key components (`BQ34Z100-R2`, `INA3221`, `TPS25750`, `CYPD3175`, `STPD01`) via two different `I2C` channels
 - Monitoring the secondary USB-C PD controller (`CYPD3175`) via HPI, reading the negotiated contract, configuring accordingly the power delivery and enabling/disabling the secondary USB-C port and the power delivery component
-- Gating the primary port's OTG (source) mode through `EN_OTG` (PB15) — enabled only when a sink device negotiates while the FSM allows outputs, dropped on unplug and in every protection state
-- Applying the user-configurable output ceiling on the secondary USB-C port (`setSecondaryUSBC_VoltageCeiling/CurrentCeiling`): the delivered rail is `min(ceiling, negotiated contract)` — the ceiling can only lower what PD negotiated, never raise it
+- Gating the primary port's OTG (source) mode through `EN_OTG` (PB15), enabled only when a sink device negotiates while the FSM allows outputs, dropped on unplug and in every protection state
+- Applying the user-configurable output ceiling on the secondary USB-C port (`setSecondaryUSBC_VoltageCeiling/CurrentCeiling`): the delivered rail is `min(ceiling, negotiated contract)`, the ceiling can only lower what PD negotiated, never raise it
 - Providing ready-to-use get functions for easy data fetch regarding sensors, statuses and components read
 
-All TPS25750 register access goes through `system/tps25750_io.c`: the host interface is length-prefixed on the wire (a read returns `[len][data...]`, a write is `[reg][len][data...]`), which `HAL_I2C_Mem_*` cannot produce — hence the dedicated `tps25750_read()`/`tps25750_write()` helpers on I2C3.
+All TPS25750 register access goes through `system/tps25750_io.c`: the host interface is length-prefixed on the wire (a read returns `[len][data...]`, a write is `[reg][len][data...]`), which `HAL_I2C_Mem_*` cannot produce, hence the dedicated `tps25750_read()`/`tps25750_write()` helpers on I2C3.
 
 
 ---
@@ -63,7 +63,7 @@ where: `VMAX` is equal to 2^nbits - 1 = 4095 (the ADC channel has 12-bit resolut
 Then we need to convert the obtained voltage value (expressed in `mV`) accordingly to the sensor we are reading:
 - **Temperature:** obtained via NTC thermistors, in order to get the value expressed in ºC we need to:
 	- Convert from voltage to resistance by doing:
-	  
+
 $$
 R_{PULLUP} \cdot \frac{V_{out}}{(V_{REF} - V_{out})}
 $$
@@ -106,7 +106,7 @@ Signals used to enable power rails and modes.
 | `USB_A2_CTRL` | PC2       | Q11 (Load Switch) | Enable USB-A Port 2 Output (5V)       |
 | `C2_PORT_EN`  | PA12      | Port FET          | Route the STPD01 rail to the USB-C2 connector |
 | `C2_LAB_EN`   | PA11      | Lab FET           | Route the STPD01 rail to the Lab output (interlocked with `C2_PORT_EN`) |
-| `HP.EN_OTG`   | PB15      | BQ25713 EN_OTG    | Enable OTG (Reverse Power) on C1 — see the Primary USB-C section |
+| `HP.EN_OTG`   | PB15      | BQ25713 EN_OTG    | Enable OTG (Reverse Power) on C1, see the Primary USB-C section |
 | `STPD01_EN`   | PC11      | STPD01 Enable Pin | Enable the shared C2/Lab buck converter |
 
 #### Interrupts & Status Inputs
@@ -128,7 +128,7 @@ These are the standard/extended commands the firmware reads from the fuel gauge.
 Addresses, byte order, and units verified against the **BQ34Z100-R2 Technical
 Reference Manual (SLUUCO5A)**. Multi-byte values are **little-endian** (low byte at
 the lower address). The bundled [`bq34z100-r2.pdf`](../../PCB/Ducker-Charger/docs/bq34z100-r2.pdf) is the *datasheet* and does
-**not** contain this table — it is sourced from the [TRM](../../PCB/Ducker-Charger/docs/BQ34Z100-R2_Technical Reference_Manual.pdf). All mentioned registers are Read-Only (RO)
+**not** contain this table; it is sourced from the [TRM](../../PCB/Ducker-Charger/docs/BQ34Z100-R2_Technical Reference_Manual.pdf). All mentioned registers are Read-Only (RO)
 
 | Command                 | Addr (LSB/MSB) | Bytes | Unit     | Firmware field (`FuelGaugeSensors`) |
 | :---------------------- | :------------- | :---: | :------- | :---------------------------------- |
@@ -140,8 +140,8 @@ the lower address). The bundled [`bq34z100-r2.pdf`](../../PCB/Ducker-Charger/doc
 | `Current()`             | 0x10/0x11      |   2   | mA       | `current`                           |
 | `AverageTimeToEmpty()`  | 0x18/0x19      |   2   | minutes  | `avgTimeToEmpty`                    |
 | `AverageTimeToFull()`   | 0x1A/0x1B      |   2   | minutes  | `avgTimeToFull`                     |
-| `VoltScale()`           | 0x20           |   1   | —        | `voltageScale`                      |
-| `CurrScale()`           | 0x21           |   1   | —        | `currentScale`                      |
+| `VoltScale()`           | 0x20           |   1   | N/A | `voltageScale`                      |
+| `CurrScale()`           | 0x21           |   1   | N/A | `currentScale`                      |
 | `InternalTemperature()` | 0x2A/0x2B      |   2   | 0.1 K    | `internalTemperature`               |
 | `CycleCount()`          | 0x2C/0x2D      |   2   | counts   | `cycleCount`                        |
 | `StateOfHealth()`       | 0x2E/0x2F      |   2   | %        | `stateOfHealth`                     |
@@ -163,11 +163,11 @@ the lower address). The bundled [`bq34z100-r2.pdf`](../../PCB/Ducker-Charger/doc
 - **CHG_INH:** Charge Inhibit: unable to begin charging. Refer to the data flash (Charge Inhibit Temp Low, Charge Inhibit Temp High) parameters for threshold settings. True when set
 - **XCHG:** Charging not allowed
 - **FC:** Full charge is detected
-- **CHG:** (Fast) charging allowed. True when set  
+- **CHG:** (Fast) charging allowed. True when set
 - **DSG:** Discharging detected. True when set
 - **SOCF:** State of Charge is below the final (critical) low threshold
 - **SOC1:** State of Charge is at threshold 1
-- **CF:** Condition Flag — indicates the gauge needs a re-learning cycle. Firmware pushes `EVT_ERROR` on rising edge
+- **CF:** Condition Flag, indicates the gauge needs a re-learning cycle. Firmware pushes `EVT_ERROR` on rising edge
 - **REST:** Rest condition detected (no charge or discharge current for a sustained period)
 
 *Note:* The firmware decodes all high-byte bits and all four documented low-byte bits (`DSG`, `SOCF`, `SOC1`, `CF`, `REST`). `CF` is the only low-byte flag that pushes an FSM event; the rest are available for the display layer
@@ -239,7 +239,7 @@ The CYPD3175 (Cypress EZ-PD CCG3PA) uses the **HPI (Host Processor Interface)** 
 | `PORT0_CURRENT_PDO`   | 0x1010 | RO     |   4   | Active PDO contract (USB PD Fixed PDO format, little-endian) |
 | `PORT0_CURRENT_RDO`   | 0x1014 | RO     |   4   | Active RDO from sink (USB PD RDO format, little-endian)      |
 
-- **HPI event codes — read from `RESPONSE_REG` (0x007E) per `cy_hpi_master_response_t`:**
+- **HPI event codes; read from `RESPONSE_REG` (0x007E) per `cy_hpi_master_response_t`:**
 
 | Code | Firmware macro                   | Description                      |
 | ---- | -------------------------------- | -------------------------------- |
@@ -278,7 +278,7 @@ The CYPD3175 (Cypress EZ-PD CCG3PA) uses the **HPI (Host Processor Interface)** 
 | 6   | `Overtemperature warning`          | Junction temperature 145 °C |
 | 7   | `Inductor peak current protection` |                             |
 
-*Note:* the firmware decodes all bits except 1 and 4. Bit 6 (`OTW`) is decoded and stored in `stpd01_status.overTemperatureWarning` for the display layer but does **not** block STPD01 enable — only bits 0, 2, 5, and 7 (OVP, SCP, OTP, ILIM) are treated as blocking faults in `checkSTPD01()`
+*Note:* the firmware decodes all bits except 1 and 4. Bit 6 (`OTW`) is decoded and stored in `stpd01_status.overTemperatureWarning` for the display layer but does **not** block STPD01 enable, only bits 0, 2, 5, and 7 (OVP, SCP, OTP, ILIM) are treated as blocking faults in `checkSTPD01()`
 
 ### I2C3
 
@@ -351,7 +351,7 @@ The primary USB-C allows for both source and sink connections. This port is also
 If both `PlugInsertOrRemoval` and `PowerStatusUpdate` are set, the firmware reads the `POWER_STATUS` register and updates the port's connection state and, if connected, whether the powerbank is acting as source or sink:
 
 - **Sink** (being charged): `EVT_CHARGER_CONNECTED` is pushed and the FSM enters CHARGING.
-- **Source** (OTG, powering a device): the firmware raises `EN_OTG` (PB15) via `enable_OTG()` — but only while the FSM is in IDLE or SLEEP, the same auto-enable gate used for the secondary port. Per the BQ25713 TRM, OTG output requires this pin HIGH **and** the `ChargeOption3.EN_OTG` I2C bit the TPS25750 sets on its private bus — an AND condition, so the MCU holding the pin low is an independent kill switch on C1 discharging the pack (protection-state `onEnter` handlers rely on exactly this).
+- **Source** (OTG, powering a device): the firmware raises `EN_OTG` (PB15) via `enable_OTG()`, but only while the FSM is in IDLE or SLEEP, the same auto-enable gate used for the secondary port. Per the BQ25713 TRM, OTG output requires this pin HIGH **and** the `ChargeOption3.EN_OTG` I2C bit the TPS25750 sets on its private bus, an AND condition, so the MCU holding the pin low is an independent kill switch on C1 discharging the pack (protection-state `onEnter` handlers rely on exactly this).
 - **Unplug**: `disable_OTG()` runs before `EVT_CHARGER_DISCONNECTED` is pushed.
 
 If the port is connected and either `NewContractAsCons` or `NewContractAsProv` is set, the firmware reads the `ACTIVE_CONTRACT_PDO` register and checks the `PDO Type` field. If the contract is not Fixed-Voltage type, it is rejected; otherwise, the firmware extracts the `Voltage` and `Maximum Current` from the PDO, then reads the `ACTIVE_CONTRACT_RDO` in order to extract the `Operating Current`.
@@ -370,9 +370,9 @@ The function reads `INTR_REG` (0x0006) to confirm a port 0 interrupt (bit 1), th
 2. **OTP** (code 0xB6): USB-C2 and STPD01 are disabled, negotiation is cleared, and `EVT_FAULT_OT` is pushed.
 3. **Hard Reset** (code 0x8F): STPD01 and USB-C2 are disabled and negotiation is cleared; `isPlugged` stays true because the device is still physically present and the CYPD3175 re-advertises automatically.
 4. **Disconnect** (code 0x85): contract and connection state are cleared, both STPD01 and USB-C2 are disabled.
-5. **Contract complete** (code 0x86): `PORT0_CURRENT_PDO` (0x1010) and `PORT0_CURRENT_RDO` (0x1014) are read to extract the negotiated `Voltage`, `Maximum Current`, and `Operating Current` using the standard USB PD Fixed PDO/RDO bit mapping. The output is then applied through `secondaryUSBC_ApplyOutput()` — the single path shared with the ceiling setters, so a fresh contract and a live ceiling change can never diverge. It clamps the contract to the user ceiling (`min(ceiling, contract)` on both voltage and current — the CYPD3175 only negotiates; the STPD01 is what physically produces the rail, so the clamp is a real limit), configures the `STPD01` via `setupSTPD01()`, and enables it with a 10 ms stabilization delay, after which `checkSTPD01()` verifies no post-setup fault is active. If healthy, the USB-C2 output is enabled and the contract is marked as negotiated. A state gate applies before any of this: auto-enable only runs while the FSM is in IDLE or SLEEP — everywhere else the event is acked and the contract stored, but the output stays off (MANUAL is excluded too: there the STPD01 rail belongs to the Lab output).
+5. **Contract complete** (code 0x86): `PORT0_CURRENT_PDO` (0x1010) and `PORT0_CURRENT_RDO` (0x1014) are read to extract the negotiated `Voltage`, `Maximum Current`, and `Operating Current` using the standard USB PD Fixed PDO/RDO bit mapping. The output is then applied through `secondaryUSBC_ApplyOutput()`, the single path shared with the ceiling setters, so a fresh contract and a live ceiling change can never diverge. It clamps the contract to the user ceiling (`min(ceiling, contract)` on both voltage and current, the CYPD3175 only negotiates; the STPD01 is what physically produces the rail, so the clamp is a real limit), configures the `STPD01` via `setupSTPD01()`, and enables it with a 10 ms stabilization delay, after which `checkSTPD01()` verifies no post-setup fault is active. If healthy, the USB-C2 output is enabled and the contract is marked as negotiated. A state gate applies before any of this: auto-enable only runs while the FSM is in IDLE or SLEEP, everywhere else the event is acked and the contract stored, but the output stays off (MANUAL is excluded too: there the STPD01 rail belongs to the Lab output).
 
-Changing the ceiling from the UI while a device is already connected and negotiated re-runs `secondaryUSBC_ApplyOutput()` immediately — the rail is reprogrammed live, no replug needed. Since the STPD01 offers no VOUT/ILIM readback and its rail carries no shunt (INA3221 ch3 is grounded), `setupSTPD01()` records the register-decoded setpoint, exposed via `getSTPD01_SetpointVoltage()/Current()` — the quantized value the rail actually holds, which telemetry and the UI use as the source of truth for that rail.
+Changing the ceiling from the UI while a device is already connected and negotiated re-runs `secondaryUSBC_ApplyOutput()` immediately, the rail is reprogrammed live, no replug needed. Since the STPD01 offers no VOUT/ILIM readback and its rail carries no shunt (INA3221 ch3 is grounded), `setupSTPD01()` records the register-decoded setpoint, exposed via `getSTPD01_SetpointVoltage()/Current()`, the quantized value the rail actually holds, which telemetry and the UI use as the source of truth for that rail.
 
 ---
 
@@ -417,4 +417,4 @@ In this section we provide the complete PDO and RDO register bit mappings used f
 | 19...10 | `Operating Current`                     | Operating current, **in 10mA units**<br><br>Indicates the highest current the Sink will draw during the Explicit Contract. |
 | 9...0   | `Maximum Operating Current`             | **Deprecated**, transmitter **Shall** set this field equal to "Operating Current", receiver should ignore this field.      |
 
-*Note:* the firmware extracts **Operating Current** (bits 19:10) from every RDO contract. For the secondary USB-C port the CYPD3175 handles PDO negotiation internally; the firmware reads the already-resolved contract directly from `PORT0_CURRENT_PDO` (0x1010) and `PORT0_CURRENT_RDO` (0x1014) — no Object Position lookup is needed
+*Note:* the firmware extracts **Operating Current** (bits 19:10) from every RDO contract. For the secondary USB-C port the CYPD3175 handles PDO negotiation internally; the firmware reads the already-resolved contract directly from `PORT0_CURRENT_PDO` (0x1010) and `PORT0_CURRENT_RDO` (0x1014), no Object Position lookup is needed
