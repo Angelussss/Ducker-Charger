@@ -156,8 +156,6 @@ The project is split by layer, one owner per layer end-to-end (design, implement
 | Michelangelo Calia | Power-state FSM & fault handling |
 | Maya | Display/UI stack: driver, widgets, screens, navigation |
 
-Lines of code contributed (deduplicated across rebased branches; excludes vendor HAL/CMSIS, PCB/CAD files and binaries):
-
 ## 🤝 Contributing
 
 Issues, suggestions, and pull requests are momentarily suspended, as this is a university course project.
