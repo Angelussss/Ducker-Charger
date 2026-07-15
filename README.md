@@ -142,8 +142,8 @@ Full screen-by-screen reference: [`docs/firmware/UI_and_Display.md`](docs/firmwa
 
 ## 🎥 Presentation & Demo
 
-* 📊 Slides: _link TBD_
-* 🎬 YouTube walkthrough: _link TBD_
+* 📊 Slides: [Google Slides](https://docs.google.com/presentation/d/1OwDXiBUUQ08QPd7Jknc45msrt9zxNyJMcGTFnEZxmk4/edit?usp=sharing)
+* 🎬 YouTube walkthrough: [youtu.be/msm0JCK7GhI](https://youtu.be/msm0JCK7GhI)
 
 ## 👥 Team & Contributions
 
